@@ -9,4 +9,24 @@
     <artifactId>accounting-dataaccess</artifactId>
     <name>accounting-dataaccess</name>
 
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.jalaldeveloper.accountingsystem</groupId>
+            <artifactId>common-domain</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jalaldeveloper.accountingsystem</groupId>
+            <artifactId>accounting-domain-core</artifactId>
+        </dependency>
+    </dependencies>
+
 </project>

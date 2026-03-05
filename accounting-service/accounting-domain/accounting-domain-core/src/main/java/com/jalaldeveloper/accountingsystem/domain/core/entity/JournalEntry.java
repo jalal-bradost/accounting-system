@@ -1,11 +1,10 @@
-package com.jalaldeveloper.accounting.domain.core.entity;
+package com.jalaldeveloper.accountingsystem.domain.core.entity;
 
-import com.jalaldeveloper.accounting.domain.core.ValueObject.JournalEntryId;
-import com.jalaldeveloper.accounting.domain.core.ValueObject.JournalEntryStatus;
-import com.jalaldeveloper.accounting.domain.core.ValueObject.JournalId;
-import com.jalaldeveloper.accounting.domain.core.ValueObject.JournalItemId;
-import com.jalaldeveloper.accountingsystem.domain.entity.AggergateRoot;
-import com.jalaldeveloper.accountingsystem.domain.exception.DomainException;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalEntryId;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalEntryStatus;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalId;
+import com.jalaldeveloper.accountingsystem.domain.core.exception.AccountingDomainException;
+import com.jalaldeveloper.accountingsystem.domain.entity.AggregateRoot;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.Currency;
 
@@ -13,7 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-public class JournalEntry extends AggergateRoot<JournalEntryId> {
+public class JournalEntry extends AggregateRoot<JournalEntryId> {
     private final CompanyId companyId;
     private final JournalId journalId;
     private final String sequenceNumber;
@@ -21,6 +20,37 @@ public class JournalEntry extends AggergateRoot<JournalEntryId> {
     private final Currency currency;
     private final List<JournalItem> items;
     private JournalEntryStatus status;
+
+    public void validate() {
+        BigDecimal totalDebit = items.stream().map(JournalItem::getDebit).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalCredit = items.stream().map(JournalItem::getCredit).reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        if (totalDebit.compareTo(totalCredit) != 0) {
+            throw new AccountingDomainException("Entry is not balanced! Debits must equal Credits.");
+        }
+    }
+
+    public void post() {
+        if (this.status != JournalEntryStatus.DRAFT) {
+            throw new AccountingDomainException("Only Draft entries can be posted.");
+        }
+
+        if (items == null || items.isEmpty()) {
+            throw new AccountingDomainException("Cannot post an empty journal entry.");
+        }
+
+        // Logic from previous step: Ensures Sum(Debit) == Sum(Credit)
+        validate();
+
+        this.status = JournalEntryStatus.POSTED;
+    }
+
+    public void cancel() {
+        if (this.status != JournalEntryStatus.DRAFT) {
+            throw new AccountingDomainException("Only DRAFT entries can be cancelled. POSTED entries must be reversed.");
+        }
+        this.status = JournalEntryStatus.CANCELLED;
+    }
 
     private JournalEntry(Builder builder) {
         super.setId(builder.id);
@@ -31,15 +61,6 @@ public class JournalEntry extends AggergateRoot<JournalEntryId> {
         currency = builder.currency;
         items = builder.items;
         status = builder.status;
-    }
-
-    public void validate() {
-        BigDecimal totalDebit = items.stream().map(JournalItem::getDebit).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalCredit = items.stream().map(JournalItem::getCredit).reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        if (totalDebit.compareTo(totalCredit) != 0) {
-            throw new DomainException("Entry is not balanced! Debits must equal Credits.");
-        }
     }
 
     public CompanyId getCompanyId() {
@@ -68,6 +89,10 @@ public class JournalEntry extends AggergateRoot<JournalEntryId> {
 
     public JournalEntryStatus getStatus() {
         return status;
+    }
+
+    public static Builder builder() {
+        return Builder.builder();
     }
 
     public static final class Builder {

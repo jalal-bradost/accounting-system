@@ -1,4 +1,4 @@
-package com.jalaldeveloper.accounting.domain.core.ValueObject;
+package com.jalaldeveloper.accountingsystem.domain.core.ValueObject;
 
 import com.jalaldeveloper.accountingsystem.domain.valueobject.BaseId;
 

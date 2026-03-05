@@ -1,7 +1,7 @@
-package com.jalaldeveloper.accounting.domain.core.entity;
+package com.jalaldeveloper.accountingsystem.domain.core.entity;
 
-import com.jalaldeveloper.accounting.domain.core.ValueObject.AccountId;
-import com.jalaldeveloper.accounting.domain.core.ValueObject.JournalItemId;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.AccountId;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalItemId;
 import com.jalaldeveloper.accountingsystem.domain.entity.BaseEntity;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.Currency;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.Money;
@@ -50,6 +50,10 @@ public class JournalItem extends BaseEntity<JournalItemId> {
 
     public Currency getCurrency() {
         return currency;
+    }
+
+    public static Builder builder() {
+        return Builder.builder();
     }
 
     public static final class Builder {

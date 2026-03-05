@@ -1,31 +1,34 @@
-package com.jalaldeveloper.accounting.domain.core.entity;
+package com.jalaldeveloper.accountingsystem.domain.core.entity;
 
-import com.jalaldeveloper.accounting.domain.core.ValueObject.JournalId;
-import com.jalaldeveloper.accounting.domain.core.ValueObject.JournalType;
-import com.jalaldeveloper.accountingsystem.domain.entity.BaseEntity;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.AccountId;
+import com.jalaldeveloper.accountingsystem.domain.entity.AggregateRoot;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.AccountType;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 
-public class Journal extends BaseEntity<JournalId> {
+public class Account extends AggregateRoot<AccountId> {
     private final CompanyId companyId;
     private final String code;
     private final String name;
-    private final JournalType journalType;
+    private final AccountType accountType;
+    private final boolean active;
 
-    private Journal(Builder builder) {
+    private Account(Builder builder) {
         super.setId(builder.id);
         companyId = builder.companyId;
         code = builder.code;
         name = builder.name;
-        journalType = builder.journalType;
+        accountType = builder.accountType;
+        active = builder.active;
     }
 
 
     public static final class Builder {
-        private JournalId id;
+        private AccountId id;
         private CompanyId companyId;
         private String code;
         private String name;
-        private JournalType journalType;
+        private AccountType accountType;
+        private boolean active;
 
         private Builder() {
         }
@@ -34,7 +37,7 @@ public class Journal extends BaseEntity<JournalId> {
             return new Builder();
         }
 
-        public Builder id(JournalId val) {
+        public Builder id(AccountId val) {
             id = val;
             return this;
         }
@@ -54,13 +57,18 @@ public class Journal extends BaseEntity<JournalId> {
             return this;
         }
 
-        public Builder journalType(JournalType val) {
-            journalType = val;
+        public Builder accountType(AccountType val) {
+            accountType = val;
             return this;
         }
 
-        public Journal build() {
-            return new Journal(this);
+        public Builder active(boolean val) {
+            active = val;
+            return this;
+        }
+
+        public Account build() {
+            return new Account(this);
         }
     }
 }

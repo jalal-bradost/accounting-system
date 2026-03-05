@@ -1,4 +1,4 @@
-package com.jalaldeveloper.accounting.domain.core.ValueObject;
+package com.jalaldeveloper.accountingsystem.domain.core.ValueObject;
 
 public enum JournalEntryStatus {
     DRAFT,
