@@ -56,12 +56,25 @@ public class AccountingDataMapper {
     public JournalEntry createJournalEntryCommandToJournalEntry(CreateJournalEntryCommand cmd,
                                                                 UUID journalEntryId,
                                                                 List<JournalItem> items) {
+        return createJournalEntryCommandToJournalEntry(cmd, journalEntryId, items, null);
+    }
+
+    /** When sequenceNumberOverride is non-null, it is used instead of command.getSequenceNumber(). */
+    public JournalEntry createJournalEntryCommandToJournalEntry(CreateJournalEntryCommand cmd,
+                                                                UUID journalEntryId,
+                                                                List<JournalItem> items,
+                                                                String sequenceNumberOverride) {
         Currency currency = toCurrency(cmd.getCurrencyCode());
+        String seq = sequenceNumberOverride != null && !sequenceNumberOverride.isBlank()
+                ? sequenceNumberOverride
+                : (cmd.getSequenceNumber() != null && !cmd.getSequenceNumber().isBlank()
+                        ? cmd.getSequenceNumber()
+                        : "TMP-" + System.currentTimeMillis());
         return JournalEntry.builder()
                 .id(new JournalEntryId(journalEntryId))
                 .companyId(new CompanyId(cmd.getCompanyId()))
                 .journalId(new JournalId(cmd.getJournalId()))
-                .sequenceNumber(cmd.getSequenceNumber())
+                .sequenceNumber(seq)
                 .date(cmd.getDate())
                 .currency(currency)
                 .items(items)

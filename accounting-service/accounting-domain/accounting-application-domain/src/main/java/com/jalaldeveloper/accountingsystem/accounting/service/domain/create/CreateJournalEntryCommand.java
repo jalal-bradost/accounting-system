@@ -13,7 +13,7 @@ public class CreateJournalEntryCommand {
     private final UUID companyId;
     @NotNull
     private final UUID journalId;
-    @NotNull
+    /** Optional: when omitted, server generates via sequence. */
     private final String sequenceNumber;
     @NotNull
     private final LocalDate date;
@@ -26,7 +26,7 @@ public class CreateJournalEntryCommand {
                                      String currencyCode, List<JournalItemCommand> items) {
         this.companyId = companyId;
         this.journalId = journalId;
-        this.sequenceNumber = sequenceNumber;
+        this.sequenceNumber = sequenceNumber != null ? sequenceNumber : "";
         this.date = date;
         this.currencyCode = currencyCode;
         this.items = items != null ? items : List.of();

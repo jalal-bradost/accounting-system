@@ -55,16 +55,15 @@ This document splits the implementation into 5 sessions. Each session is self-co
 
 ---
 
-## Session 4: Odoo-like Base (Sequence, Fiscal Period, Lock Date)
+## Session 4: Odoo-like Base (Sequence, Fiscal Period, Lock Date) (DONE)
 
 **Goal:** Add sequence generation and period/lock controls.
 
-**Deliverables:**
-- **SequenceGeneratorPort** (output port) and adapter: generate next journal entry number per journal/company (e.g. table or DB sequence).
-- Use sequence in CreateJournalEntry and in reversal.
-- **Fiscal period:** Value object or entity `FiscalPeriod` (start/end date, open/closed); optional `FiscalYear`; link `JournalEntry` to period (by date or stored).
-- **Lock date:** Company (or settings) `periodLockDate`; in post use case reject if entry date is before lock date.
-- Repository/port for period and company settings if needed.
+**Done:**
+- **SequenceGeneratorPort** (output port): `getNextSequenceNumber(CompanyId, JournalId, LocalDate)`. **SequenceGeneratorAdapter**: table `journal_entry_sequences` (company_id, journal_id, period_key e.g. year, last_number); pessimistic lock, increment, format e.g. `JOU-2025-00001`. CreateJournalEntry and ReverseJournalEntry use it; optional `sequenceNumber` in command (server generates when omitted).
+- **CompanyLockDatePort** (output): `getPeriodLockDate(CompanyId)`, `setPeriodLockDate(CompanyId, LocalDate)`. **CompanyLockDateAdapter** + **CompanySettingsEntity** / **CompanySettingsJpaRepository** (table `company_settings`). **PostJournalEntryCommandHandler**: if entry date is before lock date → throw `AccountingDomainException`.
+- **FiscalPeriodRepository** (output): `findPeriodContaining(CompanyId, LocalDate)` → `Optional<FiscalPeriodInfo>`, `create(...)`. **FiscalPeriodRepositoryAdapter** + **FiscalPeriodEntity** / **FiscalPeriodJpaRepository** (table `fiscal_periods`). Post handler: if a period contains the entry date and it is not open → throw.
+- **CompanySettingsApplicationService** and **FiscalPeriodApplicationService** (input ports) with implementations. **REST:** PUT `/api/v1/companies/{companyId}/settings` (body `{ "periodLockDate": "yyyy-MM-dd" }`), POST `/api/v1/companies/{companyId}/fiscal-periods` (body `{ "startDate", "endDate", "open" }` → returns created period).
 
 ---
 
