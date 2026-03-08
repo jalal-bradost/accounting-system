@@ -5,6 +5,7 @@ import com.jalaldeveloper.accountingsystem.accounting.service.domain.mapper.Acco
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository.JournalEntryRepository;
 import com.jalaldeveloper.accountingsystem.domain.core.AccountingDomainService;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalEntryId;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalEntryStatus;
 import com.jalaldeveloper.accountingsystem.domain.core.entity.JournalEntry;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,9 @@ class PostJournalEntryCommandHandler {
     CreateJournalEntryResponse postJournalEntry(UUID journalEntryId) {
         JournalEntry entry = journalEntryRepository.findById(new JournalEntryId(journalEntryId))
                 .orElseThrow(() -> new IllegalArgumentException("Journal entry not found: " + journalEntryId));
+        if (entry.getStatus() == JournalEntryStatus.POSTED) {
+            return mapper.journalEntryToCreateResponse(entry, "Journal entry already posted.");
+        }
         accountingDomainService.postJournalEntry(entry);
         JournalEntry saved = journalEntryRepository.save(entry);
         return mapper.journalEntryToCreateResponse(saved, "Journal entry posted successfully.");

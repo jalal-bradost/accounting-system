@@ -36,6 +36,7 @@ public class JournalEntryDataAccessMapper {
                 .date(entity.getEntryDate())
                 .currency(currency)
                 .items(items)
+                .reversalOfEntryId(entity.getReversalOfEntryId() != null ? new JournalEntryId(entity.getReversalOfEntryId()) : null)
                 .status(entity.getStatus())
                 .build();
     }
@@ -51,6 +52,7 @@ public class JournalEntryDataAccessMapper {
         entity.setEntryDate(domain.getDate());
         entity.setCurrencyCode(domain.getCurrency() != null ? domain.getCurrency().code() : null);
         entity.setStatus(domain.getStatus());
+        entity.setReversalOfEntryId(domain.getReversalOfEntryId() != null ? domain.getReversalOfEntryId().getId() : null);
         if (domain.getItems() != null) {
             entity.getItems().clear();
             for (JournalItem item : domain.getItems()) {

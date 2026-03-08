@@ -12,6 +12,7 @@ import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.Jour
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.JournalEntryResponse;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.Currency;
+import com.jalaldeveloper.accountingsystem.domain.valueobject.MonetaryScale;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.Money;
 import org.springframework.stereotype.Component;
 
@@ -80,8 +81,8 @@ public class AccountingDataMapper {
                             .id(new JournalItemId(UUID.randomUUID()))
                             .accountId(new AccountId(c.getAccountId()))
                             .label(c.getLabel())
-                            .debit(c.getDebit())
-                            .credit(c.getCredit())
+                            .debit(MonetaryScale.scale(c.getDebit()))
+                            .credit(MonetaryScale.scale(c.getCredit()))
                             .amountCurrency(amountCurrency)
                             .currency(curr)
                             .build();
@@ -139,6 +140,7 @@ public class AccountingDataMapper {
                 entry.getDate(),
                 entry.getCurrency() != null ? entry.getCurrency().code() : null,
                 entry.getStatus(),
+                entry.getReversalOfEntryId() != null ? entry.getReversalOfEntryId().getId() : null,
                 itemResponses);
     }
 

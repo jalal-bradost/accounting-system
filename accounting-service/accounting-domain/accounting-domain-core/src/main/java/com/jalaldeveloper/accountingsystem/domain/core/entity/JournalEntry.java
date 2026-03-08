@@ -19,12 +19,27 @@ public class JournalEntry extends AggregateRoot<JournalEntryId> {
     private final LocalDate date;
     private final Currency currency;
     private final List<JournalItem> items;
+    private final JournalEntryId reversalOfEntryId;
     private JournalEntryStatus status;
 
     public void validate() {
-        BigDecimal totalDebit = items.stream().map(JournalItem::getDebit).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalCredit = items.stream().map(JournalItem::getCredit).reduce(BigDecimal.ZERO, BigDecimal::add);
-
+        if (items == null || items.size() < 2) {
+            throw new AccountingDomainException("Journal entry must have at least two lines.");
+        }
+        BigDecimal zero = BigDecimal.ZERO;
+        for (JournalItem item : items) {
+            BigDecimal d = item.getDebit() != null ? item.getDebit() : zero;
+            BigDecimal c = item.getCredit() != null ? item.getCredit() : zero;
+            boolean hasDebit = d.compareTo(zero) > 0;
+            boolean hasCredit = c.compareTo(zero) > 0;
+            boolean bothZero = d.compareTo(zero) == 0 && c.compareTo(zero) == 0;
+            if (bothZero || (hasDebit && hasCredit)) {
+                throw new AccountingDomainException(
+                    "Each line must have either debit or credit (not both, not both zero). Invalid line: account=" + item.getAccountId() + " debit=" + d + " credit=" + c);
+            }
+        }
+        BigDecimal totalDebit = items.stream().map(JournalItem::getDebit).reduce(BigDecimal.ZERO, (a, b) -> a.add(b != null ? b : BigDecimal.ZERO));
+        BigDecimal totalCredit = items.stream().map(JournalItem::getCredit).reduce(BigDecimal.ZERO, (a, b) -> a.add(b != null ? b : BigDecimal.ZERO));
         if (totalDebit.compareTo(totalCredit) != 0) {
             throw new AccountingDomainException("Entry is not balanced! Debits must equal Credits.");
         }
@@ -60,6 +75,7 @@ public class JournalEntry extends AggregateRoot<JournalEntryId> {
         date = builder.date;
         currency = builder.currency;
         items = builder.items;
+        reversalOfEntryId = builder.reversalOfEntryId;
         status = builder.status;
     }
 
@@ -91,6 +107,10 @@ public class JournalEntry extends AggregateRoot<JournalEntryId> {
         return status;
     }
 
+    public JournalEntryId getReversalOfEntryId() {
+        return reversalOfEntryId;
+    }
+
     public static Builder builder() {
         return Builder.builder();
     }
@@ -103,6 +123,7 @@ public class JournalEntry extends AggregateRoot<JournalEntryId> {
         private LocalDate date;
         private Currency currency;
         private List<JournalItem> items;
+        private JournalEntryId reversalOfEntryId;
         private JournalEntryStatus status;
 
         private Builder() {
@@ -144,6 +165,11 @@ public class JournalEntry extends AggregateRoot<JournalEntryId> {
 
         public Builder items(List<JournalItem> val) {
             items = val;
+            return this;
+        }
+
+        public Builder reversalOfEntryId(JournalEntryId val) {
+            reversalOfEntryId = val;
             return this;
         }
 

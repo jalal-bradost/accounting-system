@@ -1,7 +1,6 @@
 package com.jalaldeveloper.accountingsystem.domain.valueobject;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.Objects;
 
 public class Money {
@@ -10,7 +9,7 @@ public class Money {
     public static final Money ZERO = new Money(BigDecimal.ZERO);
 
     public Money(BigDecimal amount) {
-        this.amount = amount;
+        this.amount = amount != null ? MonetaryScale.scale(amount) : MonetaryScale.scale(BigDecimal.ZERO);
     }
 
     public boolean isGreaterThanZero() {
@@ -22,15 +21,15 @@ public class Money {
     }
 
     public Money add(Money money) {
-        return new Money(setScale(this.amount.add(money.getAmount())));
+        return new Money(MonetaryScale.scale(this.amount.add(money.getAmount())));
     }
 
     public Money subtract(Money money) {
-        return new Money(setScale(this.amount.subtract(money.getAmount())));
+        return new Money(MonetaryScale.scale(this.amount.subtract(money.getAmount())));
     }
 
     public Money multiply(int multiplier) {
-        return new Money(setScale(this.amount.multiply(new BigDecimal(multiplier))));
+        return new Money(MonetaryScale.scale(this.amount.multiply(new BigDecimal(multiplier))));
     }
 
     public BigDecimal getAmount() {
@@ -50,7 +49,4 @@ public class Money {
         return Objects.hash(amount);
     }
 
-    private BigDecimal setScale(BigDecimal input) {
-        return input.setScale(2, RoundingMode.HALF_EVEN);
-    }
 }

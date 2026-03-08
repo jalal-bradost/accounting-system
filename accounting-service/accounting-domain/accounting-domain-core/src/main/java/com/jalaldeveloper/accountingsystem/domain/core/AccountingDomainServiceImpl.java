@@ -24,32 +24,35 @@ public class AccountingDomainServiceImpl implements AccountingDomainService {
     }
 
     @Override
-    public JournalEntry createReversalEntry(JournalEntry originalEntry, String reason) {
+    public JournalEntry createReversalEntry(JournalEntry originalEntry, String reason, String reversalSequenceNumber) {
         if (originalEntry.getStatus() != JournalEntryStatus.POSTED) {
             throw new AccountingDomainException("Cannot reverse a non-posted entry.");
         }
+        if (reversalSequenceNumber == null || reversalSequenceNumber.isBlank()) {
+            throw new AccountingDomainException("Reversal entry must have a sequence number.");
+        }
 
-        // Map original items to reversed items
         List<JournalItem> reversedItems = originalEntry.getItems().stream()
                 .map(item -> JournalItem.builder()
                         .id(new JournalItemId(UUID.randomUUID()))
                         .accountId(item.getAccountId())
                         .label("Reversal of " + originalEntry.getSequenceNumber() + ": " + reason)
-                        .debit(item.getCredit())  // Swap Credit to Debit
-                        .credit(item.getDebit()) // Swap Debit to Credit
+                        .debit(item.getCredit())
+                        .credit(item.getDebit())
                         .amountCurrency(item.getAmountCurrency())
                         .currency(item.getCurrency())
                         .build())
                 .toList();
 
-        // Create the new JournalEntry using its Builder
         return JournalEntry.builder()
                 .id(new JournalEntryId(UUID.randomUUID()))
                 .companyId(originalEntry.getCompanyId())
                 .journalId(originalEntry.getJournalId())
+                .sequenceNumber(reversalSequenceNumber)
                 .date(LocalDate.now())
                 .currency(originalEntry.getCurrency())
                 .items(reversedItems)
+                .reversalOfEntryId(originalEntry.getId())
                 .status(JournalEntryStatus.DRAFT)
                 .build();
     }

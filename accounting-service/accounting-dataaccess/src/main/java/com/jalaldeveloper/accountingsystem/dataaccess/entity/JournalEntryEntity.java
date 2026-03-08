@@ -27,6 +27,8 @@ public class JournalEntryEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private JournalEntryStatus status;
+    @Column(name = "reversal_of_entry_id")
+    private UUID reversalOfEntryId;
     @OneToMany(mappedBy = "journalEntry", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<JournalItemEntity> items = new ArrayList<>();
 
@@ -47,4 +49,6 @@ public class JournalEntryEntity {
     public void setStatus(JournalEntryStatus status) { this.status = status; }
     public List<JournalItemEntity> getItems() { return items; }
     public void setItems(List<JournalItemEntity> items) { this.items = items != null ? items : new ArrayList<>(); }
+    public UUID getReversalOfEntryId() { return reversalOfEntryId; }
+    public void setReversalOfEntryId(UUID reversalOfEntryId) { this.reversalOfEntryId = reversalOfEntryId; }
 }

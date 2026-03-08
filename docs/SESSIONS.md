@@ -42,16 +42,16 @@ This document splits the implementation into 5 sessions. Each session is self-co
 
 ---
 
-## Session 3: Double-Entry Reliability
+## Session 3: Double-Entry Reliability (DONE)
 
 **Goal:** Harden double-entry rules and immutability.
 
-**Deliverables:**
-- **Single scale:** Monetary scale constant (e.g. 2 or 4); use in `Money` and all debit/credit; DB columns `DECIMAL(19,4)`.
-- **Item-level rules:** In `JournalEntry.validate()`: each line has exactly one of debit or credit non-zero (the other zero); at least two lines.
-- **Immutability:** Once POSTED, reject updates to entry/items in domain and in persistence layer.
-- **Idempotent post:** In post use case, skip or no-op if status already POSTED.
-- **Reversal integrity:** Set `sequenceNumber` on reversal entry (from sequence or passed in); add `reversalOfEntryId` (value object) to `JournalEntry` and persist.
+**Done:**
+- **Single scale:** `MonetaryScale` in common-domain (SCALE=4, HALF_EVEN); `Money` uses it in constructor and in add/subtract/multiply; `AccountingDataMapper.journalItemCommandsToDomain` scales debit/credit via `MonetaryScale.scale()`. DB already uses DECIMAL(19,4) for journal_items.
+- **Item-level rules:** `JournalEntry.validate()` enforces: at least two lines; each line has exactly one of debit or credit > 0 (the other must be zero); then balance check (sum debit == sum credit).
+- **Immutability:** In `JournalEntryRepositoryImpl.save()`, if existing entity has status POSTED, throw `AccountingDomainException` ("Cannot modify a posted journal entry. Use reversal instead.").
+- **Idempotent post:** In `PostJournalEntryCommandHandler`, if `entry.getStatus() == POSTED` return success response without calling domain service or save.
+- **Reversal integrity:** `JournalEntry` has optional `reversalOfEntryId` (JournalEntryId); `AccountingDomainService.createReversalEntry(original, reason, reversalSequenceNumber)` sets `sequenceNumber` and `reversalOfEntryId(original.getId())` on the new entry. Reversal handler generates `reversalSequenceNumber` as "REV-{originalSeq}-{timestamp}". `JournalEntryEntity` and mapper persist/load `reversal_of_entry_id`. `JournalEntryResponse` and API expose `reversalOfEntryId`.
 
 ---
 

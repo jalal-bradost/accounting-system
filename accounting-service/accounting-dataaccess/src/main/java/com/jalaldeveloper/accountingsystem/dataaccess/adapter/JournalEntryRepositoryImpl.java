@@ -11,7 +11,9 @@ import com.jalaldeveloper.accountingsystem.dataaccess.repository.JournalEntryJpa
 import com.jalaldeveloper.accountingsystem.dataaccess.repository.JournalJpaRepository;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalEntryId;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalId;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalEntryStatus;
 import com.jalaldeveloper.accountingsystem.domain.core.entity.JournalEntry;
+import com.jalaldeveloper.accountingsystem.domain.core.exception.AccountingDomainException;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import org.springframework.stereotype.Component;
 
@@ -43,6 +45,9 @@ public class JournalEntryRepositoryImpl implements JournalEntryRepository {
         JournalEntity journalEntity = journalJpaRepository.findById(journalEntry.getJournalId().getId())
                 .orElseThrow(() -> new IllegalStateException("Journal not found: " + journalEntry.getJournalId().getId()));
         JournalEntryEntity existing = jpaRepository.findById(journalEntry.getId().getId()).orElse(null);
+        if (existing != null && existing.getStatus() == JournalEntryStatus.POSTED) {
+            throw new AccountingDomainException("Cannot modify a posted journal entry. Use reversal instead.");
+        }
         JournalEntryEntity entity = mapper.domainToEntity(journalEntry, existing, journalEntity);
         setAccountOnItems(entity, journalEntry);
         JournalEntryEntity saved = jpaRepository.save(entity);

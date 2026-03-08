@@ -11,7 +11,7 @@ public interface AccountingDomainService {
     void postJournalEntry(JournalEntry journalEntry);
 
     /**
-     * Logic for reversing an entry (Contra Entry)
+     * Creates a reversal (contra) entry. The new entry will have reversalSequenceNumber and link to original via reversalOfEntryId.
      */
-    JournalEntry createReversalEntry(JournalEntry originalEntry, String reason);
+    JournalEntry createReversalEntry(JournalEntry originalEntry, String reason, String reversalSequenceNumber);
 }

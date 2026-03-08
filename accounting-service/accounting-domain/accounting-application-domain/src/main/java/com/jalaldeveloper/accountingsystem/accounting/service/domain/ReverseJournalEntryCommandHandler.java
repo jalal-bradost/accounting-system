@@ -29,7 +29,8 @@ class ReverseJournalEntryCommandHandler {
     ReverseJournalEntryResponse reverseJournalEntry(ReverseJournalEntryCommand command) {
         JournalEntry original = journalEntryRepository.findById(new JournalEntryId(command.getJournalEntryId()))
                 .orElseThrow(() -> new IllegalArgumentException("Journal entry not found: " + command.getJournalEntryId()));
-        JournalEntry reversal = accountingDomainService.createReversalEntry(original, command.getReason());
+        String reversalSequenceNumber = "REV-" + original.getSequenceNumber() + "-" + System.currentTimeMillis();
+        JournalEntry reversal = accountingDomainService.createReversalEntry(original, command.getReason(), reversalSequenceNumber);
         reversal = journalEntryRepository.save(reversal);
         accountingDomainService.postJournalEntry(reversal);
         reversal = journalEntryRepository.save(reversal);

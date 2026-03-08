@@ -14,11 +14,12 @@ public class JournalEntryResponse {
     private final LocalDate date;
     private final String currencyCode;
     private final JournalEntryStatus status;
+    private final UUID reversalOfEntryId;
     private final List<JournalItemResponse> items;
 
     public JournalEntryResponse(UUID id, UUID companyId, UUID journalId, String sequenceNumber,
                                 LocalDate date, String currencyCode, JournalEntryStatus status,
-                                List<JournalItemResponse> items) {
+                                UUID reversalOfEntryId, List<JournalItemResponse> items) {
         this.id = id;
         this.companyId = companyId;
         this.journalId = journalId;
@@ -26,6 +27,7 @@ public class JournalEntryResponse {
         this.date = date;
         this.currencyCode = currencyCode;
         this.status = status;
+        this.reversalOfEntryId = reversalOfEntryId;
         this.items = items;
     }
 
@@ -36,6 +38,7 @@ public class JournalEntryResponse {
     public LocalDate getDate() { return date; }
     public String getCurrencyCode() { return currencyCode; }
     public JournalEntryStatus getStatus() { return status; }
+    public UUID getReversalOfEntryId() { return reversalOfEntryId; }
     public List<JournalItemResponse> getItems() { return items; }
 
     public static class JournalItemResponse {
