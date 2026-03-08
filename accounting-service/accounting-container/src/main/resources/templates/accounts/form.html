@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: layout(~{::content})}">
+<head>
+  <meta charset="UTF-8"/>
+  <title>New Account</title>
+</head>
+<body>
+<th:block th:fragment="content">
+  <div class="page-header">
+    <h1 class="page-title">New Account</h1>
+    <a th:href="@{/web/accounts}" class="btn btn-outline-secondary">Back to list</a>
+  </div>
+  <div class="card">
+    <div class="card-header">Create account</div>
+    <div class="card-body">
+      <form th:action="@{/web/accounts}" th:object="${createAccountForm}" method="post">
+        <div class="mb-3">
+          <label for="code" class="form-label">Code</label>
+          <input type="text" id="code" class="form-control" th:field="*{code}" required="required"/>
+          <p th:if="${#fields.hasErrors('code')}" th:errors="*{code}" class="text-danger small"></p>
+        </div>
+        <div class="mb-3">
+          <label for="name" class="form-label">Name</label>
+          <input type="text" id="name" class="form-control" th:field="*{name}" required="required"/>
+          <p th:if="${#fields.hasErrors('name')}" th:errors="*{name}" class="text-danger small"></p>
+        </div>
+        <div class="mb-3">
+          <label for="accountType" class="form-label">Account type</label>
+          <select id="accountType" class="form-select" th:field="*{accountType}">
+            <option th:each="t : ${accountTypes}" th:value="${t.name()}" th:text="${t.name()}">ASSET</option>
+          </select>
+        </div>
+        <div class="mb-3 form-check">
+          <input type="checkbox" id="active" class="form-check-input" th:field="*{active}"/>
+          <label for="active" class="form-check-label">Active</label>
+        </div>
+        <button type="submit" class="btn btn-primary">Create</button>
+        <a th:href="@{/web/accounts}" class="btn btn-outline-secondary ms-2">Cancel</a>
+      </form>
+    </div>
+  </div>
+</th:block>
+</body>
+</html>

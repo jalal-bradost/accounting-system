@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<nav th:fragment="sidebar" class="layout-navbar">
+  <div class="menu-brand">Accounting</div>
+  <ul class="menu">
+    <li class="menu-item">
+      <a th:href="@{/web}" class="menu-link" th:classappend="${(requestURI == '/web' || requestURI == '/web/') ? 'active' : ''}">
+        <span class="menu-icon">&#x1F3E2;</span> Dashboard
+      </a>
+    </li>
+    <li class="menu-item">
+      <a th:href="@{/web/company/settings}" class="menu-link" th:classappend="${#strings.startsWith(requestURI, '/web/company') ? 'active' : ''}">
+        <span class="menu-icon">&#x2699;</span> Company Settings
+      </a>
+    </li>
+    <li class="menu-item">
+      <a th:href="@{/web/fiscal-periods}" class="menu-link" th:classappend="${#strings.startsWith(requestURI, '/web/fiscal-periods') ? 'active' : ''}">
+        <span class="menu-icon">&#x1F4C5;</span> Fiscal Periods
+      </a>
+    </li>
+    <li class="menu-item">
+      <a th:href="@{/web/accounts}" class="menu-link" th:classappend="${#strings.startsWith(requestURI, '/web/accounts') ? 'active' : ''}">
+        <span class="menu-icon">&#x1F4B0;</span> Chart of Accounts
+      </a>
+    </li>
+    <li class="menu-item">
+      <a th:href="@{/web/journals}" class="menu-link" th:classappend="${#strings.startsWith(requestURI, '/web/journals') ? 'active' : ''}">
+        <span class="menu-icon">&#x1F4D6;</span> Journals
+      </a>
+    </li>
+    <li class="menu-item">
+      <a th:href="@{/web/journal-entries}" class="menu-link" th:classappend="${#strings.startsWith(requestURI, '/web/journal-entries') ? 'active' : ''}">
+        <span class="menu-icon">&#x270D;</span> Journal Entries
+      </a>
+    </li>
+    <li class="menu-item">
+      <a th:href="@{/web/trial-balance}" class="menu-link" th:classappend="${#strings.startsWith(requestURI, '/web/trial-balance') ? 'active' : ''}">
+        <span class="menu-icon">&#x1F4B8;</span> Trial Balance
+      </a>
+    </li>
+    <li class="menu-item">
+      <a th:href="@{/web/reconciliation}" class="menu-link" th:classappend="${#strings.startsWith(requestURI, '/web/reconciliation') ? 'active' : ''}">
+        <span class="menu-icon">&#x27F3;</span> Reconciliation
+      </a>
+    </li>
+  </ul>
+</nav>
+</body>
+</html>

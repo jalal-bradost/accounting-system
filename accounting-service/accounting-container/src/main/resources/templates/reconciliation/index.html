@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: layout(~{::content})}">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Reconciliation</title>
+</head>
+<body>
+<th:block th:fragment="content">
+  <div class="page-header">
+    <h1 class="page-title">Reconciliation</h1>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      <p class="text-muted">Reconcile journal items by setting a reconciliation ID on selected items. Use the API <code>POST /api/v1/journal-items/reconcile</code> and <code>POST /api/v1/journal-items/unreconcile</code> with journal item IDs and reconciliation ID.</p>
+      <p>This screen is a placeholder. For full reconciliation UI, implement selection of journal items from journal entries and call the reconciliation API.</p>
+    </div>
+  </div>
+</th:block>
+</body>
+</html>

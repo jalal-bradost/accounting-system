@@ -7,6 +7,7 @@ import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -21,5 +22,10 @@ class FiscalPeriodApplicationServiceImpl implements FiscalPeriodApplicationServi
     @Override
     public FiscalPeriodInfo createPeriod(UUID companyId, LocalDate startDate, LocalDate endDate, boolean open) {
         return fiscalPeriodRepository.create(new CompanyId(companyId), startDate, endDate, open);
+    }
+
+    @Override
+    public List<FiscalPeriodInfo> listPeriods(UUID companyId) {
+        return fiscalPeriodRepository.findByCompanyIdOrderByStartDateDesc(new CompanyId(companyId));
     }
 }

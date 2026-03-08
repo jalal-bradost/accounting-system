@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: layout(~{::content})}">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Trial Balance</title>
+</head>
+<body>
+<th:block th:fragment="content">
+  <div class="page-header">
+    <h1 class="page-title">Trial Balance</h1>
+    <a th:href="@{/web/trial-balance}" class="btn btn-outline-secondary">New report</a>
+  </div>
+  <p class="text-muted" th:text="'From ' + ${from} + ' to ' + ${to}">-</p>
+  <div class="card">
+    <div class="card-header">Balances</div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Account</th>
+            <th class="text-end">Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr th:each="line : ${lines}">
+            <td>
+              <span th:if="${accountMap != null && accountMap[line.accountId()] != null}" th:text="${accountMap[line.accountId()].code + ' - ' + accountMap[line.accountId()].name}">-</span>
+              <span th:unless="${accountMap != null && accountMap[line.accountId()] != null}" th:text="${line.accountId()}">-</span>
+            </td>
+            <td class="text-end" th:text="${line.balance()}">-</td>
+          </tr>
+          <tr th:if="${#lists.isEmpty(lines)}">
+            <td colspan="2" class="text-muted">No balances in this period.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</th:block>
+</body>
+</html>

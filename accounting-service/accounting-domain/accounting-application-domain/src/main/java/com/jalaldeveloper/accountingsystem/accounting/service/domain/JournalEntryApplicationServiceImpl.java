@@ -9,10 +9,13 @@ import com.jalaldeveloper.accountingsystem.accounting.service.domain.mapper.Acco
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.JournalEntryApplicationService;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository.JournalEntryRepository;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalEntryId;
+import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
 
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Validated
@@ -56,5 +59,12 @@ class JournalEntryApplicationServiceImpl implements JournalEntryApplicationServi
         return journalEntryRepository.findById(new JournalEntryId(journalEntryId))
                 .map(mapper::journalEntryToJournalEntryResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Journal entry not found: " + journalEntryId));
+    }
+
+    @Override
+    public List<JournalEntryResponse> listJournalEntriesByCompany(UUID companyId) {
+        return journalEntryRepository.findByCompanyId(new CompanyId(companyId)).stream()
+                .map(mapper::journalEntryToJournalEntryResponse)
+                .collect(Collectors.toList());
     }
 }

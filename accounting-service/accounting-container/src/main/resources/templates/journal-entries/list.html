@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: layout(~{::content})}">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Journal Entries</title>
+</head>
+<body>
+<th:block th:fragment="content">
+  <div class="page-header">
+    <h1 class="page-title">Journal Entries</h1>
+    <a th:href="@{/web/journal-entries/new}" class="btn btn-primary">New Journal Entry</a>
+  </div>
+  <div th:if="${message}" class="alert alert-success" th:text="${message}"></div>
+  <div class="card">
+    <div class="card-header">Entries</div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Sequence</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr th:each="e : ${entries}">
+            <td th:text="${e.sequenceNumber}">-</td>
+            <td th:text="${e.date}">-</td>
+            <td><span class="badge" th:classappend="${e.status.name() == 'POSTED'} ? 'bg-success' : 'bg-secondary'" th:text="${e.status}">-</span></td>
+            <td>
+              <a th:href="@{/web/journal-entries/{id}(id=${e.id})}" class="btn btn-sm btn-outline-primary">View</a>
+            </td>
+          </tr>
+          <tr th:if="${#lists.isEmpty(entries)}">
+            <td colspan="4" class="text-muted">No journal entries yet. <a th:href="@{/web/journal-entries/new}">Create one</a>.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</th:block>
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: layout(~{::content})}">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Chart of Accounts</title>
+</head>
+<body>
+<th:block th:fragment="content">
+  <div class="page-header">
+    <h1 class="page-title">Chart of Accounts</h1>
+    <a th:href="@{/web/accounts/new}" class="btn btn-primary">New Account</a>
+  </div>
+  <div th:if="${message}" class="alert alert-success" th:text="${message}"></div>
+  <div class="card">
+    <div class="card-header">Accounts</div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Active</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr th:each="a : ${accounts}">
+            <td th:text="${a.code}">-</td>
+            <td th:text="${a.name}">-</td>
+            <td th:text="${a.accountType}">-</td>
+            <td><span th:if="${a.active}" class="badge bg-success">Yes</span><span th:unless="${a.active}" class="badge bg-secondary">No</span></td>
+          </tr>
+          <tr th:if="${#lists.isEmpty(accounts)}">
+            <td colspan="4" class="text-muted">No accounts yet. <a th:href="@{/web/accounts/new}">Create one</a>.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</th:block>
+</body>
+</html>

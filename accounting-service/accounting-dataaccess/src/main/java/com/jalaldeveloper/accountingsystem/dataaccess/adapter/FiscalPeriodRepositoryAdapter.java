@@ -7,7 +7,9 @@ import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Component
 public class FiscalPeriodRepositoryAdapter implements FiscalPeriodRepository {
@@ -22,6 +24,13 @@ public class FiscalPeriodRepositoryAdapter implements FiscalPeriodRepository {
     public Optional<FiscalPeriodInfo> findPeriodContaining(CompanyId companyId, LocalDate date) {
         return jpaRepository.findByCompanyIdAndDateBetweenStartAndEnd(companyId.getId(), date)
                 .map(e -> new FiscalPeriodInfo(e.getId(), e.getStartDate(), e.getEndDate(), e.isOpen()));
+    }
+
+    @Override
+    public List<FiscalPeriodInfo> findByCompanyIdOrderByStartDateDesc(CompanyId companyId) {
+        return jpaRepository.findByCompanyIdOrderByStartDateDesc(companyId.getId()).stream()
+                .map(e -> new FiscalPeriodInfo(e.getId(), e.getStartDate(), e.getEndDate(), e.isOpen()))
+                .collect(Collectors.toList());
     }
 
     @Override

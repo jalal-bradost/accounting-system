@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<header th:fragment="navbar(title)" class="layout-nav">
+  <h1 class="navbar-title" th:text="${title}">Dashboard</h1>
+  <div th:if="${companyId != null}" class="ms-auto">
+    <span class="badge bg-light text-dark">Company: <span th:text="${companyId}">-</span></span>
+  </div>
+</header>
+</body>
+</html>

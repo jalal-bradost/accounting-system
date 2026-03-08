@@ -3,6 +3,7 @@ package com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.outp
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -15,6 +16,11 @@ public interface FiscalPeriodRepository {
      * Used to check that the period exists and is open before posting.
      */
     Optional<FiscalPeriodInfo> findPeriodContaining(CompanyId companyId, LocalDate date);
+
+    /**
+     * Lists all fiscal periods for the company, newest first.
+     */
+    List<FiscalPeriodInfo> findByCompanyIdOrderByStartDateDesc(CompanyId companyId);
 
     /**
      * Minimal read-only info about a fiscal period for validation.

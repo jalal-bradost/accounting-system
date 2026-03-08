@@ -7,6 +7,7 @@ import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.Reve
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.ReverseJournalEntryResponse;
 
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 
 public interface JournalEntryApplicationService {
@@ -18,4 +19,6 @@ public interface JournalEntryApplicationService {
     ReverseJournalEntryResponse reverseJournalEntry(@Valid ReverseJournalEntryCommand command);
 
     JournalEntryResponse getJournalEntry(UUID journalEntryId);
+
+    List<JournalEntryResponse> listJournalEntriesByCompany(UUID companyId);
 }
