@@ -7,6 +7,7 @@ import com.jalaldeveloper.accountingsystem.domain.valueobject.Currency;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.Money;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 public class JournalItem extends BaseEntity<JournalItemId> {
     private final AccountId accountId;
@@ -18,6 +19,9 @@ public class JournalItem extends BaseEntity<JournalItemId> {
     private final Money amountCurrency;
     private final Currency currency;
 
+    /** Nullable; when set, this item is part of a reconciliation group. */
+    private final UUID reconciliationId;
+
     private JournalItem(Builder builder) {
         super.setId(builder.id);
         accountId = builder.accountId;
@@ -26,6 +30,7 @@ public class JournalItem extends BaseEntity<JournalItemId> {
         credit = builder.credit;
         amountCurrency = builder.amountCurrency;
         currency = builder.currency;
+        reconciliationId = builder.reconciliationId;
     }
 
     public AccountId getAccountId() {
@@ -52,6 +57,10 @@ public class JournalItem extends BaseEntity<JournalItemId> {
         return currency;
     }
 
+    public UUID getReconciliationId() {
+        return reconciliationId;
+    }
+
     public static Builder builder() {
         return Builder.builder();
     }
@@ -64,6 +73,7 @@ public class JournalItem extends BaseEntity<JournalItemId> {
         private BigDecimal credit;
         private Money amountCurrency;
         private Currency currency;
+        private UUID reconciliationId;
 
         private Builder() {
         }
@@ -104,6 +114,11 @@ public class JournalItem extends BaseEntity<JournalItemId> {
 
         public Builder currency(Currency val) {
             currency = val;
+            return this;
+        }
+
+        public Builder reconciliationId(UUID val) {
+            reconciliationId = val;
             return this;
         }
 

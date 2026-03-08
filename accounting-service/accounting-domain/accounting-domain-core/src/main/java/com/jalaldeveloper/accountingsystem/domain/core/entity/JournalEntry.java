@@ -9,6 +9,7 @@ import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.Currency;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -21,6 +22,10 @@ public class JournalEntry extends AggregateRoot<JournalEntryId> {
     private final List<JournalItem> items;
     private final JournalEntryId reversalOfEntryId;
     private JournalEntryStatus status;
+    private final Instant createdAt;
+    private final Instant updatedAt;
+    private final Instant postedAt;
+    private final String postedBy;
 
     public void validate() {
         if (items == null || items.size() < 2) {
@@ -77,6 +82,10 @@ public class JournalEntry extends AggregateRoot<JournalEntryId> {
         items = builder.items;
         reversalOfEntryId = builder.reversalOfEntryId;
         status = builder.status;
+        createdAt = builder.createdAt;
+        updatedAt = builder.updatedAt;
+        postedAt = builder.postedAt;
+        postedBy = builder.postedBy;
     }
 
     public CompanyId getCompanyId() {
@@ -111,6 +120,11 @@ public class JournalEntry extends AggregateRoot<JournalEntryId> {
         return reversalOfEntryId;
     }
 
+    public Instant getCreatedAt() { return createdAt; }
+    public Instant getUpdatedAt() { return updatedAt; }
+    public Instant getPostedAt() { return postedAt; }
+    public String getPostedBy() { return postedBy; }
+
     public static Builder builder() {
         return Builder.builder();
     }
@@ -125,6 +139,10 @@ public class JournalEntry extends AggregateRoot<JournalEntryId> {
         private List<JournalItem> items;
         private JournalEntryId reversalOfEntryId;
         private JournalEntryStatus status;
+        private Instant createdAt;
+        private Instant updatedAt;
+        private Instant postedAt;
+        private String postedBy;
 
         private Builder() {
         }
@@ -177,6 +195,11 @@ public class JournalEntry extends AggregateRoot<JournalEntryId> {
             status = val;
             return this;
         }
+
+        public Builder createdAt(Instant val) { createdAt = val; return this; }
+        public Builder updatedAt(Instant val) { updatedAt = val; return this; }
+        public Builder postedAt(Instant val) { postedAt = val; return this; }
+        public Builder postedBy(String val) { postedBy = val; return this; }
 
         public JournalEntry build() {
             return new JournalEntry(this);

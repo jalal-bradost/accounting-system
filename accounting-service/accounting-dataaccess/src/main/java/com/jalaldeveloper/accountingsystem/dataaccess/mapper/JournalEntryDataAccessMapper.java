@@ -17,6 +17,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import java.time.Instant;
+
 @Component
 public class JournalEntryDataAccessMapper {
 
@@ -38,6 +40,10 @@ public class JournalEntryDataAccessMapper {
                 .items(items)
                 .reversalOfEntryId(entity.getReversalOfEntryId() != null ? new JournalEntryId(entity.getReversalOfEntryId()) : null)
                 .status(entity.getStatus())
+                .createdAt(entity.getCreatedAt())
+                .updatedAt(entity.getUpdatedAt())
+                .postedAt(entity.getPostedAt())
+                .postedBy(entity.getPostedBy())
                 .build();
     }
 
@@ -75,6 +81,7 @@ public class JournalEntryDataAccessMapper {
                 .credit(e.getCredit() != null ? e.getCredit() : BigDecimal.ZERO)
                 .amountCurrency(amountCurrency)
                 .currency(currency)
+                .reconciliationId(e.getReconciliationId())
                 .build();
     }
 
@@ -89,6 +96,7 @@ public class JournalEntryDataAccessMapper {
         e.setAmountCurrency(domain.getAmountCurrency() != null && domain.getAmountCurrency().getAmount() != null
                 ? domain.getAmountCurrency().getAmount()
                 : BigDecimal.ZERO);
+        e.setReconciliationId(domain.getReconciliationId());
         return e;
     }
 

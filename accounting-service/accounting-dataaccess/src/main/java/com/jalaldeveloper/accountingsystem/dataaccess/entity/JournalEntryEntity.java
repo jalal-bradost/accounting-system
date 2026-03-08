@@ -3,6 +3,7 @@ package com.jalaldeveloper.accountingsystem.dataaccess.entity;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalEntryStatus;
 import jakarta.persistence.*;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +30,14 @@ public class JournalEntryEntity {
     private JournalEntryStatus status;
     @Column(name = "reversal_of_entry_id")
     private UUID reversalOfEntryId;
+    @Column(name = "created_at")
+    private Instant createdAt;
+    @Column(name = "updated_at")
+    private Instant updatedAt;
+    @Column(name = "posted_at")
+    private Instant postedAt;
+    @Column(name = "posted_by", length = 255)
+    private String postedBy;
     @OneToMany(mappedBy = "journalEntry", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<JournalItemEntity> items = new ArrayList<>();
 
@@ -51,4 +60,12 @@ public class JournalEntryEntity {
     public void setItems(List<JournalItemEntity> items) { this.items = items != null ? items : new ArrayList<>(); }
     public UUID getReversalOfEntryId() { return reversalOfEntryId; }
     public void setReversalOfEntryId(UUID reversalOfEntryId) { this.reversalOfEntryId = reversalOfEntryId; }
+    public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+    public Instant getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    public Instant getPostedAt() { return postedAt; }
+    public void setPostedAt(Instant postedAt) { this.postedAt = postedAt; }
+    public String getPostedBy() { return postedBy; }
+    public void setPostedBy(String postedBy) { this.postedBy = postedBy; }
 }

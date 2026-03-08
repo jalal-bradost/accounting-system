@@ -143,7 +143,8 @@ public class AccountingDataMapper {
                                 i.getDebit(),
                                 i.getCredit(),
                                 i.getCurrency() != null ? i.getCurrency().code() : null,
-                                i.getAmountCurrency() != null ? i.getAmountCurrency().getAmount() : null))
+                                i.getAmountCurrency() != null ? i.getAmountCurrency().getAmount() : null,
+                                i.getReconciliationId()))
                         .collect(Collectors.toList());
         return new JournalEntryResponse(
                 entry.getId().getId(),
@@ -154,7 +155,11 @@ public class AccountingDataMapper {
                 entry.getCurrency() != null ? entry.getCurrency().code() : null,
                 entry.getStatus(),
                 entry.getReversalOfEntryId() != null ? entry.getReversalOfEntryId().getId() : null,
-                itemResponses);
+                itemResponses,
+                entry.getCreatedAt(),
+                entry.getUpdatedAt(),
+                entry.getPostedAt(),
+                entry.getPostedBy());
     }
 
     private static Currency toCurrency(String code) {

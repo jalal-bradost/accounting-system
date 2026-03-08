@@ -2,6 +2,7 @@ package com.jalaldeveloper.accountingsystem.accounting.service.domain.create;
 
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalEntryStatus;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -16,10 +17,15 @@ public class JournalEntryResponse {
     private final JournalEntryStatus status;
     private final UUID reversalOfEntryId;
     private final List<JournalItemResponse> items;
+    private final Instant createdAt;
+    private final Instant updatedAt;
+    private final Instant postedAt;
+    private final String postedBy;
 
     public JournalEntryResponse(UUID id, UUID companyId, UUID journalId, String sequenceNumber,
                                 LocalDate date, String currencyCode, JournalEntryStatus status,
-                                UUID reversalOfEntryId, List<JournalItemResponse> items) {
+                                UUID reversalOfEntryId, List<JournalItemResponse> items,
+                                Instant createdAt, Instant updatedAt, Instant postedAt, String postedBy) {
         this.id = id;
         this.companyId = companyId;
         this.journalId = journalId;
@@ -29,6 +35,10 @@ public class JournalEntryResponse {
         this.status = status;
         this.reversalOfEntryId = reversalOfEntryId;
         this.items = items;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+        this.postedAt = postedAt;
+        this.postedBy = postedBy;
     }
 
     public UUID getId() { return id; }
@@ -40,6 +50,10 @@ public class JournalEntryResponse {
     public JournalEntryStatus getStatus() { return status; }
     public UUID getReversalOfEntryId() { return reversalOfEntryId; }
     public List<JournalItemResponse> getItems() { return items; }
+    public Instant getCreatedAt() { return createdAt; }
+    public Instant getUpdatedAt() { return updatedAt; }
+    public Instant getPostedAt() { return postedAt; }
+    public String getPostedBy() { return postedBy; }
 
     public static class JournalItemResponse {
         private final UUID id;
@@ -49,9 +63,10 @@ public class JournalEntryResponse {
         private final BigDecimal credit;
         private final String currencyCode;
         private final BigDecimal amountCurrency;
+        private final UUID reconciliationId;
 
         public JournalItemResponse(UUID id, UUID accountId, String label, BigDecimal debit, BigDecimal credit,
-                                   String currencyCode, BigDecimal amountCurrency) {
+                                   String currencyCode, BigDecimal amountCurrency, UUID reconciliationId) {
             this.id = id;
             this.accountId = accountId;
             this.label = label;
@@ -59,6 +74,7 @@ public class JournalEntryResponse {
             this.credit = credit;
             this.currencyCode = currencyCode;
             this.amountCurrency = amountCurrency;
+            this.reconciliationId = reconciliationId;
         }
         public UUID getId() { return id; }
         public UUID getAccountId() { return accountId; }
@@ -67,5 +83,6 @@ public class JournalEntryResponse {
         public BigDecimal getCredit() { return credit; }
         public String getCurrencyCode() { return currencyCode; }
         public BigDecimal getAmountCurrency() { return amountCurrency; }
+        public UUID getReconciliationId() { return reconciliationId; }
     }
 }

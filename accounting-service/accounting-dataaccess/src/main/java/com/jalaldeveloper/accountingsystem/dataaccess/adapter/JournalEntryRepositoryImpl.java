@@ -17,6 +17,7 @@ import com.jalaldeveloper.accountingsystem.domain.core.exception.AccountingDomai
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -49,6 +50,14 @@ public class JournalEntryRepositoryImpl implements JournalEntryRepository {
             throw new AccountingDomainException("Cannot modify a posted journal entry. Use reversal instead.");
         }
         JournalEntryEntity entity = mapper.domainToEntity(journalEntry, existing, journalEntity);
+        Instant now = Instant.now();
+        if (existing == null) {
+            entity.setCreatedAt(now);
+        }
+        entity.setUpdatedAt(now);
+        if (journalEntry.getStatus() == JournalEntryStatus.POSTED && entity.getPostedAt() == null) {
+            entity.setPostedAt(now);
+        }
         setAccountOnItems(entity, journalEntry);
         JournalEntryEntity saved = jpaRepository.save(entity);
         return mapper.entityToDomain(saved);

@@ -67,14 +67,14 @@ This document splits the implementation into 5 sessions. Each session is self-co
 
 ---
 
-## Session 5: Account Balance, Reconciliation Stub, Audit
+## Session 5: Account Balance, Reconciliation Stub, Audit (DONE)
 
 **Goal:** Support reporting and reconciliation.
 
-**Deliverables:**
-- **Account balance (computed):** Query sum(debit)-sum(credit) per account from posted journal items; port/use case for “trial balance” or “ledger” by period/company.
-- **Reconciliation stub:** Add `reconciliationId` (nullable) on `JournalItem` (domain + entity); use case “reconcile” (set same id on selected items), “unreconcile” (clear id).
-- **Audit fields:** `createdAt`/`updatedAt` on entries; optional `postedAt`/`postedBy` (persistence or domain).
+**Done:**
+- **Account balance (computed):** **AccountBalanceRepository** (output port) with `getTrialBalance(CompanyId, from, to)`. **AccountBalanceRepositoryAdapter** + **JournalItemJpaRepository** JPQL. **ReportingApplicationService** + impl. REST: GET `/api/v1/companies/{companyId}/trial-balance?from=&to=` returns lines with accountId and balance.
+- **Reconciliation stub:** **JournalItem** and **JournalItemEntity** have nullable `reconciliationId`. **JournalItemReconciliationPort** (output); **ReconciliationApplicationService** + impl. REST: POST `/api/v1/journal-items/reconcile`, POST `/api/v1/journal-items/unreconcile`. **JournalItemResponse** exposes `reconciliationId`.
+- **Audit fields:** **JournalEntryEntity** and **JournalEntry** have `createdAt`, `updatedAt`, `postedAt`, `postedBy`; set in adapter on save; **JournalEntryResponse** exposes all four.
 
 ---
 
