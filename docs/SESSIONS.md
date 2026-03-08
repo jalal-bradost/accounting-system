@@ -27,17 +27,18 @@ This document splits the implementation into 5 sessions. Each session is self-co
 
 ---
 
-## Session 2: Application Services and REST API
+## Session 2: Application Services and REST API (DONE)
 
 **Goal:** Implement use cases and expose them via REST.
 
-**Deliverables:**
-- **Input ports:** Application service interfaces in `accounting-application-service` (e.g. `AccountApplicationService`, `JournalEntryApplicationService`).
-- **Commands and responses:** CreateAccountCommand, CreateJournalEntryCommand, PostJournalEntryCommand, ReverseJournalEntryCommand, etc.
-- **Command handlers:** CreateAccountCommandHandler, CreateJournalEntryCommandHandler, PostJournalEntryCommandHandler, ReverseJournalEntryCommandHandler (orchestrate domain + output ports).
-- **Application service impl:** Delegates to command handlers.
-- **REST controllers** in `accounting-application`: `AccountController`, `JournalEntryController` (POST/GET, post, reverse).
-- Exception handling: map `AccountingDomainException` to 4xx in common-application or local handler.
+**Done:**
+- **Input ports:** `AccountApplicationService`, `JournalApplicationService`, `JournalEntryApplicationService` in `accounting-application-service` (create, get, list where applicable; post, reverse for journal entry).
+- **Commands/responses:** CreateAccountCommand/Response, CreateJournalCommand/Response, CreateJournalEntryCommand/Response, JournalItemCommand, ReverseJournalEntryCommand/Response; AccountResponse, JournalResponse, JournalEntryResponse (with JournalItemResponse).
+- **Command handlers:** CreateAccountCommandHandler, CreateJournalCommandHandler, CreateJournalEntryCommandHandler, PostJournalEntryCommandHandler, ReverseJournalEntryCommandHandler (use repositories + domain service + mapper).
+- **Application service impl:** AccountApplicationServiceImpl, JournalApplicationServiceImpl, JournalEntryApplicationServiceImpl delegate to handlers and expose get/list via repositories + mapper.
+- **REST:** `AccountController` (POST, GET /{id}, GET ?companyId=), `JournalController` (same), `JournalEntryController` (GET /{id}, POST create, POST /{id}/post, POST /{id}/reverse with optional body { "reason": "..." }).
+- **Exception handling:** `AccountingExceptionHandler` in `accounting-application` maps `AccountingDomainException` to 422 and `IllegalArgumentException` to 400.
+- **Mapper:** `AccountingDataMapper` (command→domain, domain→response for accounts, journals, journal entries).
 
 ---
 

@@ -8,4 +8,24 @@
     </parent>
     <artifactId>accounting-application</artifactId>
     <name>accounting-application</name>
+    <description>REST API layer: controllers, exception handlers</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jalaldeveloper.accountingsystem</groupId>
+            <artifactId>accounting-application-service</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jalaldeveloper.accountingsystem</groupId>
+            <artifactId>common-application</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jalaldeveloper.accountingsystem</groupId>
+            <artifactId>accounting-domain-core</artifactId>
+        </dependency>
+    </dependencies>
 </project>
