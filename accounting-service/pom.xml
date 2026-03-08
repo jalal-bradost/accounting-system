@@ -3,6 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <modules>
+        <module>accounting-container</module>
         <module>accounting-dataaccess</module>
         <module>accounting-domain</module>
         <module>accounting-application</module>

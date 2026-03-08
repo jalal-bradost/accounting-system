@@ -4,6 +4,7 @@ import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalEntryS
 import jakarta.persistence.*;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -12,18 +13,38 @@ import java.util.UUID;
 public class JournalEntryEntity {
     @Id
     private UUID id;
+    @Column(name = "company_id", nullable = false)
     private UUID companyId;
-    
-    @ManyToOne
-    @JoinColumn(name = "journal_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "journal_id", nullable = false)
     private JournalEntity journal;
-
+    @Column(name = "sequence_number", nullable = false)
     private String sequenceNumber;
+    @Column(name = "entry_date", nullable = false)
     private LocalDate entryDate;
-
+    @Column(name = "currency_code", length = 3)
+    private String currencyCode;
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private JournalEntryStatus status;
+    @OneToMany(mappedBy = "journalEntry", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<JournalItemEntity> items = new ArrayList<>();
 
-    @OneToMany(mappedBy = "journalEntry", cascade = CascadeType.ALL)
-    private List<JournalItemEntity> items;
+    public JournalEntryEntity() {}
+    public UUID getId() { return id; }
+    public void setId(UUID id) { this.id = id; }
+    public UUID getCompanyId() { return companyId; }
+    public void setCompanyId(UUID companyId) { this.companyId = companyId; }
+    public JournalEntity getJournal() { return journal; }
+    public void setJournal(JournalEntity journal) { this.journal = journal; }
+    public String getSequenceNumber() { return sequenceNumber; }
+    public void setSequenceNumber(String sequenceNumber) { this.sequenceNumber = sequenceNumber; }
+    public LocalDate getEntryDate() { return entryDate; }
+    public void setEntryDate(LocalDate entryDate) { this.entryDate = entryDate; }
+    public String getCurrencyCode() { return currencyCode; }
+    public void setCurrencyCode(String currencyCode) { this.currencyCode = currencyCode; }
+    public JournalEntryStatus getStatus() { return status; }
+    public void setStatus(JournalEntryStatus status) { this.status = status; }
+    public List<JournalItemEntity> getItems() { return items; }
+    public void setItems(List<JournalItemEntity> items) { this.items = items != null ? items : new ArrayList<>(); }
 }

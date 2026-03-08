@@ -6,6 +6,26 @@
         <artifactId>accounting-domain</artifactId>
         <version>1.0-SNAPSHOT</version>
     </parent>
-    <artifactId>accounting-application-domain</artifactId>
-    <name>accounting-application-domain</name>
+    <artifactId>accounting-application-service</artifactId>
+    <name>accounting-application-service</name>
+    <description>Application service layer: ports (input/output), use cases, command handlers</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.jalaldeveloper.accountingsystem</groupId>
+            <artifactId>accounting-domain-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jalaldeveloper.accountingsystem</groupId>
+            <artifactId>common-domain</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-tx</artifactId>
+        </dependency>
+    </dependencies>
 </project>

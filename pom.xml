@@ -57,6 +57,31 @@
         <version>${project.version}</version>
       </dependency>
       <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>accounting-application-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>accounting-container</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>accounting-application</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>accounting-dataaccess</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>accounting-messaging</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
         <groupId>com.h2database</groupId>
         <artifactId>h2</artifactId>
         <version>${h2.version}</version>

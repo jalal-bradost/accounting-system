@@ -3,6 +3,7 @@
   <component name="Encoding">
     <file url="file://$PROJECT_DIR$/accounting-service/accounting-application/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/accounting-service/accounting-application/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/accounting-service/accounting-container/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/accounting-service/accounting-dataaccess/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/accounting-service/accounting-dataaccess/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/accounting-service/accounting-domain/accounting-application-domain/src/main/java" charset="UTF-8" />

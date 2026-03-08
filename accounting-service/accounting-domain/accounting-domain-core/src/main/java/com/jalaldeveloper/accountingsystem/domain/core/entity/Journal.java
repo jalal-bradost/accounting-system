@@ -19,6 +19,12 @@ public class Journal extends BaseEntity<JournalId> {
         journalType = builder.journalType;
     }
 
+    public CompanyId getCompanyId() { return companyId; }
+    public String getCode() { return code; }
+    public String getName() { return name; }
+    public JournalType getJournalType() { return journalType; }
+
+    public static Builder builder() { return new Builder(); }
 
     public static final class Builder {
         private JournalId id;

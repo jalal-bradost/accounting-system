@@ -21,6 +21,13 @@ public class Account extends AggregateRoot<AccountId> {
         active = builder.active;
     }
 
+    public CompanyId getCompanyId() { return companyId; }
+    public String getCode() { return code; }
+    public String getName() { return name; }
+    public AccountType getAccountType() { return accountType; }
+    public boolean isActive() { return active; }
+
+    public static Builder builder() { return new Builder(); }
 
     public static final class Builder {
         private AccountId id;
