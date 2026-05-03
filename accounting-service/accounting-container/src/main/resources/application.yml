@@ -1,3 +1,8 @@
+accounting:
+  seed:
+    # Idempotent seed for DEFAULT_COMPANY_ID accounts & journals (set false to skip)
+    default-company-chart: true
+
 spring:
   application:
     name: accounting-service
