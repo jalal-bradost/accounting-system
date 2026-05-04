@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: layout(~{::content})}">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Balance Sheet</title>
+</head>
+<body>
+<th:block th:fragment="content">
+  <div class="page-header">
+    <h1 class="page-title">Balance Sheet</h1>
+    <a th:href="@{/web/balance-sheet}" class="btn btn-outline-secondary">New report</a>
+  </div>
+  <p class="text-muted" th:text="'As of ' + ${asOf}">-</p>
+
+  <div class="card mb-3">
+    <div class="card-header">Assets</div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Account</th>
+            <th class="text-end">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr th:each="line : ${report.assets()}">
+            <td>
+              <span th:if="${accountMap != null && accountMap[line.accountId()] != null}" th:text="${accountMap[line.accountId()].code + ' - ' + accountMap[line.accountId()].name}">-</span>
+              <span th:unless="${accountMap != null && accountMap[line.accountId()] != null}" th:text="${line.accountId()}">-</span>
+            </td>
+            <td class="text-end" th:text="${line.amount()}">-</td>
+          </tr>
+          <tr th:if="${#lists.isEmpty(report.assets())}">
+            <td colspan="2" class="text-muted">No asset balances.</td>
+          </tr>
+          <tr class="table-light fw-semibold" th:if="${!#lists.isEmpty(report.assets())}">
+            <td>Total assets</td>
+            <td class="text-end" th:text="${report.totalAssets()}">-</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header">Liabilities</div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Account</th>
+            <th class="text-end">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr th:each="line : ${report.liabilities()}">
+            <td>
+              <span th:if="${accountMap != null && accountMap[line.accountId()] != null}" th:text="${accountMap[line.accountId()].code + ' - ' + accountMap[line.accountId()].name}">-</span>
+              <span th:unless="${accountMap != null && accountMap[line.accountId()] != null}" th:text="${line.accountId()}">-</span>
+            </td>
+            <td class="text-end" th:text="${line.amount()}">-</td>
+          </tr>
+          <tr th:if="${#lists.isEmpty(report.liabilities())}">
+            <td colspan="2" class="text-muted">No liability balances.</td>
+          </tr>
+          <tr class="table-light fw-semibold" th:if="${!#lists.isEmpty(report.liabilities())}">
+            <td>Total liabilities</td>
+            <td class="text-end" th:text="${report.totalLiabilities()}">-</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header">Equity</div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Account</th>
+            <th class="text-end">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr th:each="line : ${report.equity()}">
+            <td>
+              <span th:if="${accountMap != null && accountMap[line.accountId()] != null}" th:text="${accountMap[line.accountId()].code + ' - ' + accountMap[line.accountId()].name}">-</span>
+              <span th:unless="${accountMap != null && accountMap[line.accountId()] != null}" th:text="${line.accountId()}">-</span>
+            </td>
+            <td class="text-end" th:text="${line.amount()}">-</td>
+          </tr>
+          <tr th:if="${#lists.isEmpty(report.equity())}">
+            <td colspan="2" class="text-muted">No equity balances.</td>
+          </tr>
+          <tr class="table-light fw-semibold" th:if="${!#lists.isEmpty(report.equity())}">
+            <td>Total equity</td>
+            <td class="text-end" th:text="${report.totalEquity()}">-</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</th:block>
+</body>
+</html>

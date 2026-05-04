@@ -1,5 +1,6 @@
 package com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository;
 
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.AccountType;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 
 import java.math.BigDecimal;
@@ -18,6 +19,12 @@ public interface AccountBalanceRepository {
      * at least one posted line are included.
      */
     List<AccountBalanceLine> getTrialBalance(CompanyId companyId, LocalDate from, LocalDate to);
+
+    /**
+     * Cumulative balance per account (sum(debit) − sum(credit)) for posted lines with
+     * entry date on or before {@code asOf}, restricted to the given account types.
+     */
+    List<AccountBalanceLine> getBalancesUpTo(CompanyId companyId, LocalDate asOf, List<AccountType> accountTypes);
 
     record AccountBalanceLine(UUID accountId, BigDecimal balance) {}
 }

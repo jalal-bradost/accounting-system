@@ -44,16 +44,16 @@ public class DefaultCompanyChartDataSeeder implements ApplicationRunner {
     }
 
     private void seedAccounts() {
-        insertAccount("430001", "Cash", AccountType.ASSET);
-        insertAccount("430002", "Bank", AccountType.ASSET);
-        insertAccount("430003", "Accounts Receivable", AccountType.ASSET);
-        insertAccount("430004", "Accounts Payable", AccountType.LIABILITY);
+        insertAccount("430001", "Cash", AccountType.BANK_AND_CASH);
+        insertAccount("430002", "Bank", AccountType.BANK_AND_CASH);
+        insertAccount("430003", "Accounts Receivable", AccountType.RECEIVABLE);
+        insertAccount("430004", "Accounts Payable", AccountType.PAYABLE);
         insertAccount("430005", "Sales Revenue", AccountType.INCOME);
-        insertAccount("430006", "Sales Discount", AccountType.EXPENSE);
+        insertAccount("430006", "Sales Discount", AccountType.EXPENSES);
         insertAccount("430007", "Auction Fee Revenue", AccountType.INCOME);
         insertAccount("430008", "Delivery Fee Revenue", AccountType.INCOME);
-        insertAccount("430009", "Cost of goods sold", AccountType.EXPENSE);
-        insertAccount("430010", "Inventory", AccountType.ASSET);
+        insertAccount("430009", "Cost of goods sold", AccountType.COST_OF_REVENUE);
+        insertAccount("430010", "Inventory", AccountType.CURRENT_ASSETS);
     }
 
     private void insertAccount(String code, String name, AccountType type) {

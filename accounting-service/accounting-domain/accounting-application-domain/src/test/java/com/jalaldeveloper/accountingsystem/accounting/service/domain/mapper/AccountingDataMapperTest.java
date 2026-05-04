@@ -84,7 +84,7 @@ class AccountingDataMapperTest {
                 .companyId(new CompanyId(companyId))
                 .code("1000")
                 .name("Cash")
-                .accountType(AccountType.ASSET)
+                .accountType(AccountType.BANK_AND_CASH)
                 .active(true)
                 .build();
         var response = mapper.accountToAccountResponse(account);
@@ -130,7 +130,7 @@ class AccountingDataMapperTest {
     void createAccountCommandToAccount_mapsCorrectly() {
         UUID companyId = UUID.randomUUID();
         UUID accountId = UUID.randomUUID();
-        CreateAccountCommand cmd = new CreateAccountCommand(companyId, "2000", "Receivables", AccountType.ASSET, true);
+        CreateAccountCommand cmd = new CreateAccountCommand(companyId, "2000", "Receivables", AccountType.RECEIVABLE, true);
         Account account = mapper.createAccountCommandToAccount(cmd, accountId);
         assertThat(account.getId().getId()).isEqualTo(accountId);
         assertThat(account.getCompanyId().getId()).isEqualTo(companyId);

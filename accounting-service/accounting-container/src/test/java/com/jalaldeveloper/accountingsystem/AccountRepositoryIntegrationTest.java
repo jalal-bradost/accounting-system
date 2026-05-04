@@ -30,7 +30,7 @@ class AccountRepositoryIntegrationTest {
                 .companyId(new CompanyId(companyId))
                 .code("1000")
                 .name("Cash")
-                .accountType(AccountType.ASSET)
+                .accountType(AccountType.BANK_AND_CASH)
                 .active(true)
                 .build();
 
@@ -52,7 +52,7 @@ class AccountRepositoryIntegrationTest {
                 .companyId(new CompanyId(companyId))
                 .code("2000")
                 .name("Receivables")
-                .accountType(AccountType.ASSET)
+                .accountType(AccountType.RECEIVABLE)
                 .active(true)
                 .build());
 

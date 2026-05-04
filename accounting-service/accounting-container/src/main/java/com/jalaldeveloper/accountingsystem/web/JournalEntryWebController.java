@@ -23,6 +23,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * @deprecated The Thymeleaf {@code /web} UI is being replaced by the Next.js frontend in
+ * {@code accounting-system-frontend}. Kept during the migration; will be removed once the
+ * new client reaches feature parity. See {@code docs/MIGRATION.md}.
+ */
+@Deprecated(since = "0.2.0", forRemoval = true)
 @Controller
 @RequestMapping("/web/journal-entries")
 public class JournalEntryWebController {

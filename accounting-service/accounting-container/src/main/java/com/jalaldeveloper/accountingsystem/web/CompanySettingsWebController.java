@@ -12,6 +12,12 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.time.LocalDate;
 import java.util.UUID;
 
+/**
+ * @deprecated The Thymeleaf {@code /web} UI is being replaced by the Next.js frontend in
+ * {@code accounting-system-frontend}. Kept during the migration; will be removed once the
+ * new client reaches feature parity. See {@code docs/MIGRATION.md}.
+ */
+@Deprecated(since = "0.2.0", forRemoval = true)
 @Controller
 @RequestMapping("/web/company")
 public class CompanySettingsWebController {

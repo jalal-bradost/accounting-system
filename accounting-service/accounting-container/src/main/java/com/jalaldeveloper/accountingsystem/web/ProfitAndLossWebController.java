@@ -3,7 +3,7 @@ package com.jalaldeveloper.accountingsystem.web;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.AccountResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.AccountApplicationService;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.ReportingApplicationService;
-import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository.AccountBalanceRepository;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.report.ProfitAndLossReport;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -24,39 +24,39 @@ import java.util.stream.Collectors;
  */
 @Deprecated(since = "0.2.0", forRemoval = true)
 @Controller
-@RequestMapping("/web/trial-balance")
-public class TrialBalanceWebController {
+@RequestMapping("/web/profit-and-loss")
+public class ProfitAndLossWebController {
 
     private final ReportingApplicationService reportingApplicationService;
     private final AccountApplicationService accountApplicationService;
     private final WebCompanyContext companyContext;
 
-    public TrialBalanceWebController(ReportingApplicationService reportingApplicationService,
-                                     AccountApplicationService accountApplicationService,
-                                     WebCompanyContext companyContext) {
+    public ProfitAndLossWebController(ReportingApplicationService reportingApplicationService,
+                                      AccountApplicationService accountApplicationService,
+                                      WebCompanyContext companyContext) {
         this.reportingApplicationService = reportingApplicationService;
         this.accountApplicationService = accountApplicationService;
         this.companyContext = companyContext;
     }
 
     @GetMapping
-    public String trialBalance(
+    public String profitAndLoss(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             Model model) {
         UUID companyId = companyContext.getCompanyId();
-        model.addAttribute("pageTitle", "Trial Balance");
+        model.addAttribute("pageTitle", "Profit and Loss");
         model.addAttribute("companyId", companyId);
         if (from != null && to != null) {
-            List<AccountBalanceRepository.AccountBalanceLine> lines = reportingApplicationService.getTrialBalance(companyId, from, to);
+            ProfitAndLossReport report = reportingApplicationService.getProfitAndLoss(companyId, from, to);
             List<AccountResponse> accounts = accountApplicationService.listAccountsByCompany(companyId);
             Map<UUID, AccountResponse> accountMap = accounts.stream().collect(Collectors.toMap(AccountResponse::getId, a -> a));
             model.addAttribute("from", from);
             model.addAttribute("to", to);
-            model.addAttribute("lines", lines);
+            model.addAttribute("report", report);
             model.addAttribute("accountMap", accountMap);
-            return "trial-balance/result";
+            return "profit-and-loss/result";
         }
-        return "trial-balance/form";
+        return "profit-and-loss/form";
     }
 }

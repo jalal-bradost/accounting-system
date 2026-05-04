@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: layout(~{::content})}">
+<head>
+  <meta charset="UTF-8"/>
+  <title>General Ledger</title>
+</head>
+<body>
+<th:block th:fragment="content">
+  <div class="page-header">
+    <h1 class="page-title">General Ledger</h1>
+    <a th:href="@{/web/general-ledger}" class="btn btn-outline-secondary">New report</a>
+  </div>
+  <p class="text-muted">
+    <span th:text="'From ' + ${from} + ' to ' + ${to}">-</span>
+    <span th:if="${accountId != null}" th:text="' · Account filter: ' + ${accountId}">-</span>
+  </p>
+  <div class="card">
+    <div class="card-header">Posted lines</div>
+    <div class="card-body p-0">
+      <table class="table table-hover table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Account</th>
+            <th>Date</th>
+            <th>Journal</th>
+            <th>#</th>
+            <th>Description</th>
+            <th class="text-end">Debit</th>
+            <th class="text-end">Credit</th>
+            <th class="text-end">Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          <th:block th:each="line, iterStat : ${lines}">
+            <tr th:if="${iterStat.first || lines.get(iterStat.index - 1).accountId() != line.accountId()}" class="table-secondary">
+              <td colspan="8" class="fw-semibold">
+                <span th:if="${accountMap != null && accountMap[line.accountId()] != null}" th:text="${accountMap[line.accountId()].code + ' - ' + accountMap[line.accountId()].name}">-</span>
+                <span th:unless="${accountMap != null && accountMap[line.accountId()] != null}" th:text="${line.accountId()}">-</span>
+              </td>
+            </tr>
+            <tr>
+              <td></td>
+              <td th:text="${line.entryDate()}">-</td>
+              <td th:text="${line.journalCode()}">-</td>
+              <td th:text="${line.sequenceNumber()}">-</td>
+              <td th:text="${line.label()}">-</td>
+              <td class="text-end" th:text="${line.debit()}">-</td>
+              <td class="text-end" th:text="${line.credit()}">-</td>
+              <td class="text-end" th:text="${line.runningBalance()}">-</td>
+            </tr>
+          </th:block>
+          <tr th:if="${#lists.isEmpty(lines)}">
+            <td colspan="8" class="text-muted">No posted lines in this range.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</th:block>
+</body>
+</html>

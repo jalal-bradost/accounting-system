@@ -2,6 +2,10 @@ accounting:
   seed:
     # Idempotent seed for DEFAULT_COMPANY_ID accounts & journals (set false to skip)
     default-company-chart: true
+  cors:
+    # Comma-separated list of origins allowed to call /api/v1/**
+    # The Next.js dev server runs on http://localhost:3000 by default.
+    allowed-origins: http://localhost:3000
 
 spring:
   application:

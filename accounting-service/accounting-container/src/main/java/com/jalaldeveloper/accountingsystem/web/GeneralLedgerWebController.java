@@ -3,7 +3,7 @@ package com.jalaldeveloper.accountingsystem.web;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.AccountResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.AccountApplicationService;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.ReportingApplicationService;
-import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository.AccountBalanceRepository;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.report.GeneralLedgerLine;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -24,39 +24,54 @@ import java.util.stream.Collectors;
  */
 @Deprecated(since = "0.2.0", forRemoval = true)
 @Controller
-@RequestMapping("/web/trial-balance")
-public class TrialBalanceWebController {
+@RequestMapping("/web/general-ledger")
+public class GeneralLedgerWebController {
 
     private final ReportingApplicationService reportingApplicationService;
     private final AccountApplicationService accountApplicationService;
     private final WebCompanyContext companyContext;
 
-    public TrialBalanceWebController(ReportingApplicationService reportingApplicationService,
-                                     AccountApplicationService accountApplicationService,
-                                     WebCompanyContext companyContext) {
+    public GeneralLedgerWebController(ReportingApplicationService reportingApplicationService,
+                                      AccountApplicationService accountApplicationService,
+                                      WebCompanyContext companyContext) {
         this.reportingApplicationService = reportingApplicationService;
         this.accountApplicationService = accountApplicationService;
         this.companyContext = companyContext;
     }
 
     @GetMapping
-    public String trialBalance(
+    public String generalLedger(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) String accountId,
             Model model) {
         UUID companyId = companyContext.getCompanyId();
-        model.addAttribute("pageTitle", "Trial Balance");
+        model.addAttribute("pageTitle", "General Ledger");
         model.addAttribute("companyId", companyId);
+        List<AccountResponse> accounts = accountApplicationService.listAccountsByCompany(companyId);
+        model.addAttribute("allAccounts", accounts);
         if (from != null && to != null) {
-            List<AccountBalanceRepository.AccountBalanceLine> lines = reportingApplicationService.getTrialBalance(companyId, from, to);
-            List<AccountResponse> accounts = accountApplicationService.listAccountsByCompany(companyId);
+            UUID accountUuid = parseAccountId(accountId);
+            List<GeneralLedgerLine> lines = reportingApplicationService.getGeneralLedger(companyId, from, to, accountUuid);
             Map<UUID, AccountResponse> accountMap = accounts.stream().collect(Collectors.toMap(AccountResponse::getId, a -> a));
             model.addAttribute("from", from);
             model.addAttribute("to", to);
+            model.addAttribute("accountId", accountUuid);
             model.addAttribute("lines", lines);
             model.addAttribute("accountMap", accountMap);
-            return "trial-balance/result";
+            return "general-ledger/result";
         }
-        return "trial-balance/form";
+        return "general-ledger/form";
+    }
+
+    private static UUID parseAccountId(String accountId) {
+        if (accountId == null || accountId.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(accountId.trim());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 }

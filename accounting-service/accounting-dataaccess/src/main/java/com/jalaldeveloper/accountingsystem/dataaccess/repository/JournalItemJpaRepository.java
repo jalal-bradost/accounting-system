@@ -1,12 +1,14 @@
 package com.jalaldeveloper.accountingsystem.dataaccess.repository;
 
 import com.jalaldeveloper.accountingsystem.dataaccess.entity.JournalItemEntity;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.AccountType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -22,6 +24,24 @@ public interface JournalItemJpaRepository extends JpaRepository<JournalItemEntit
     List<Object[]> findTrialBalance(@Param("companyId") UUID companyId,
                                    @Param("fromDate") LocalDate fromDate,
                                    @Param("toDate") LocalDate toDate);
+
+    @Query("SELECT i.account.id, (SUM(i.debit) - SUM(i.credit)) FROM JournalItemEntity i "
+            + "JOIN i.journalEntry e WHERE e.companyId = :companyId AND e.status = 'POSTED' "
+            + "AND e.entryDate <= :asOf AND i.account.type IN :accountTypes GROUP BY i.account.id")
+    List<Object[]> findBalancesUpTo(@Param("companyId") UUID companyId,
+                                   @Param("asOf") LocalDate asOf,
+                                   @Param("accountTypes") Collection<AccountType> accountTypes);
+
+    @Query("SELECT i.account.id, e.id, e.entryDate, j.code, e.sequenceNumber, i.label, i.debit, i.credit "
+            + "FROM JournalItemEntity i JOIN i.journalEntry e JOIN e.journal j "
+            + "WHERE e.companyId = :companyId AND e.status = 'POSTED' "
+            + "AND e.entryDate BETWEEN :fromDate AND :toDate "
+            + "AND (:accountId IS NULL OR i.account.id = :accountId) "
+            + "ORDER BY i.account.id, e.entryDate, e.id, i.id")
+    List<Object[]> findGeneralLedgerLines(@Param("companyId") UUID companyId,
+                                          @Param("fromDate") LocalDate fromDate,
+                                          @Param("toDate") LocalDate toDate,
+                                          @Param("accountId") UUID accountId);
 
     @Modifying
     @Query("UPDATE JournalItemEntity i SET i.reconciliationId = :reconciliationId WHERE i.id IN :ids")

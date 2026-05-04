@@ -37,7 +37,7 @@ class AccountControllerTest {
         UUID accountId = UUID.randomUUID();
         when(accountApplicationService.createAccount(any()))
                 .thenReturn(new CreateAccountResponse(accountId, "Account created."));
-        String json = "{\"companyId\":\"" + companyId + "\",\"code\":\"1000\",\"name\":\"Cash\",\"accountType\":\"ASSET\",\"active\":true}";
+        String json = "{\"companyId\":\"" + companyId + "\",\"code\":\"1000\",\"name\":\"Cash\",\"accountType\":\"BANK_AND_CASH\",\"active\":true}";
 
         mockMvc.perform(post("/api/v1/accounts")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -52,7 +52,7 @@ class AccountControllerTest {
         UUID id = UUID.randomUUID();
         UUID companyId = UUID.randomUUID();
         when(accountApplicationService.getAccount(id))
-                .thenReturn(new AccountResponse(id, companyId, "1000", "Cash", AccountType.ASSET, true));
+                .thenReturn(new AccountResponse(id, companyId, "1000", "Cash", AccountType.BANK_AND_CASH, true));
 
         mockMvc.perform(get("/api/v1/accounts/{id}", id))
                 .andExpect(status().isOk())
@@ -65,7 +65,7 @@ class AccountControllerTest {
     void listAccounts_returns200AndArray() throws Exception {
         UUID companyId = UUID.randomUUID();
         when(accountApplicationService.listAccountsByCompany(companyId))
-                .thenReturn(List.of(new AccountResponse(UUID.randomUUID(), companyId, "1000", "Cash", AccountType.ASSET, true)));
+                .thenReturn(List.of(new AccountResponse(UUID.randomUUID(), companyId, "1000", "Cash", AccountType.BANK_AND_CASH, true)));
 
         mockMvc.perform(get("/api/v1/accounts").param("companyId", companyId.toString()))
                 .andExpect(status().isOk())

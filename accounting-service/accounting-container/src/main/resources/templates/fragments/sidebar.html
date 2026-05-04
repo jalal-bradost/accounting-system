@@ -40,6 +40,21 @@
       </a>
     </li>
     <li class="menu-item">
+      <a th:href="@{/web/balance-sheet}" class="menu-link" th:classappend="${#strings.startsWith(requestURI, '/web/balance-sheet') ? 'active' : ''}">
+        <span class="menu-icon">&#x1F4CA;</span> Balance Sheet
+      </a>
+    </li>
+    <li class="menu-item">
+      <a th:href="@{/web/profit-and-loss}" class="menu-link" th:classappend="${#strings.startsWith(requestURI, '/web/profit-and-loss') ? 'active' : ''}">
+        <span class="menu-icon">&#x1F4C8;</span> Profit and Loss
+      </a>
+    </li>
+    <li class="menu-item">
+      <a th:href="@{/web/general-ledger}" class="menu-link" th:classappend="${#strings.startsWith(requestURI, '/web/general-ledger') ? 'active' : ''}">
+        <span class="menu-icon">&#x1F4D2;</span> General Ledger
+      </a>
+    </li>
+    <li class="menu-item">
       <a th:href="@{/web/reconciliation}" class="menu-link" th:classappend="${#strings.startsWith(requestURI, '/web/reconciliation') ? 'active' : ''}">
         <span class="menu-icon">&#x27F3;</span> Reconciliation
       </a>
