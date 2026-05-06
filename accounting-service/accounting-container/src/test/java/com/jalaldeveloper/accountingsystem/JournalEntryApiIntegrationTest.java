@@ -24,7 +24,7 @@ class JournalEntryApiIntegrationTest {
     @Test
     void createAccount_andGetAccount_returnsSameData() throws Exception {
         UUID companyId = UUID.randomUUID();
-        String createBody = "{\"companyId\":\"" + companyId + "\",\"code\":\"1000\",\"name\":\"Cash\",\"accountType\":\"ASSET\",\"active\":true}";
+        String createBody = "{\"companyId\":\"" + companyId + "\",\"code\":\"1000\",\"name\":\"Cash\",\"accountType\":\"BANK_AND_CASH\",\"active\":true}";
 
         String createResult = mockMvc.perform(post("/api/v1/accounts")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -45,7 +45,7 @@ class JournalEntryApiIntegrationTest {
     @Test
     void listAccounts_byCompanyId_returnsCreatedAccounts() throws Exception {
         UUID companyId = UUID.randomUUID();
-        String body = "{\"companyId\":\"" + companyId + "\",\"code\":\"2000\",\"name\":\"Receivables\",\"accountType\":\"ASSET\",\"active\":true}";
+        String body = "{\"companyId\":\"" + companyId + "\",\"code\":\"2000\",\"name\":\"Receivables\",\"accountType\":\"RECEIVABLE\",\"active\":true}";
         mockMvc.perform(post("/api/v1/accounts").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk());
 

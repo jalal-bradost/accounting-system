@@ -1,3 +1,8 @@
+accounting:
+  seed:
+    # Keep integration tests free of demo PO/SO/invoice side effects
+    demo-business-data: false
+
 spring:
   application:
     name: accounting-service-test
