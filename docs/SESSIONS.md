@@ -78,6 +78,70 @@ This document splits the implementation into 5 sessions. Each session is self-co
 
 ---
 
+## Session 6: Platform Cross-Cutting (DONE)
+
+**Goal:** Provide module-agnostic infrastructure for archiving, multi-company, audit, activity (chatter), and RBAC, so downstream modules can opt in by annotation.
+
+**Done:**
+- **`common-platform` module** with sibling JPA entities (`AuditLogEntity`, `ActivityMessageEntity`, `AppUserEntity`, `RoleEntity`, `PermissionEntity`, `UserRoleEntity`, `RolePermissionEntity`).
+- **Soft delete:** `ArchivableAggregateRoot<ID>` (common-domain) and `ArchivableEntity` `@MappedSuperclass` (common-platform) with `active` + `archived_at` + `archived_by`.
+- **Multi-company:** `CompanyContext` (singleton; values on `HttpServletRequest` attributes) populated by `CompanyContextFilter` from `X-Company-Id` header / `companyId` param; `@CurrentCompany` argument resolver.
+- **Audit:** `AuditLogPort` / `AuditLogService` (`Propagation.REQUIRES_NEW`); JPA `AuditingEntityListener` driven by `@AuditableModel` / `@AuditTrack`; `AuditContextHolder` static bridge so the listener can reach the service even outside a request scope (seeders).
+- **Activity (chatter):** `ActivityMessageEntity` + `ActivityApplicationService` and REST under `/api/v1/activities`.
+- **RBAC:** `@RequiresPermission("...")` annotation + `PermissionAspect` (AOP) calling `AuthorizationPort`. Default `DefaultAuthorizationPortImpl` is permissive (open) for dev; replace with a real auth provider in prod.
+- **Seeded permissions and roles:** `PlatformRbacSeeder` seeds the canonical permission catalogue and `ADMIN` / `ACCOUNTANT` / `SALES` / `PURCHASING` / `WAREHOUSE` / `READONLY` roles for the demo company.
+
+---
+
+## Session 7: Contacts (Customers / Vendors) (DONE)
+
+**Goal:** Single `Partner` aggregate that can be customer, vendor, or both, with multi-address, payment terms, and bank accounts; integrate with accounting for receivable/payable balances and credit checks.
+
+**Done:**
+- **`contacts-service` Maven sub-modules** (`contacts-domain-core`, `contacts-application-service`, `contacts-application`, `contacts-dataaccess`) following the existing hexagonal pattern.
+- **Domain:** `Partner` aggregate (company vs individual, isCustomer/isVendor flags, credit limit, payment terms ref, bank accounts, addresses), `PartnerAddress`, `PartnerBankAccount`, `PaymentTerms`. Soft-delete via `ArchivableAggregateRoot`.
+- **Application:** `PartnerApplicationService` + handlers, `PaymentTermsApplicationService`, `CreditLimitChecker` domain service, `ContactsExceptionHandler` (`@Order(HIGHEST_PRECEDENCE)`).
+- **REST:** `/api/v1/contacts/partners` (CRUD, archive, search, addresses, bank accounts), `/api/v1/contacts/payment-terms` (CRUD), `/api/v1/contacts/partners/{id}/credit-status` (current AR balance + remaining credit limit).
+- **Accounting integration:** `partnerId` / `partnerName` snapshot fields on `JournalEntry` and each `JournalItem` (domain, DTOs, JPA entity, mapper). New ports: `PartnerLookupPort` (resolve partner snapshot) and `PartnerBalancePort` (sum receivables/payables) with adapters in `accounting-container`.
+
+---
+
+## Session 8: Inventory (Products, Pickings, Valuation) (DONE)
+
+**Goal:** Odoo-style stockable inventory with products, units of measure, warehouses & locations, stock pickings, on-hand quants, and append-only valuation layers, integrated with accounting for stock-IN / stock-OUT / COGS journal entries.
+
+**Done:**
+- **`inventory-service` Maven sub-modules** mirroring the contacts/accounting pattern (`inventory-domain-core`, `inventory-application-service`, `inventory-application`, `inventory-dataaccess`).
+- **Domain entities:** `Product`, `ProductCategory`, `UnitOfMeasure` + `UomCategory` (with `REFERENCE` / `BIGGER` / `SMALLER` factor model), `Warehouse`, `StockLocation` (`INTERNAL` / `SUPPLIER` / `CUSTOMER` / `TRANSIT` / `INVENTORY_LOSS` / `PRODUCTION` / `VIEW`), `StockPicking` (with state machine `DRAFT` → `CONFIRMED` → `ASSIGNED` → `DONE` | `CANCELLED`), `StockMove`, `StockQuant` (with `@Version` for optimistic locking), `StockValuationLayer`.
+- **Valuation strategies (pure domain):** `StandardCostStrategy`, `AvcoStrategy`, `FifoStrategy`, selected per-product or per-category via `ValuationStrategyFactory`. AVCO updates the running average on receipt; FIFO consumes oldest layers oldest-first; STANDARD uses fixed product cost.
+- **Application services:** `ProductApplicationService`, `UomApplicationService`, `WarehouseApplicationService`, `StockPickingApplicationService` (orchestrates the full receive / deliver / internal-transfer / adjust pipeline including reservation, valuation, on-hand mutation, JE posting, and backorder creation), `StockValuationApplicationService` (on-hand and valuation queries).
+- **REST:** `/api/v1/inventory/products`, `/product-categories`, `/uoms`, `/uom-categories`, `/warehouses`, `/stock-locations`, `/pickings` (`POST`, `/{id}/confirm`, `/assign`, `/validate`, `/cancel`, `/return`, `/adjust`), `/quants`, `/on-hand/{productId}`, `/valuation-layers`, `/valuation/{productId}`. `InventoryExceptionHandler` (`@Order(HIGHEST_PRECEDENCE)`) maps `InventoryDomainException` → 422, `OptimisticLockingFailureException` → 409.
+- **Accounting integration:** new `JournalEntryPostingPort` consumed from inventory; `JournalEntryPostingAdapter` in `accounting-container` routes inventory entries to the seeded `INV` journal. Receipts post `Dr Stock Valuation / Cr Stock Input`; deliveries post `Dr COGS / Cr Stock Valuation`. Account ids resolved per-product or per-category.
+- **Bootstrap (`DefaultInventorySeeder`):** seeds UoM categories (Units / Weight / Length / Time) + reference units + common units, default warehouse `WH` with auto-provisioned `WH/STOCK` / `WH/INPUT` / `WH/OUTPUT` internal locations and the virtual `VIRT/SUPPLIERS` / `VIRT/CUSTOMERS` / `VIRT/INVENTORY-LOSS` locations, and a default product category `All` wired to seeded inventory accounts (`430010` Inventory, `430011` Stock Input, `430012` Stock Output, `430009` COGS).
+
+---
+
+## Session 9: Edge-Case Validation & Documentation (DONE)
+
+**Goal:** End-to-end coverage of the major inventory flows and small fixes uncovered along the way.
+
+**Done:**
+- **`InventoryApiIntegrationTest`** (full Spring Boot context) covering:
+  1. Receive / second receive (AVCO running average) / partial deliver / inventory adjustment.
+  2. Partial validation that creates a backorder picking in `DRAFT`.
+  3. Negative-stock delivery rejected with `INVENTORY_DOMAIN_ERROR` (422).
+  4. No-op adjustment rejected with `INVENTORY_DOMAIN_ERROR` (422).
+  5. UoM conversion endpoint (Dozen → Unit).
+- **Bug fixes uncovered by the tests:**
+  - `InventoryDataMapper.moveCommandToDomain` now propagates `unitCost` from the command (without it, AVCO/FIFO valued every receipt at zero).
+  - `StockValuationLayerJpaRepository.sumOnHandValue` now sums `value` across all layers (positive receipts net negative deliveries) instead of only the un-consumed `remainingValue` of positive layers — fixes AVCO valuation drift.
+  - `StockPickingApplicationServiceImpl.validatePicking` no longer adds/subtracts a synthetic delta to `onHandValue` before invoking the strategy (the SVL had not been written yet at that point, so the value was already pre-move).
+  - `AuditContextHolder` and `AuditLogService` defensively handle the missing request scope so seeders no longer log audit warnings.
+  - All module-specific exception handlers (`AccountingExceptionHandler`, `ContactsExceptionHandler`, `InventoryExceptionHandler`, `PlatformExceptionHandler`) are now annotated `@Order(HIGHEST_PRECEDENCE)` so the catch-all `GlobalExceptionHandler` no longer wins the resolution race.
+  - `StockValuationLayerEntity.value` column renamed to `total_value` (avoids H2 reserved keyword conflict).
+
+---
+
 ## Session Summary
 
 | Session | Focus |
@@ -87,3 +151,7 @@ This document splits the implementation into 5 sessions. Each session is self-co
 | 3 | Double-entry rules, scale, immutability, reversal link |
 | 4 | Sequence, fiscal period, lock date |
 | 5 | Balance query, reconciliation id, audit fields |
+| 6 | Platform: archive, company context, audit, activity, RBAC |
+| 7 | Contacts: partner / addresses / payment terms / accounting integration |
+| 8 | Inventory: products, UoM, warehouses, pickings, valuation, accounting integration |
+| 9 | Inventory edge-case integration tests + small fixes |
