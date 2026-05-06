@@ -44,6 +44,9 @@ public class JournalEntryDataAccessMapper {
                 .updatedAt(entity.getUpdatedAt())
                 .postedAt(entity.getPostedAt())
                 .postedBy(entity.getPostedBy())
+                .partnerRef(entity.getPartnerId() != null
+                        ? new PartnerRef(entity.getPartnerId(), entity.getPartnerName())
+                        : null)
                 .build();
     }
 
@@ -59,6 +62,13 @@ public class JournalEntryDataAccessMapper {
         entity.setCurrencyCode(domain.getCurrency() != null ? domain.getCurrency().code() : null);
         entity.setStatus(domain.getStatus());
         entity.setReversalOfEntryId(domain.getReversalOfEntryId() != null ? domain.getReversalOfEntryId().getId() : null);
+        if (domain.getPartnerRef() != null) {
+            entity.setPartnerId(domain.getPartnerRef().id());
+            entity.setPartnerName(domain.getPartnerRef().name());
+        } else {
+            entity.setPartnerId(null);
+            entity.setPartnerName(null);
+        }
         if (domain.getItems() != null) {
             entity.getItems().clear();
             for (JournalItem item : domain.getItems()) {
@@ -82,6 +92,9 @@ public class JournalEntryDataAccessMapper {
                 .amountCurrency(amountCurrency)
                 .currency(currency)
                 .reconciliationId(e.getReconciliationId())
+                .partnerRef(e.getPartnerId() != null
+                        ? new PartnerRef(e.getPartnerId(), e.getPartnerName())
+                        : null)
                 .build();
     }
 
@@ -97,6 +110,13 @@ public class JournalEntryDataAccessMapper {
                 ? domain.getAmountCurrency().getAmount()
                 : BigDecimal.ZERO);
         e.setReconciliationId(domain.getReconciliationId());
+        if (domain.getPartnerRef() != null) {
+            e.setPartnerId(domain.getPartnerRef().id());
+            e.setPartnerName(domain.getPartnerRef().name());
+        } else {
+            e.setPartnerId(null);
+            e.setPartnerName(null);
+        }
         return e;
     }
 

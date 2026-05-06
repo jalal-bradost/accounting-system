@@ -4,6 +4,7 @@ import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.Crea
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.CreateJournalEntryResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.JournalItemCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.mapper.AccountingDataMapper;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.contacts.PartnerLookupPort;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository.JournalEntryRepository;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.sequence.SequenceGeneratorPort;
 import com.jalaldeveloper.accountingsystem.domain.core.entity.JournalEntry;
@@ -14,9 +15,9 @@ import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalId;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -37,12 +38,15 @@ class CreateJournalEntryCommandHandlerTest {
     private AccountingDataMapper mapper;
     @Mock
     private SequenceGeneratorPort sequenceGeneratorPort;
+    @Mock
+    private ObjectProvider<PartnerLookupPort> partnerLookupPortProvider;
 
-    @InjectMocks
     private CreateJournalEntryCommandHandler handler;
 
     @Test
     void createJournalEntry_callsSequenceGeneratorAndSavesEntry() {
+        handler = new CreateJournalEntryCommandHandler(
+                journalEntryRepository, mapper, sequenceGeneratorPort, partnerLookupPortProvider);
         UUID companyId = UUID.randomUUID();
         UUID journalId = UUID.randomUUID();
         List<JournalItemCommand> items = List.of(
@@ -51,6 +55,7 @@ class CreateJournalEntryCommandHandlerTest {
         CreateJournalEntryCommand command = new CreateJournalEntryCommand(
                 companyId, journalId, null, LocalDate.of(2025, 3, 1), "USD", items);
 
+        when(partnerLookupPortProvider.getIfAvailable()).thenReturn(null);
         when(sequenceGeneratorPort.getNextSequenceNumber(any(CompanyId.class), any(JournalId.class), any(LocalDate.class)))
                 .thenReturn("JOU-2025-00001");
         JournalEntry entryToSave = JournalEntry.builder()
@@ -62,8 +67,8 @@ class CreateJournalEntryCommandHandlerTest {
                 .items(List.of())
                 .status(JournalEntryStatus.DRAFT)
                 .build();
-        when(mapper.journalItemCommandsToDomain(any())).thenReturn(List.of());
-        when(mapper.createJournalEntryCommandToJournalEntry(any(), any(), any(), any())).thenReturn(entryToSave);
+        when(mapper.journalItemCommandsToDomain(any(), any())).thenReturn(List.of());
+        when(mapper.createJournalEntryCommandToJournalEntry(any(), any(), any(), any(), any())).thenReturn(entryToSave);
         when(journalEntryRepository.save(any(JournalEntry.class))).thenAnswer(inv -> inv.getArgument(0));
         when(mapper.journalEntryToCreateResponse(any(JournalEntry.class), any())).thenReturn(new CreateJournalEntryResponse(entryToSave.getId().getId(), "Journal entry created successfully."));
 

@@ -14,15 +14,23 @@ public class JournalItemCommand {
     private final BigDecimal credit;
     private final String currencyCode;
     private final BigDecimal amountCurrency;
+    /** Optional per-line partner override; when null, the entry-level partner applies. */
+    private final UUID partnerId;
 
     public JournalItemCommand(UUID accountId, String label, BigDecimal debit, BigDecimal credit,
                               String currencyCode, BigDecimal amountCurrency) {
+        this(accountId, label, debit, credit, currencyCode, amountCurrency, null);
+    }
+
+    public JournalItemCommand(UUID accountId, String label, BigDecimal debit, BigDecimal credit,
+                              String currencyCode, BigDecimal amountCurrency, UUID partnerId) {
         this.accountId = accountId;
         this.label = label;
         this.debit = debit != null ? debit : BigDecimal.ZERO;
         this.credit = credit != null ? credit : BigDecimal.ZERO;
         this.currencyCode = currencyCode;
         this.amountCurrency = amountCurrency;
+        this.partnerId = partnerId;
     }
 
     public UUID getAccountId() { return accountId; }
@@ -31,4 +39,5 @@ public class JournalItemCommand {
     public BigDecimal getCredit() { return credit; }
     public String getCurrencyCode() { return currencyCode; }
     public BigDecimal getAmountCurrency() { return amountCurrency; }
+    public UUID getPartnerId() { return partnerId; }
 }

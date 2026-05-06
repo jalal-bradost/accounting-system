@@ -2,6 +2,7 @@ package com.jalaldeveloper.accountingsystem.domain.core.entity;
 
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.AccountId;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalItemId;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.PartnerRef;
 import com.jalaldeveloper.accountingsystem.domain.entity.BaseEntity;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.Currency;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.Money;
@@ -22,6 +23,9 @@ public class JournalItem extends BaseEntity<JournalItemId> {
     /** Nullable; when set, this item is part of a reconciliation group. */
     private final UUID reconciliationId;
 
+    /** Optional partner attached to this individual line; overrides the entry's partner when present. */
+    private final PartnerRef partnerRef;
+
     private JournalItem(Builder builder) {
         super.setId(builder.id);
         accountId = builder.accountId;
@@ -31,6 +35,7 @@ public class JournalItem extends BaseEntity<JournalItemId> {
         amountCurrency = builder.amountCurrency;
         currency = builder.currency;
         reconciliationId = builder.reconciliationId;
+        partnerRef = builder.partnerRef;
     }
 
     public AccountId getAccountId() {
@@ -61,6 +66,10 @@ public class JournalItem extends BaseEntity<JournalItemId> {
         return reconciliationId;
     }
 
+    public PartnerRef getPartnerRef() {
+        return partnerRef;
+    }
+
     public static Builder builder() {
         return Builder.builder();
     }
@@ -74,6 +83,7 @@ public class JournalItem extends BaseEntity<JournalItemId> {
         private Money amountCurrency;
         private Currency currency;
         private UUID reconciliationId;
+        private PartnerRef partnerRef;
 
         private Builder() {
         }
@@ -119,6 +129,11 @@ public class JournalItem extends BaseEntity<JournalItemId> {
 
         public Builder reconciliationId(UUID val) {
             reconciliationId = val;
+            return this;
+        }
+
+        public Builder partnerRef(PartnerRef val) {
+            partnerRef = val;
             return this;
         }
 

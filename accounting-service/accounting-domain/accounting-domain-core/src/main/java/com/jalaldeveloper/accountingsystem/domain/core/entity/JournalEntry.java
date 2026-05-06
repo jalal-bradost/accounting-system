@@ -3,6 +3,7 @@ package com.jalaldeveloper.accountingsystem.domain.core.entity;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalEntryId;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalEntryStatus;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalId;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.PartnerRef;
 import com.jalaldeveloper.accountingsystem.domain.core.exception.AccountingDomainException;
 import com.jalaldeveloper.accountingsystem.domain.entity.AggregateRoot;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
@@ -26,6 +27,7 @@ public class JournalEntry extends AggregateRoot<JournalEntryId> {
     private final Instant updatedAt;
     private final Instant postedAt;
     private final String postedBy;
+    private final PartnerRef partnerRef;
 
     public void validate() {
         if (items == null || items.size() < 2) {
@@ -86,6 +88,7 @@ public class JournalEntry extends AggregateRoot<JournalEntryId> {
         updatedAt = builder.updatedAt;
         postedAt = builder.postedAt;
         postedBy = builder.postedBy;
+        partnerRef = builder.partnerRef;
     }
 
     public CompanyId getCompanyId() {
@@ -124,6 +127,7 @@ public class JournalEntry extends AggregateRoot<JournalEntryId> {
     public Instant getUpdatedAt() { return updatedAt; }
     public Instant getPostedAt() { return postedAt; }
     public String getPostedBy() { return postedBy; }
+    public PartnerRef getPartnerRef() { return partnerRef; }
 
     public static Builder builder() {
         return Builder.builder();
@@ -143,6 +147,7 @@ public class JournalEntry extends AggregateRoot<JournalEntryId> {
         private Instant updatedAt;
         private Instant postedAt;
         private String postedBy;
+        private PartnerRef partnerRef;
 
         private Builder() {
         }
@@ -200,6 +205,7 @@ public class JournalEntry extends AggregateRoot<JournalEntryId> {
         public Builder updatedAt(Instant val) { updatedAt = val; return this; }
         public Builder postedAt(Instant val) { postedAt = val; return this; }
         public Builder postedBy(String val) { postedBy = val; return this; }
+        public Builder partnerRef(PartnerRef val) { partnerRef = val; return this; }
 
         public JournalEntry build() {
             return new JournalEntry(this);

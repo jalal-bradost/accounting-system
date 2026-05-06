@@ -7,6 +7,7 @@ import com.jalaldeveloper.accountingsystem.domain.core.entity.Journal;
 import com.jalaldeveloper.accountingsystem.domain.core.entity.JournalEntry;
 import com.jalaldeveloper.accountingsystem.domain.core.entity.JournalItem;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalEntryStatus;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.PartnerRef;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.AccountResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.JournalResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.JournalEntryResponse;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Component
@@ -56,7 +58,7 @@ public class AccountingDataMapper {
     public JournalEntry createJournalEntryCommandToJournalEntry(CreateJournalEntryCommand cmd,
                                                                 UUID journalEntryId,
                                                                 List<JournalItem> items) {
-        return createJournalEntryCommandToJournalEntry(cmd, journalEntryId, items, null);
+        return createJournalEntryCommandToJournalEntry(cmd, journalEntryId, items, null, partnerId -> null);
     }
 
     /** When sequenceNumberOverride is non-null, it is used instead of command.getSequenceNumber(). */
@@ -64,12 +66,21 @@ public class AccountingDataMapper {
                                                                 UUID journalEntryId,
                                                                 List<JournalItem> items,
                                                                 String sequenceNumberOverride) {
+        return createJournalEntryCommandToJournalEntry(cmd, journalEntryId, items, sequenceNumberOverride, partnerId -> null);
+    }
+
+    public JournalEntry createJournalEntryCommandToJournalEntry(CreateJournalEntryCommand cmd,
+                                                                UUID journalEntryId,
+                                                                List<JournalItem> items,
+                                                                String sequenceNumberOverride,
+                                                                Function<UUID, PartnerRef> partnerResolver) {
         Currency currency = toCurrency(cmd.getCurrencyCode());
         String seq = sequenceNumberOverride != null && !sequenceNumberOverride.isBlank()
                 ? sequenceNumberOverride
                 : (cmd.getSequenceNumber() != null && !cmd.getSequenceNumber().isBlank()
                         ? cmd.getSequenceNumber()
                         : "TMP-" + System.currentTimeMillis());
+        PartnerRef partnerRef = cmd.getPartnerId() != null ? partnerResolver.apply(cmd.getPartnerId()) : null;
         return JournalEntry.builder()
                 .id(new JournalEntryId(journalEntryId))
                 .companyId(new CompanyId(cmd.getCompanyId()))
@@ -79,10 +90,16 @@ public class AccountingDataMapper {
                 .currency(currency)
                 .items(items)
                 .status(JournalEntryStatus.DRAFT)
+                .partnerRef(partnerRef)
                 .build();
     }
 
     public List<JournalItem> journalItemCommandsToDomain(List<JournalItemCommand> commands) {
+        return journalItemCommandsToDomain(commands, partnerId -> null);
+    }
+
+    public List<JournalItem> journalItemCommandsToDomain(List<JournalItemCommand> commands,
+                                                         Function<UUID, PartnerRef> partnerResolver) {
         if (commands == null) return List.of();
         return commands.stream()
                 .map(c -> {
@@ -90,6 +107,7 @@ public class AccountingDataMapper {
                             ? new Money(c.getAmountCurrency())
                             : Money.ZERO;
                     Currency curr = toCurrency(c.getCurrencyCode());
+                    PartnerRef partnerRef = c.getPartnerId() != null ? partnerResolver.apply(c.getPartnerId()) : null;
                     return JournalItem.builder()
                             .id(new JournalItemId(UUID.randomUUID()))
                             .accountId(new AccountId(c.getAccountId()))
@@ -98,6 +116,7 @@ public class AccountingDataMapper {
                             .credit(MonetaryScale.scale(c.getCredit()))
                             .amountCurrency(amountCurrency)
                             .currency(curr)
+                            .partnerRef(partnerRef)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -144,7 +163,9 @@ public class AccountingDataMapper {
                                 i.getCredit(),
                                 i.getCurrency() != null ? i.getCurrency().code() : null,
                                 i.getAmountCurrency() != null ? i.getAmountCurrency().getAmount() : null,
-                                i.getReconciliationId()))
+                                i.getReconciliationId(),
+                                i.getPartnerRef() != null ? i.getPartnerRef().id() : null,
+                                i.getPartnerRef() != null ? i.getPartnerRef().name() : null))
                         .collect(Collectors.toList());
         return new JournalEntryResponse(
                 entry.getId().getId(),
@@ -159,7 +180,9 @@ public class AccountingDataMapper {
                 entry.getCreatedAt(),
                 entry.getUpdatedAt(),
                 entry.getPostedAt(),
-                entry.getPostedBy());
+                entry.getPostedBy(),
+                entry.getPartnerRef() != null ? entry.getPartnerRef().id() : null,
+                entry.getPartnerRef() != null ? entry.getPartnerRef().name() : null);
     }
 
     private static Currency toCurrency(String code) {

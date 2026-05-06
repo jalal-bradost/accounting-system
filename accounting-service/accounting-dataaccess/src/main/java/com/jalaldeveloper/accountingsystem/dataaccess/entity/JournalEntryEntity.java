@@ -38,6 +38,10 @@ public class JournalEntryEntity {
     private Instant postedAt;
     @Column(name = "posted_by", length = 255)
     private String postedBy;
+    @Column(name = "partner_id")
+    private UUID partnerId;
+    @Column(name = "partner_name", length = 255)
+    private String partnerName;
     @OneToMany(mappedBy = "journalEntry", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<JournalItemEntity> items = new ArrayList<>();
 
@@ -68,4 +72,8 @@ public class JournalEntryEntity {
     public void setPostedAt(Instant postedAt) { this.postedAt = postedAt; }
     public String getPostedBy() { return postedBy; }
     public void setPostedBy(String postedBy) { this.postedBy = postedBy; }
+    public UUID getPartnerId() { return partnerId; }
+    public void setPartnerId(UUID partnerId) { this.partnerId = partnerId; }
+    public String getPartnerName() { return partnerName; }
+    public void setPartnerName(String partnerName) { this.partnerName = partnerName; }
 }

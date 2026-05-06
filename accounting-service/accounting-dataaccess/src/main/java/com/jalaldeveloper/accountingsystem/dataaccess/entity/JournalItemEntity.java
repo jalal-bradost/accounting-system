@@ -27,6 +27,10 @@ public class JournalItemEntity {
     private BigDecimal amountCurrency;
     @Column(name = "reconciliation_id")
     private UUID reconciliationId;
+    @Column(name = "partner_id")
+    private UUID partnerId;
+    @Column(name = "partner_name", length = 255)
+    private String partnerName;
 
     public JournalItemEntity() {}
     public UUID getId() { return id; }
@@ -47,4 +51,8 @@ public class JournalItemEntity {
     public void setAmountCurrency(BigDecimal amountCurrency) { this.amountCurrency = amountCurrency; }
     public UUID getReconciliationId() { return reconciliationId; }
     public void setReconciliationId(UUID reconciliationId) { this.reconciliationId = reconciliationId; }
+    public UUID getPartnerId() { return partnerId; }
+    public void setPartnerId(UUID partnerId) { this.partnerId = partnerId; }
+    public String getPartnerName() { return partnerName; }
+    public void setPartnerName(String partnerName) { this.partnerName = partnerName; }
 }

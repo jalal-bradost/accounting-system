@@ -50,4 +50,18 @@ public interface JournalItemJpaRepository extends JpaRepository<JournalItemEntit
     @Modifying
     @Query("UPDATE JournalItemEntity i SET i.reconciliationId = NULL WHERE i.id IN :ids")
     void clearReconciliationId(@Param("ids") List<UUID> ids);
+
+    /**
+     * Sum of (debit - credit) on posted journal items for the given partner, restricted to
+     * a given account type (typically RECEIVABLE for AR or PAYABLE for AP balances).
+     */
+    @Query("SELECT COALESCE(SUM(i.debit) - SUM(i.credit), 0) FROM JournalItemEntity i "
+            + "JOIN i.journalEntry e "
+            + "WHERE e.companyId = :companyId AND e.status = 'POSTED' "
+            + "AND COALESCE(i.partnerId, e.partnerId) = :partnerId "
+            + "AND i.account.type = :accountType")
+    java.math.BigDecimal sumPartnerBalanceByAccountType(
+            @Param("companyId") UUID companyId,
+            @Param("partnerId") UUID partnerId,
+            @Param("accountType") AccountType accountType);
 }
