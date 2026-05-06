@@ -2,9 +2,13 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <modules>
+    <modules>
     <module>common</module>
     <module>accounting-service</module>
+    <module>contacts-service</module>
+    <module>inventory-service</module>
+    <module>purchase-service</module>
+    <module>sales-service</module>
   </modules>
 
   <parent>
@@ -49,6 +53,51 @@
       </dependency>
       <dependency>
         <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>common-platform</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>contacts-domain-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>contacts-application-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>contacts-application</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>contacts-dataaccess</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>inventory-domain-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>inventory-application-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>inventory-application</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>inventory-dataaccess</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
         <artifactId>accounting-domain-core</artifactId>
         <version>${project.version}</version>
       </dependency>
@@ -80,6 +129,46 @@
       <dependency>
         <groupId>com.jalaldeveloper.accountingsystem</groupId>
         <artifactId>accounting-messaging</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>purchase-domain-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>purchase-application-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>purchase-dataaccess</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>purchase-application</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>sales-domain-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>sales-application-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>sales-dataaccess</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>sales-application</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
