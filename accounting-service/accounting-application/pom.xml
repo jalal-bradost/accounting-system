@@ -25,6 +25,10 @@
         </dependency>
         <dependency>
             <groupId>com.jalaldeveloper.accountingsystem</groupId>
+            <artifactId>common-platform</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jalaldeveloper.accountingsystem</groupId>
             <artifactId>accounting-domain-core</artifactId>
         </dependency>
         <dependency>
