@@ -2,6 +2,8 @@ accounting:
   seed:
     # Idempotent seed for DEFAULT_COMPANY_ID accounts & journals (set false to skip)
     default-company-chart: true
+    # Demo partners, products, PO/SO, vendor bill, customer invoice, and payments (idempotent; disable in production)
+    demo-business-data: false
   cors:
     # Comma-separated list of origins allowed to call /api/v1/**
     # The Next.js dev server runs on http://localhost:3000 by default.
