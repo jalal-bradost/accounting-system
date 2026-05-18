@@ -9,6 +9,7 @@
     <module>inventory-service</module>
     <module>purchase-service</module>
     <module>sales-service</module>
+    <module>infrastructure</module>
   </modules>
 
   <parent>
@@ -153,6 +154,11 @@
       </dependency>
       <dependency>
         <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>purchase-messaging</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
         <artifactId>sales-domain-core</artifactId>
         <version>${project.version}</version>
       </dependency>
@@ -169,6 +175,26 @@
       <dependency>
         <groupId>com.jalaldeveloper.accountingsystem</groupId>
         <artifactId>sales-application</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>sales-messaging</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>inventory-messaging</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>contacts-messaging</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>infrastructure</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
