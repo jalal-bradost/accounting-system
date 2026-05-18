@@ -2,16 +2,15 @@ package com.jalaldeveloper.accountingsystem.purchase.dataaccess.service;
 
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.JournalEntryApplicationService;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.ReconciliationApplicationService;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.AccountingReferenceLookupPort;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.CreateJournalEntryCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.CreateJournalEntryResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.JournalEntryResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.JournalItemCommand;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.partnerstatement.PartnerStatementLineResponse;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.partnerstatement.PartnerStatementSectionResponse;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.dto.PartnerResponse;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.ports.input.PartnerApplicationService;
-import com.jalaldeveloper.accountingsystem.dataaccess.entity.AccountEntity;
-import com.jalaldeveloper.accountingsystem.dataaccess.entity.JournalEntity;
-import com.jalaldeveloper.accountingsystem.dataaccess.repository.AccountJpaRepository;
-import com.jalaldeveloper.accountingsystem.dataaccess.repository.JournalJpaRepository;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalType;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.Product;
@@ -41,7 +40,10 @@ import com.jalaldeveloper.accountingsystem.purchase.domain.core.*;
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.FiscalTaxSnapshot;
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.PurchaseTaxEngine;
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.dto.*;
+import com.jalaldeveloper.accountingsystem.purchase.service.domain.event.VendorBillPostedEvent;
+import com.jalaldeveloper.accountingsystem.purchase.service.domain.event.VendorPaymentRegisteredEvent;
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.ports.input.PurchaseApplicationService;
+import com.jalaldeveloper.accountingsystem.purchase.service.domain.ports.output.messaging.PurchaseEventPublisher;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.springframework.beans.factory.ObjectProvider;
@@ -61,6 +63,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -83,10 +86,10 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     private final StockPickingApplicationService stockPickingApplicationService;
     private final StockMovePurchaseQueryPort stockMovePurchaseQueryPort;
     private final JournalEntryApplicationService journalEntryApplicationService;
-    private final JournalJpaRepository journalJpaRepository;
-    private final AccountJpaRepository accountJpaRepository;
+    private final AccountingReferenceLookupPort accountingReferenceLookupPort;
     private final ReconciliationApplicationService reconciliationApplicationService;
     private final ObjectProvider<CompanyContext> companyContextProvider;
+    private final PurchaseEventPublisher purchaseEventPublisher;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -104,10 +107,10 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                                           StockPickingApplicationService stockPickingApplicationService,
                                           StockMovePurchaseQueryPort stockMovePurchaseQueryPort,
                                           JournalEntryApplicationService journalEntryApplicationService,
-                                          JournalJpaRepository journalJpaRepository,
-                                          AccountJpaRepository accountJpaRepository,
+                                          AccountingReferenceLookupPort accountingReferenceLookupPort,
                                           ReconciliationApplicationService reconciliationApplicationService,
-                                          ObjectProvider<CompanyContext> companyContextProvider) {
+                                          ObjectProvider<CompanyContext> companyContextProvider,
+                                          PurchaseEventPublisher purchaseEventPublisher) {
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.fiscalTaxRepository = fiscalTaxRepository;
         this.vendorBillRepository = vendorBillRepository;
@@ -121,10 +124,10 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         this.stockPickingApplicationService = stockPickingApplicationService;
         this.stockMovePurchaseQueryPort = stockMovePurchaseQueryPort;
         this.journalEntryApplicationService = journalEntryApplicationService;
-        this.journalJpaRepository = journalJpaRepository;
-        this.accountJpaRepository = accountJpaRepository;
+        this.accountingReferenceLookupPort = accountingReferenceLookupPort;
         this.reconciliationApplicationService = reconciliationApplicationService;
         this.companyContextProvider = companyContextProvider;
+        this.purchaseEventPublisher = purchaseEventPublisher;
     }
 
     private UUID companyIdOrDefault(UUID fromCommand) {
@@ -132,18 +135,12 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         return companyContextProvider.getObject().requireCompany().getId();
     }
 
-    private AccountEntity resolveLiquidityAccountForPaymentJournal(UUID companyId, UUID journalId) {
-        JournalEntity j = journalJpaRepository.findById(journalId)
-                .orElseThrow(() -> new PurchaseDomainException("Payment journal not found"));
-        if (!j.getCompanyId().equals(companyId)) {
-            throw new PurchaseDomainException("Journal company mismatch");
-        }
-        if (j.getType() != JournalType.CASH && j.getType() != JournalType.BANK) {
+    private UUID resolveLiquidityAccountForPaymentJournal(UUID companyId, UUID journalId) {
+        JournalType journalType = accountingReferenceLookupPort.resolveJournalType(companyId, journalId);
+        if (journalType != JournalType.CASH && journalType != JournalType.BANK) {
             throw new PurchaseDomainException("Payment journal must be cash or bank");
         }
-        return accountJpaRepository.findByCompanyIdAndCode(companyId, j.getCode())
-                .orElseThrow(() -> new PurchaseDomainException(
-                        "Liquidity account for journal code " + j.getCode() + " not found"));
+        return accountingReferenceLookupPort.resolveLiquidityAccountIdForJournal(companyId, journalId);
     }
 
     @Override
@@ -562,6 +559,20 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 .orElse(BigDecimal.ZERO);
     }
 
+    private BigDecimal billTotalDocumentCurrency(PurVendorBillEntity bill) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (PurVendorBillLineEntity line : bill.getLines()) {
+            BigDecimal disc = discountForBillLine(bill, line);
+            BigDecimal lineNetDoc = PurchaseOrderRules.lineNet(line.getQty(), line.getUnitPrice(), disc)
+                    .setScale(4, RoundingMode.HALF_UP);
+            total = total.add(lineNetDoc);
+            for (PurVendorBillLineTaxEntity ts : line.getTaxSnapshots()) {
+                total = total.add(ts.getTaxAmount().setScale(4, RoundingMode.HALF_UP));
+            }
+        }
+        return total;
+    }
+
     private UUID resolveStockInputAccount(Product product) {
         ProductCategory cat = product.getCategoryId() != null
                 ? categoryRepository.findById(product.getCategoryId()).orElse(null)
@@ -596,14 +607,10 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         PartnerResponse vendor = partnerApplicationService.getPartner(bill.getVendorPartnerId());
         UUID payableAccount = vendor.getPayableAccountId() != null
                 ? vendor.getPayableAccountId()
-                : accountJpaRepository.findByCompanyIdAndCode(bill.getCompanyId(), DEFAULT_AP_ACCOUNT_CODE)
-                .map(AccountEntity::getId)
-                .orElseThrow(() -> new PurchaseDomainException("Default AP account not found"));
+                : accountingReferenceLookupPort.resolveAccountIdByCode(bill.getCompanyId(), DEFAULT_AP_ACCOUNT_CODE);
 
-        JournalEntity purchaseJournal = journalJpaRepository.findByCompanyId(bill.getCompanyId()).stream()
-                .filter(j -> j.getType() == JournalType.PURCHASE)
-                .findFirst()
-                .orElseThrow(() -> new PurchaseDomainException("Purchase journal not found for company"));
+        UUID purchaseJournalId = accountingReferenceLookupPort.resolveJournalIdByType(
+                bill.getCompanyId(), JournalType.PURCHASE);
 
         BigDecimal rate = bill.getExchangeRateToCompany() != null && bill.getExchangeRateToCompany().signum() > 0
                 ? bill.getExchangeRateToCompany() : BigDecimal.ONE;
@@ -631,7 +638,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
 
         CreateJournalEntryCommand jcmd = new CreateJournalEntryCommand(
                 bill.getCompanyId(),
-                purchaseJournal.getId(),
+                purchaseJournalId,
                 "",
                 bill.getBillDate(),
                 bill.getCurrencyCode(),
@@ -668,6 +675,12 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 purchaseOrderRepository.save(po);
             }
         }
+        purchaseEventPublisher.publishVendorBillPosted(new VendorBillPostedEvent(
+                UUID.randomUUID(),
+                Instant.now(),
+                bill.getCompanyId(),
+                bill.getId(),
+                bill.getVendorPartnerId()));
         return toBillResponse(bill);
     }
 
@@ -706,6 +719,137 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public PartnerStatementSectionResponse payableStatement(UUID companyId,
+                                                            UUID partnerId,
+                                                            LocalDate from,
+                                                            LocalDate to,
+                                                            String currencyCode) {
+        UUID cid = companyIdOrDefault(companyId);
+        if (to.isBefore(from)) {
+            throw new PurchaseDomainException("Statement end date must be on or after start date");
+        }
+        PartnerResponse partner = partnerApplicationService.getPartner(partnerId);
+        if (!partner.getCompanyId().equals(cid)) {
+            throw new PurchaseDomainException("Partner belongs to another company");
+        }
+        if (!partner.isVendor()) {
+            throw new PurchaseDomainException("Partner is not a vendor");
+        }
+        return buildPayableSection(cid, partnerId, from, to, currencyCode);
+    }
+
+    private PartnerStatementSectionResponse buildPayableSection(
+            UUID cid, UUID partnerId, LocalDate from, LocalDate to, String currencyCode) {
+        List<PurVendorBillEntity> bills = vendorBillRepository
+                .findByCompanyIdAndVendorPartnerIdOrderByBillDateAscCreatedAtAsc(cid, partnerId);
+        for (PurVendorBillEntity b : bills) {
+            b.getLines().size();
+            for (PurVendorBillLineEntity line : b.getLines()) {
+                line.getTaxSnapshots().size();
+            }
+        }
+        List<PurVendorPaymentEntity> payments = vendorPaymentRepository
+                .findByCompanyIdAndVendorPartnerIdOrderByPaymentDateAscCreatedAtAsc(cid, partnerId);
+
+        String currency = currencyCode != null && !currencyCode.isBlank()
+                ? currencyCode
+                : "USD";
+
+        BigDecimal opening = BigDecimal.ZERO;
+        for (PurVendorBillEntity b : bills) {
+            if (b.getState() != VendorBillState.POSTED) {
+                continue;
+            }
+            if (b.getBillDate().isBefore(from)) {
+                opening = opening.add(billTotalDocumentCurrency(b));
+            }
+        }
+        for (PurVendorPaymentEntity p : payments) {
+            if (p.getState() != VendorPaymentState.POSTED) {
+                continue;
+            }
+            if (p.getPaymentDate().isBefore(from)) {
+                opening = opening.subtract(p.getAmount());
+            }
+        }
+        opening = opening.setScale(4, RoundingMode.HALF_UP);
+
+        record PayEvt(LocalDate d, Instant created, String idKey, PurVendorBillEntity bill, PurVendorPaymentEntity pay) {}
+
+        List<PayEvt> period = new ArrayList<>();
+        for (PurVendorBillEntity b : bills) {
+            if (b.getState() != VendorBillState.POSTED) {
+                continue;
+            }
+            if (!b.getBillDate().isBefore(from) && !b.getBillDate().isAfter(to)) {
+                period.add(new PayEvt(b.getBillDate(), b.getCreatedAt(), "B:" + b.getId(), b, null));
+            }
+        }
+        for (PurVendorPaymentEntity p : payments) {
+            if (p.getState() != VendorPaymentState.POSTED) {
+                continue;
+            }
+            if (!p.getPaymentDate().isBefore(from) && !p.getPaymentDate().isAfter(to)) {
+                period.add(new PayEvt(p.getPaymentDate(), p.getCreatedAt(), "P:" + p.getId(), null, p));
+            }
+        }
+        period.sort(Comparator.comparing(PayEvt::d)
+                .thenComparing(PayEvt::created)
+                .thenComparing(PayEvt::idKey));
+
+        BigDecimal running = opening;
+        List<PartnerStatementLineResponse> lines = new ArrayList<>();
+        BigDecimal z = zeroMoney();
+        for (PayEvt e : period) {
+            PartnerStatementLineResponse row = new PartnerStatementLineResponse();
+            row.setEntryDate(e.d());
+            if (e.bill() != null) {
+                PurVendorBillEntity b = e.bill();
+                BigDecimal amt = billTotalDocumentCurrency(b).setScale(4, RoundingMode.HALF_UP);
+                row.setLineType("VENDOR_BILL");
+                row.setReference(b.getReference() != null && !b.getReference().isBlank()
+                        ? b.getReference()
+                        : b.getId().toString());
+                row.setVendorBillId(b.getId());
+                row.setVendorPaymentId(null);
+                row.setCustomerInvoiceId(null);
+                row.setCustomerPaymentId(null);
+                row.setDebit(amt);
+                row.setCredit(z);
+                running = running.add(amt);
+            } else {
+                PurVendorPaymentEntity p = e.pay();
+                BigDecimal amt = p.getAmount().setScale(4, RoundingMode.HALF_UP);
+                row.setLineType("VENDOR_PAYMENT");
+                row.setReference(p.getReference() != null && !p.getReference().isBlank()
+                        ? p.getReference()
+                        : "Payment");
+                row.setVendorBillId(p.getVendorBillId());
+                row.setVendorPaymentId(p.getId());
+                row.setCustomerInvoiceId(null);
+                row.setCustomerPaymentId(null);
+                row.setDebit(z);
+                row.setCredit(amt);
+                running = running.subtract(amt);
+            }
+            row.setBalance(running.setScale(4, RoundingMode.HALF_UP));
+            lines.add(row);
+        }
+
+        PartnerStatementSectionResponse s = new PartnerStatementSectionResponse();
+        s.setCurrencyCode(currency);
+        s.setOpeningBalance(opening);
+        s.setClosingBalance(running.setScale(4, RoundingMode.HALF_UP));
+        s.setLines(lines);
+        return s;
+    }
+
+    private static BigDecimal zeroMoney() {
+        return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+    }
+
+    @Override
     @Transactional
     public VendorPaymentResponse registerVendorPayment(RegisterVendorPaymentCommand command) {
         UUID companyId = companyIdOrDefault(command.getCompanyId());
@@ -720,25 +864,23 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         PartnerResponse vendor = partnerApplicationService.getPartner(bill.getVendorPartnerId());
         UUID payableAccount = vendor.getPayableAccountId() != null
                 ? vendor.getPayableAccountId()
-                : accountJpaRepository.findByCompanyIdAndCode(companyId, DEFAULT_AP_ACCOUNT_CODE)
-                .map(AccountEntity::getId)
-                .orElseThrow(() -> new PurchaseDomainException("Default AP account not found"));
+                : accountingReferenceLookupPort.resolveAccountIdByCode(companyId, DEFAULT_AP_ACCOUNT_CODE);
 
-        JournalEntity paymentJournal = journalJpaRepository.findById(command.getBankJournalId())
-                .orElseThrow(() -> new PurchaseDomainException("Payment journal not found"));
-        AccountEntity liquidityAccount = resolveLiquidityAccountForPaymentJournal(companyId, command.getBankJournalId());
-        String liquidityLabel = paymentJournal.getType() == JournalType.CASH ? "Cash payment" : "Bank payment";
+        JournalType paymentJournalType = accountingReferenceLookupPort
+                .resolveJournalType(companyId, command.getBankJournalId());
+        UUID liquidityAccountId = resolveLiquidityAccountForPaymentJournal(companyId, command.getBankJournalId());
+        String liquidityLabel = paymentJournalType == JournalType.CASH ? "Cash payment" : "Bank payment";
 
         BigDecimal amt = command.getAmount().setScale(4, RoundingMode.HALF_UP);
         List<JournalItemCommand> items = List.of(
                 new JournalItemCommand(payableAccount, "Payment " + bill.getReference(), amt, BigDecimal.ZERO,
                         command.getCurrencyCode(), amt, bill.getVendorPartnerId()),
-                new JournalItemCommand(liquidityAccount.getId(), liquidityLabel, BigDecimal.ZERO, amt,
+                new JournalItemCommand(liquidityAccountId, liquidityLabel, BigDecimal.ZERO, amt,
                         command.getCurrencyCode(), amt.negate(), null)
         );
         CreateJournalEntryCommand jcmd = new CreateJournalEntryCommand(
                 companyId,
-                paymentJournal.getId(),
+                command.getBankJournalId(),
                 "",
                 command.getPaymentDate(),
                 command.getCurrencyCode(),
@@ -792,6 +934,13 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         r.setState(VendorPaymentState.POSTED);
         r.setJournalEntryId(payEntry.getJournalEntryId());
         r.setReconciliationId(reconciliationId);
+        purchaseEventPublisher.publishVendorPaymentRegistered(new VendorPaymentRegisteredEvent(
+                UUID.randomUUID(),
+                Instant.now(),
+                companyId,
+                p.getId(),
+                p.getVendorPartnerId(),
+                p.getVendorBillId()));
         return r;
     }
 
