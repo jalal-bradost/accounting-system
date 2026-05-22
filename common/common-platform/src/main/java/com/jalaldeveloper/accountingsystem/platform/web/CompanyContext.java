@@ -25,10 +25,10 @@ public class CompanyContext {
     static final String ATTR_USER_ID = CompanyContext.class.getName() + ".userId";
 
     /**
-     * Called from {@link CompanyContextFilter} using the raw {@link HttpServletRequest}; does not
-     * rely on {@link RequestContextHolder}.
+     * Called from {@link CompanyContextFilter} and JWT authentication using the raw {@link HttpServletRequest};
+     * does not rely on {@link RequestContextHolder}.
      */
-    void applyFromIncomingRequest(HttpServletRequest request, Optional<CompanyId> company, Optional<UserId> user) {
+    public void applyFromIncomingRequest(HttpServletRequest request, Optional<CompanyId> company, Optional<UserId> user) {
         if (company.isPresent()) {
             request.setAttribute(ATTR_COMPANY_ID, company.get());
         } else {

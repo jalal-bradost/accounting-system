@@ -1,8 +1,10 @@
 package com.jalaldeveloper.accountingsystem.platform.bootstrap;
 
+import com.jalaldeveloper.accountingsystem.platform.dataaccess.entity.CompanyEntity;
 import com.jalaldeveloper.accountingsystem.platform.dataaccess.entity.PermissionEntity;
 import com.jalaldeveloper.accountingsystem.platform.dataaccess.entity.RoleEntity;
 import com.jalaldeveloper.accountingsystem.platform.dataaccess.entity.RolePermissionEntity;
+import com.jalaldeveloper.accountingsystem.platform.dataaccess.repository.CompanyJpaRepository;
 import com.jalaldeveloper.accountingsystem.platform.dataaccess.repository.PermissionJpaRepository;
 import com.jalaldeveloper.accountingsystem.platform.dataaccess.repository.RoleJpaRepository;
 import com.jalaldeveloper.accountingsystem.platform.dataaccess.repository.RolePermissionJpaRepository;
@@ -36,6 +38,8 @@ public class PlatformRbacSeeder implements ApplicationRunner {
             "platform.audit.read",
             "platform.user.read", "platform.user.write",
             "platform.role.read", "platform.role.write",
+            "platform.permission.read",
+            "platform.company.read", "platform.company.write",
             // Contacts
             "contacts.partner.read", "contacts.partner.write", "contacts.partner.archive",
             "contacts.payment-terms.read", "contacts.payment-terms.write",
@@ -63,9 +67,12 @@ public class PlatformRbacSeeder implements ApplicationRunner {
             "accounting.journal-entry.read", "accounting.journal-entry.write",
             "accounting.journal-entry.post", "accounting.journal-entry.reverse",
             "accounting.fiscal-period.read", "accounting.fiscal-period.write",
+            "accounting.currency.read", "accounting.currency.write",
             "accounting.report.read",
             "accounting.customer-invoice.read", "accounting.customer-invoice.write",
-            "accounting.customer-invoice.post", "accounting.customer-payment.register"
+            "accounting.customer-invoice.post", "accounting.customer-payment.register",
+            "accounting.vendor-bill.read", "accounting.vendor-bill.write", "accounting.vendor-bill.post",
+            "accounting.vendor-payment.register"
     );
 
     private static final Map<String, Set<String>> ROLE_PERMISSIONS = Map.of(
@@ -81,9 +88,12 @@ public class PlatformRbacSeeder implements ApplicationRunner {
                     "accounting.journal-entry.read", "accounting.journal-entry.write",
                     "accounting.journal-entry.post", "accounting.journal-entry.reverse",
                     "accounting.fiscal-period.read", "accounting.fiscal-period.write",
+                    "accounting.currency.read", "accounting.currency.write",
                     "accounting.report.read",
                     "accounting.customer-invoice.read", "accounting.customer-invoice.write",
-                    "accounting.customer-invoice.post", "accounting.customer-payment.register"),
+                    "accounting.customer-invoice.post", "accounting.customer-payment.register",
+                    "accounting.vendor-bill.read", "accounting.vendor-bill.write", "accounting.vendor-bill.post",
+                    "accounting.vendor-payment.register"),
             "SALES", Set.of(
                     "platform.activity.read", "platform.activity.write",
                     "contacts.partner.read", "contacts.partner.write",
@@ -104,7 +114,9 @@ public class PlatformRbacSeeder implements ApplicationRunner {
                     "purchase.receipt.validate",
                     "purchase.vendor-bill.read", "purchase.vendor-bill.write", "purchase.vendor-bill.post",
                     "purchase.payment.register",
-                    "purchase.fiscal-tax.read", "purchase.fiscal-tax.write"),
+                    "purchase.fiscal-tax.read", "purchase.fiscal-tax.write",
+                    "accounting.vendor-bill.read", "accounting.vendor-bill.write", "accounting.vendor-bill.post",
+                    "accounting.vendor-payment.register"),
             "WAREHOUSE", Set.of(
                     "platform.activity.read", "platform.activity.write",
                     "inventory.product.read",
@@ -115,6 +127,7 @@ public class PlatformRbacSeeder implements ApplicationRunner {
                     "inventory.quant.read", "inventory.valuation.read"),
             "READONLY", Set.of(
                     "platform.activity.read", "platform.audit.read",
+                    "platform.company.read", "platform.permission.read",
                     "contacts.partner.read", "contacts.payment-terms.read",
                     "inventory.product.read", "inventory.warehouse.read",
                     "inventory.picking.read", "inventory.quant.read", "inventory.valuation.read",
@@ -122,26 +135,50 @@ public class PlatformRbacSeeder implements ApplicationRunner {
                     "sales.order.read", "sales.invoice.read",
                     "accounting.account.read", "accounting.journal.read",
                     "accounting.journal-entry.read", "accounting.fiscal-period.read",
+                    "accounting.currency.read",
                     "accounting.report.read",
-                    "accounting.customer-invoice.read")
+                    "accounting.customer-invoice.read",
+                    "accounting.vendor-bill.read")
     );
 
     private final PermissionJpaRepository permissionRepository;
     private final RoleJpaRepository roleRepository;
     private final RolePermissionJpaRepository rolePermissionRepository;
+    private final CompanyJpaRepository companyRepository;
 
     public PlatformRbacSeeder(PermissionJpaRepository permissionRepository,
                               RoleJpaRepository roleRepository,
-                              RolePermissionJpaRepository rolePermissionRepository) {
+                              RolePermissionJpaRepository rolePermissionRepository,
+                              CompanyJpaRepository companyRepository) {
         this.permissionRepository = permissionRepository;
         this.roleRepository = roleRepository;
         this.rolePermissionRepository = rolePermissionRepository;
+        this.companyRepository = companyRepository;
     }
 
     @Override
     public void run(ApplicationArguments args) {
+        seedDefaultCompany();
         seedPermissions();
         seedRolesForCompany(DEFAULT_COMPANY_ID);
+    }
+
+    private void seedDefaultCompany() {
+        if (companyRepository.existsById(DEFAULT_COMPANY_ID)) {
+            return;
+        }
+        CompanyEntity c = new CompanyEntity();
+        c.setId(DEFAULT_COMPANY_ID);
+        c.setName("Demo Company");
+        c.setLegalName("Demo Company LLC");
+        c.setEmail("contact@demo.local");
+        c.setCountry("US");
+        c.setDefaultCurrency("USD");
+        c.setLocale("en-US");
+        c.setDateFormat("yyyy-MM-dd");
+        c.setNumberFormat("#,##0.00");
+        c.setFiscalYearStartMonth(1);
+        companyRepository.save(c);
     }
 
     private void seedPermissions() {

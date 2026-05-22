@@ -29,27 +29,59 @@ public class DefaultAuthorizationPortImpl implements AuthorizationPort {
     private final UserRoleJpaRepository userRoleRepository;
     private final RolePermissionJpaRepository rolePermissionRepository;
     private final PermissionJpaRepository permissionRepository;
+    private final PlatformSecurityProperties securityProperties;
 
     public DefaultAuthorizationPortImpl(UserRoleJpaRepository userRoleRepository,
                                         RolePermissionJpaRepository rolePermissionRepository,
-                                        PermissionJpaRepository permissionRepository) {
+                                        PermissionJpaRepository permissionRepository,
+                                        PlatformSecurityProperties securityProperties) {
         this.userRoleRepository = userRoleRepository;
         this.rolePermissionRepository = rolePermissionRepository;
         this.permissionRepository = permissionRepository;
+        this.securityProperties = securityProperties;
     }
 
     @Override
     public boolean hasAll(UserId userId, Set<String> requiredPermissions) {
-        if (userId == null) return true;
-        Set<String> effective = effectivePermissions(userId);
+        if (userId == null) {
+            return allowMissingUser();
+        }
+        if (isGrantAllUser(userId)) {
+            return true;
+        }
+        Set<String> effective = applyDenyRules(effectivePermissions(userId));
         return effective.containsAll(requiredPermissions);
     }
 
     @Override
     public boolean hasAny(UserId userId, Set<String> requiredPermissions) {
-        if (userId == null) return true;
-        Set<String> effective = effectivePermissions(userId);
+        if (userId == null) {
+            return allowMissingUser();
+        }
+        if (isGrantAllUser(userId)) {
+            return true;
+        }
+        Set<String> effective = applyDenyRules(effectivePermissions(userId));
         return requiredPermissions.stream().anyMatch(effective::contains);
+    }
+
+    private boolean allowMissingUser() {
+        if (!securityProperties.isEnabled()) {
+            return true;
+        }
+        return !securityProperties.getAuthorization().isStrict();
+    }
+
+    private boolean isGrantAllUser(UserId userId) {
+        return securityProperties.getAuthorization().getGrantAllUserIds().contains(userId.getId());
+    }
+
+    private Set<String> applyDenyRules(Set<String> granted) {
+        var deny = securityProperties.getAuthorization().getDenyPermissionCodes();
+        if (deny == null || deny.isEmpty()) {
+            return granted;
+        }
+        return granted.stream().filter(p -> !deny.contains(p)).collect(Collectors.toSet());
     }
 
     private Set<String> effectivePermissions(UserId userId) {
