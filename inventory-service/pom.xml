@@ -6,6 +6,7 @@
         <module>inventory-domain</module>
         <module>inventory-application</module>
         <module>inventory-dataaccess</module>
+        <module>inventory-messaging</module>
     </modules>
 
     <parent>

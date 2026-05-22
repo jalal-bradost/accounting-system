@@ -2,6 +2,7 @@ package com.jalaldeveloper.accountingsystem.inventory.service.domain;
 
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.Money;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.event.StockPickingValidatedEvent;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.Product;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.ProductCategory;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.StockLocation;
@@ -33,6 +34,7 @@ import com.jalaldeveloper.accountingsystem.inventory.service.domain.mapper.Inven
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.StockPickingApplicationService;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.accounting.JournalEntryPostingPort;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.ProductCategoryRepository;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.messaging.InventoryEventPublisher;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.ProductRepository;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.StockLocationRepository;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.StockPickingRepository;
@@ -85,6 +87,7 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
     private final AuditLogPort auditLogPort;
     private final ObjectProvider<PurchaseReceiveSyncPort> purchaseReceiveSyncProvider;
     private final ObjectProvider<SalesDeliverySyncPort> salesDeliverySyncProvider;
+    private final InventoryEventPublisher inventoryEventPublisher;
 
     StockPickingApplicationServiceImpl(StockPickingRepository pickingRepository,
                                        StockQuantRepository quantRepository,
@@ -98,7 +101,8 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
                                        ObjectProvider<CompanyContext> companyContextProvider,
                                        AuditLogPort auditLogPort,
                                        ObjectProvider<PurchaseReceiveSyncPort> purchaseReceiveSyncProvider,
-                                       ObjectProvider<SalesDeliverySyncPort> salesDeliverySyncProvider) {
+                                       ObjectProvider<SalesDeliverySyncPort> salesDeliverySyncProvider,
+                                       InventoryEventPublisher inventoryEventPublisher) {
         this.pickingRepository = pickingRepository;
         this.quantRepository = quantRepository;
         this.layerRepository = layerRepository;
@@ -112,6 +116,7 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
         this.auditLogPort = auditLogPort;
         this.purchaseReceiveSyncProvider = purchaseReceiveSyncProvider;
         this.salesDeliverySyncProvider = salesDeliverySyncProvider;
+        this.inventoryEventPublisher = inventoryEventPublisher;
     }
 
     @Override
@@ -371,6 +376,13 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
                 salesSync.afterOutgoingPickingValidated(soId);
             }
         }
+        inventoryEventPublisher.publishStockPickingValidated(new StockPickingValidatedEvent(
+                UUID.randomUUID(),
+                Instant.now(),
+                savedPicking.getCompanyId().getId(),
+                savedPicking.getId().getId(),
+                savedPicking.getPurchaseOrderId(),
+                savedPicking.getSalesOrderId()));
 
         // Emit backorder picking if there are leftover quantities.
         if (!backorderCandidates.isEmpty()) {
