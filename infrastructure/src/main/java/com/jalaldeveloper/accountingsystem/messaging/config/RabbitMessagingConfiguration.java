@@ -33,22 +33,25 @@ public class RabbitMessagingConfiguration {
         DirectExchange dlx = new DirectExchange("accounting.events.dlx", true, false);
         Queue accounting = durableQueue("accounting.events.q");
         Queue purchase = durableQueue("purchase.events.q");
+        Queue purchaseInventorySync = durableQueue("purchase.inventory-sync.q");
         Queue sales = durableQueue("sales.events.q");
+        Queue salesInventorySync = durableQueue("sales.inventory-sync.q");
         Queue inventory = durableQueue("inventory.events.q");
         Queue contacts = durableQueue("contacts.events.q");
         Queue deadLetterQueue = new Queue("accounting.events.dlq", true);
 
         return new Declarables(
-                dlx, accounting, purchase, sales, inventory, contacts, deadLetterQueue,
+                dlx, accounting, purchase, purchaseInventorySync, sales, salesInventorySync,
+                inventory, contacts, deadLetterQueue,
                 BindingBuilder.bind(deadLetterQueue).to(dlx).with("integration.dead"),
                 bind(accounting, integrationEventExchange, "accounting.#"),
                 bind(accounting, integrationEventExchange, "purchase.#"),
                 bind(accounting, integrationEventExchange, "inventory.#"),
                 bind(accounting, integrationEventExchange, "contacts.#"),
                 bind(purchase, integrationEventExchange, "purchase.#"),
-                bind(purchase, integrationEventExchange, "inventory.stock-picking.validated"),
+                bind(purchaseInventorySync, integrationEventExchange, "inventory.stock-picking.validated"),
                 bind(sales, integrationEventExchange, "sales.#"),
-                bind(sales, integrationEventExchange, "inventory.stock-picking.validated"),
+                bind(salesInventorySync, integrationEventExchange, "inventory.stock-picking.validated"),
                 bind(inventory, integrationEventExchange, "inventory.#"),
                 bind(contacts, integrationEventExchange, "contacts.#")
         );
