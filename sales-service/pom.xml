@@ -8,6 +8,7 @@
         <module>sales-domain</module>
         <module>sales-application</module>
         <module>sales-dataaccess</module>
+        <module>sales-messaging</module>
     </modules>
 
     <parent>

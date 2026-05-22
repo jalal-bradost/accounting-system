@@ -51,7 +51,9 @@ import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.SalesOrderLi
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.SalesOrderResponse;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.SalesOrderSummaryResponse;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.SalesOrderLineCommand;
+import com.jalaldeveloper.accountingsystem.sales.service.domain.event.SalesOrderConfirmedEvent;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.ports.input.SalesApplicationService;
+import com.jalaldeveloper.accountingsystem.sales.service.domain.ports.output.messaging.SalesEventPublisher;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.springframework.beans.factory.ObjectProvider;
@@ -90,6 +92,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
     private final PurchaseApplicationService purchaseApplicationService;
     private final CustomerInvoiceApplicationService customerInvoiceApplicationService;
     private final ObjectProvider<CompanyContext> companyContextProvider;
+    private final SalesEventPublisher salesEventPublisher;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -105,7 +108,8 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
                                        StockMoveSalesQueryPort stockMoveSalesQueryPort,
                                        PurchaseApplicationService purchaseApplicationService,
                                        @Lazy CustomerInvoiceApplicationService customerInvoiceApplicationService,
-                                       ObjectProvider<CompanyContext> companyContextProvider) {
+                                       ObjectProvider<CompanyContext> companyContextProvider,
+                                       SalesEventPublisher salesEventPublisher) {
         this.salesOrderRepository = salesOrderRepository;
         this.pricelistRepository = pricelistRepository;
         this.partnerApplicationService = partnerApplicationService;
@@ -118,6 +122,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         this.purchaseApplicationService = purchaseApplicationService;
         this.customerInvoiceApplicationService = customerInvoiceApplicationService;
         this.companyContextProvider = companyContextProvider;
+        this.salesEventPublisher = salesEventPublisher;
     }
 
     private UUID companyIdOrDefault(UUID fromCommand) {
@@ -432,7 +437,13 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         o.setExchangeRateToCompany(o.getExchangeRateToCompany() != null ? o.getExchangeRateToCompany() : BigDecimal.ONE);
         o.setUpdatedAt(Instant.now());
         refreshOrderStatuses(o);
-        return toResponse(salesOrderRepository.save(o));
+        SalSalesOrderEntity saved = salesOrderRepository.save(o);
+        salesEventPublisher.publishSalesOrderConfirmed(new SalesOrderConfirmedEvent(
+                UUID.randomUUID(),
+                Instant.now(),
+                saved.getCompanyId(),
+                saved.getId()));
+        return toResponse(saved);
     }
 
     private StockLocation findCustomerVirtual(UUID companyId) {
