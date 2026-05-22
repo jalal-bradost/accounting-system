@@ -2,12 +2,24 @@ accounting:
   seed:
     # Keep integration tests free of demo PO/SO/invoice side effects
     demo-business-data: false
+  currencies:
+    seed: true
+    base:
+      code: USD
+      symbol: "$"
+      name: United States dollar
+    extras:
+      - code: IQD
+        symbol: "د.ع"
+        name: Iraqi dinar
+        rate-per-usd: "1310.000000"
+        active: true
 
 spring:
   application:
     name: accounting-service-test
   datasource:
-    url: jdbc:h2:mem:accounting_test;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    url: jdbc:h2:mem:accounting_test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
     username: sa
     password:
@@ -15,3 +27,7 @@ spring:
     hibernate:
       ddl-auto: create-drop
     database-platform: org.hibernate.dialect.H2Dialect
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
