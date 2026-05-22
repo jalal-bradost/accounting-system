@@ -1,5 +1,6 @@
 package com.jalaldeveloper.accountingsystem.contacts.service.domain.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.jalaldeveloper.accountingsystem.contacts.domain.core.valueobject.AddressType;
 import com.jalaldeveloper.accountingsystem.contacts.domain.core.valueobject.PartnerKind;
 
@@ -71,8 +72,16 @@ public class PartnerResponse {
     public String getDisplayName() { return displayName; }
     public String getLegalName() { return legalName; }
     public UUID getParentId() { return parentId; }
-    public boolean isCustomer() { return isCustomer; }
-    public boolean isVendor() { return isVendor; }
+
+    @JsonProperty("isCustomer")
+    public boolean isCustomer() {
+        return isCustomer;
+    }
+
+    @JsonProperty("isVendor")
+    public boolean isVendor() {
+        return isVendor;
+    }
     public BigDecimal getCreditLimit() { return creditLimit; }
     public UUID getPaymentTermsId() { return paymentTermsId; }
     public UUID getReceivableAccountId() { return receivableAccountId; }

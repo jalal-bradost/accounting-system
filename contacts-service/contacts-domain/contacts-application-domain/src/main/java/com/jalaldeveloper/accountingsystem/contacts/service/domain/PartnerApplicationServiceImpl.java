@@ -8,9 +8,11 @@ import com.jalaldeveloper.accountingsystem.contacts.domain.core.service.CreditLi
 import com.jalaldeveloper.accountingsystem.contacts.domain.core.valueobject.PartnerId;
 import com.jalaldeveloper.accountingsystem.contacts.domain.core.valueobject.PaymentTermsId;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.dto.*;
+import com.jalaldeveloper.accountingsystem.contacts.service.domain.event.PartnerUpdatedEvent;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.mapper.ContactsDataMapper;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.ports.input.PartnerApplicationService;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.ports.output.accounting.PartnerBalancePort;
+import com.jalaldeveloper.accountingsystem.contacts.service.domain.ports.output.messaging.ContactsEventPublisher;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.ports.output.repository.PartnerRepository;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.Currency;
@@ -40,17 +42,20 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
     private final ObjectProvider<PartnerBalancePort> partnerBalancePortProvider;
     private final ObjectProvider<CompanyContext> companyContextProvider;
     private final AuditLogPort auditLogPort;
+    private final ContactsEventPublisher contactsEventPublisher;
 
     PartnerApplicationServiceImpl(PartnerRepository partnerRepository,
                                   ContactsDataMapper mapper,
                                   ObjectProvider<PartnerBalancePort> partnerBalancePortProvider,
                                   ObjectProvider<CompanyContext> companyContextProvider,
-                                  AuditLogPort auditLogPort) {
+                                  AuditLogPort auditLogPort,
+                                  ContactsEventPublisher contactsEventPublisher) {
         this.partnerRepository = partnerRepository;
         this.mapper = mapper;
         this.partnerBalancePortProvider = partnerBalancePortProvider;
         this.companyContextProvider = companyContextProvider;
         this.auditLogPort = auditLogPort;
+        this.contactsEventPublisher = contactsEventPublisher;
     }
 
     @Override
@@ -63,6 +68,7 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
         Partner saved = partnerRepository.save(partner);
         auditLogPort.recordBusinessEvent(companyId, MODEL_NAME, id,
                 "Partner created: " + saved.getDisplayName(), null);
+        publishPartnerUpdated(saved);
         return mapper.partnerToResponse(saved);
     }
 
@@ -137,6 +143,7 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
         if (!changes.isEmpty()) {
             auditLogPort.recordBusinessEvent(saved.getCompanyId(), MODEL_NAME, partnerId,
                     "Partner updated", changes);
+            publishPartnerUpdated(saved);
         }
         return mapper.partnerToResponse(saved);
     }
@@ -152,6 +159,7 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
         Partner saved = partnerRepository.save(partner);
         auditLogPort.recordBusinessEvent(saved.getCompanyId(), MODEL_NAME, partnerId,
                 "Partner archived", null);
+        publishPartnerUpdated(saved);
         return mapper.partnerToResponse(saved);
     }
 
@@ -166,6 +174,7 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
         Partner saved = partnerRepository.save(partner);
         auditLogPort.recordBusinessEvent(saved.getCompanyId(), MODEL_NAME, partnerId,
                 "Partner unarchived", null);
+        publishPartnerUpdated(saved);
         return mapper.partnerToResponse(saved);
     }
 
@@ -295,5 +304,15 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
     private String currentUserDisplay() {
         CompanyContext ctx = companyContextProvider.getIfAvailable();
         return ctx == null ? "system" : ctx.currentUserDisplay();
+    }
+
+    private void publishPartnerUpdated(Partner partner) {
+        contactsEventPublisher.publishPartnerUpdated(new PartnerUpdatedEvent(
+                UUID.randomUUID(),
+                java.time.Instant.now(),
+                partner.getCompanyId().getId(),
+                partner.getId().getId(),
+                partner.isCustomer(),
+                partner.isVendor()));
     }
 }

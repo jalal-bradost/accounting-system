@@ -1,5 +1,6 @@
 package com.jalaldeveloper.accountingsystem.contacts.service.domain.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.jalaldeveloper.accountingsystem.contacts.domain.core.valueobject.PartnerKind;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -18,7 +19,15 @@ public class CreatePartnerCommand {
     private String legalName;
     private UUID parentId;
 
+    /**
+     * Explicit JSON names: JavaBean {@code isCustomer()}/{@code isVendor()} otherwise map to
+     * {@code customer}/{@code vendor} in JSON, so the frontend's {@code isCustomer}/{@code isVendor}
+     * payload was ignored and both stayed false.
+     */
+    @JsonProperty("isCustomer")
     private boolean isCustomer;
+
+    @JsonProperty("isVendor")
     private boolean isVendor;
 
     private BigDecimal creditLimit;

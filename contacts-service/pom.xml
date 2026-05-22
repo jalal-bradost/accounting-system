@@ -6,6 +6,7 @@
         <module>contacts-domain</module>
         <module>contacts-application</module>
         <module>contacts-dataaccess</module>
+        <module>contacts-messaging</module>
     </modules>
 
     <parent>
