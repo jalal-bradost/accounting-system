@@ -21,6 +21,10 @@
         </dependency>
         <dependency>
             <groupId>com.jalaldeveloper.accountingsystem</groupId>
+            <artifactId>purchase-application-service</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jalaldeveloper.accountingsystem</groupId>
             <artifactId>common-application</artifactId>
         </dependency>
         <dependency>
