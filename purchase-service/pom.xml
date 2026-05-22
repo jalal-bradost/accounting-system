@@ -8,6 +8,7 @@
         <module>purchase-domain</module>
         <module>purchase-application</module>
         <module>purchase-dataaccess</module>
+        <module>purchase-messaging</module>
     </modules>
 
     <parent>

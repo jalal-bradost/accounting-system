@@ -8,33 +8,24 @@
         <artifactId>purchase-service</artifactId>
         <version>1.0-SNAPSHOT</version>
     </parent>
-    <artifactId>purchase-dataaccess</artifactId>
-    <name>purchase-dataaccess</name>
+    <artifactId>purchase-messaging</artifactId>
+    <name>purchase-messaging</name>
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.jalaldeveloper.accountingsystem</groupId>
-            <artifactId>common-domain</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.jalaldeveloper.accountingsystem</groupId>
-            <artifactId>common-platform</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.jalaldeveloper.accountingsystem</groupId>
-            <artifactId>purchase-domain-core</artifactId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
         <dependency>
             <groupId>com.jalaldeveloper.accountingsystem</groupId>
             <artifactId>purchase-application-service</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
+            <groupId>com.jalaldeveloper.accountingsystem</groupId>
+            <artifactId>inventory-application-service</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jalaldeveloper.accountingsystem</groupId>
+            <artifactId>infrastructure</artifactId>
         </dependency>
     </dependencies>
 </project>
