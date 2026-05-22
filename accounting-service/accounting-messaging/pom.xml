@@ -9,4 +9,15 @@
     <artifactId>accounting-messaging</artifactId>
     <name>accounting-messaging</name>
 
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jalaldeveloper.accountingsystem</groupId>
+            <artifactId>accounting-application-service</artifactId>
+        </dependency>
+    </dependencies>
+
 </project>
