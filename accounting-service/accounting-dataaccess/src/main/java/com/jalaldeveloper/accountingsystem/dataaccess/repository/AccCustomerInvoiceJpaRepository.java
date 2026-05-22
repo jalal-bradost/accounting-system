@@ -20,4 +20,7 @@ public interface AccCustomerInvoiceJpaRepository extends JpaRepository<AccCustom
     Optional<AccCustomerInvoiceEntity> findByIdWithLines(@Param("id") UUID id);
 
     boolean existsBySalesOrderIdAndState(UUID salesOrderId, CustomerInvoiceState state);
+
+    List<AccCustomerInvoiceEntity> findByCompanyIdAndCustomerPartnerIdOrderByInvoiceDateAscCreatedAtAsc(
+            UUID companyId, UUID customerPartnerId);
 }

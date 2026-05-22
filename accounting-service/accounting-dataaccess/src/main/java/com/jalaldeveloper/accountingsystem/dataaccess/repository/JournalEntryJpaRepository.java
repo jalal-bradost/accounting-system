@@ -1,6 +1,7 @@
 package com.jalaldeveloper.accountingsystem.dataaccess.repository;
 
 import com.jalaldeveloper.accountingsystem.dataaccess.entity.JournalEntryEntity;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalEntryStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
@@ -17,4 +18,7 @@ public interface JournalEntryJpaRepository extends JpaRepository<JournalEntryEnt
 
     boolean existsBySequenceNumberAndCompanyIdAndJournal_Id(
             String sequenceNumber, UUID companyId, UUID journalId);
+
+    boolean existsByCompanyIdAndStatusAndEntryDateLessThanEqual(
+            UUID companyId, JournalEntryStatus status, LocalDate toInclusive);
 }

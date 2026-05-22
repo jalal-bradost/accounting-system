@@ -9,4 +9,7 @@ import java.util.UUID;
 public interface AccCustomerPaymentJpaRepository extends JpaRepository<AccCustomerPaymentEntity, UUID> {
 
     List<AccCustomerPaymentEntity> findByCompanyIdOrderByPaymentDateDescCreatedAtDesc(UUID companyId);
+
+    List<AccCustomerPaymentEntity> findByCompanyIdAndCustomerPartnerIdOrderByPaymentDateAscCreatedAtAsc(
+            UUID companyId, UUID customerPartnerId);
 }

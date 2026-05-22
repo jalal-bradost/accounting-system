@@ -16,6 +16,8 @@ import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.SalesOrderInvoiceSyncPort;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.JournalEntryApplicationService;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.ReconciliationApplicationService;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.messaging.AccountingEventPublisher;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.event.CustomerInvoicePostedEvent;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.dto.PartnerResponse;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.ports.input.PartnerApplicationService;
 import com.jalaldeveloper.accountingsystem.dataaccess.entity.AccCustomerInvoiceEntity;
@@ -65,6 +67,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
     private final ReconciliationApplicationService reconciliationApplicationService;
     private final ObjectProvider<CompanyContext> companyContextProvider;
     private final ObjectProvider<SalesOrderInvoiceSyncPort> salesOrderInvoiceSyncPortProvider;
+    private final AccountingEventPublisher accountingEventPublisher;
 
     public CustomerInvoiceApplicationServiceImpl(AccCustomerInvoiceJpaRepository invoiceRepository,
                                                  AccCustomerPaymentJpaRepository paymentRepository,
@@ -74,7 +77,8 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
                                                  AccountJpaRepository accountJpaRepository,
                                                  ReconciliationApplicationService reconciliationApplicationService,
                                                  ObjectProvider<CompanyContext> companyContextProvider,
-                                                 ObjectProvider<SalesOrderInvoiceSyncPort> salesOrderInvoiceSyncPortProvider) {
+                                                 ObjectProvider<SalesOrderInvoiceSyncPort> salesOrderInvoiceSyncPortProvider,
+                                                 AccountingEventPublisher accountingEventPublisher) {
         this.invoiceRepository = invoiceRepository;
         this.paymentRepository = paymentRepository;
         this.partnerApplicationService = partnerApplicationService;
@@ -84,6 +88,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         this.reconciliationApplicationService = reconciliationApplicationService;
         this.companyContextProvider = companyContextProvider;
         this.salesOrderInvoiceSyncPortProvider = salesOrderInvoiceSyncPortProvider;
+        this.accountingEventPublisher = accountingEventPublisher;
     }
 
     @Override
@@ -265,6 +270,12 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
                 }
             }
         }
+        accountingEventPublisher.publishCustomerInvoicePosted(new CustomerInvoicePostedEvent(
+                UUID.randomUUID(),
+                Instant.now(),
+                saved.getCompanyId(),
+                saved.getId(),
+                saved.getCustomerPartnerId()));
 
         return toResponse(saved);
     }

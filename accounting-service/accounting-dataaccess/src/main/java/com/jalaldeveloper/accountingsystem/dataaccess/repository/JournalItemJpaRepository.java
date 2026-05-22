@@ -64,4 +64,47 @@ public interface JournalItemJpaRepository extends JpaRepository<JournalItemEntit
             @Param("companyId") UUID companyId,
             @Param("partnerId") UUID partnerId,
             @Param("accountType") AccountType accountType);
+
+    @Query("SELECT COALESCE(i.partnerId, e.partnerId), COALESCE(SUM(i.debit - i.credit), 0) "
+            + "FROM JournalItemEntity i JOIN i.journalEntry e JOIN i.account a "
+            + "WHERE e.companyId = :companyId AND e.status = 'POSTED' "
+            + "AND a.type IN :tradeTypes "
+            + "AND COALESCE(i.partnerId, e.partnerId) IS NOT NULL "
+            + "AND e.entryDate < :fromExclusive "
+            + "GROUP BY COALESCE(i.partnerId, e.partnerId)")
+    List<Object[]> sumOpeningBalanceByPartnerBefore(
+            @Param("companyId") UUID companyId,
+            @Param("fromExclusive") LocalDate fromExclusive,
+            @Param("tradeTypes") Collection<AccountType> tradeTypes);
+
+    @Query("SELECT COALESCE(i.partnerId, e.partnerId), COALESCE(SUM(i.debit), 0), COALESCE(SUM(i.credit), 0) "
+            + "FROM JournalItemEntity i JOIN i.journalEntry e JOIN i.account a "
+            + "WHERE e.companyId = :companyId AND e.status = 'POSTED' "
+            + "AND a.type IN :tradeTypes "
+            + "AND COALESCE(i.partnerId, e.partnerId) IS NOT NULL "
+            + "AND e.entryDate BETWEEN :fromInclusive AND :toInclusive "
+            + "GROUP BY COALESCE(i.partnerId, e.partnerId)")
+    List<Object[]> sumPeriodDebitCreditByPartner(
+            @Param("companyId") UUID companyId,
+            @Param("fromInclusive") LocalDate fromInclusive,
+            @Param("toInclusive") LocalDate toInclusive,
+            @Param("tradeTypes") Collection<AccountType> tradeTypes);
+
+    @Query("SELECT COALESCE(i.partnerId, e.partnerId), "
+            + "COALESCE(NULLIF(TRIM(i.partnerName), ''), NULLIF(TRIM(e.partnerName), '')), "
+            + "e.id, e.entryDate, j.code, e.sequenceNumber, a.code, a.name, i.label, i.debit, i.credit, "
+            + "i.reconciliationId, i.id "
+            + "FROM JournalItemEntity i JOIN i.journalEntry e JOIN e.journal j JOIN i.account a "
+            + "WHERE e.companyId = :companyId AND e.status = 'POSTED' "
+            + "AND a.type IN :tradeTypes "
+            + "AND COALESCE(i.partnerId, e.partnerId) IS NOT NULL "
+            + "AND e.entryDate BETWEEN :fromInclusive AND :toInclusive "
+            + "AND COALESCE(i.partnerId, e.partnerId) = :partnerId "
+            + "ORDER BY e.entryDate, e.id, i.id")
+    List<Object[]> listPartnerTradeMovementsInPeriod(
+            @Param("companyId") UUID companyId,
+            @Param("fromInclusive") LocalDate fromInclusive,
+            @Param("toInclusive") LocalDate toInclusive,
+            @Param("partnerId") UUID partnerId,
+            @Param("tradeTypes") Collection<AccountType> tradeTypes);
 }
