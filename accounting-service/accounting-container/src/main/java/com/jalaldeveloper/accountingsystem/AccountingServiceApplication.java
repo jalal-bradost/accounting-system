@@ -1,11 +1,14 @@
 package com.jalaldeveloper.accountingsystem;
 
+import com.jalaldeveloper.accountingsystem.config.AccountingCurrencyProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 @SpringBootApplication(scanBasePackages = "com.jalaldeveloper.accountingsystem")
+@EnableConfigurationProperties(AccountingCurrencyProperties.class)
 @EntityScan(basePackages = {
         "com.jalaldeveloper.accountingsystem.dataaccess.entity",
         "com.jalaldeveloper.accountingsystem.platform.dataaccess.entity",
