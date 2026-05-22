@@ -1,7 +1,9 @@
 package com.jalaldeveloper.accountingsystem.messaging.consumer;
 
 import com.jalaldeveloper.accountingsystem.platform.dataaccess.entity.ProcessedIntegrationEventEntity;
+import com.jalaldeveloper.accountingsystem.platform.dataaccess.entity.ProcessedIntegrationEventId;
 import com.jalaldeveloper.accountingsystem.platform.dataaccess.repository.ProcessedIntegrationEventJpaRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,15 +21,17 @@ public class IntegrationEventDedupService {
 
     @Transactional
     public boolean shouldProcess(UUID eventId, String eventType, String consumerName) {
-        if (processedEventRepository.existsById(eventId)) {
+        ProcessedIntegrationEventId id = new ProcessedIntegrationEventId(eventId, consumerName);
+        if (processedEventRepository.existsById(id)) {
             return false;
         }
-        ProcessedIntegrationEventEntity entity = new ProcessedIntegrationEventEntity();
-        entity.setEventId(eventId);
-        entity.setEventType(eventType);
-        entity.setConsumerName(consumerName);
-        entity.setProcessedAt(Instant.now());
-        processedEventRepository.save(entity);
-        return true;
+        try {
+            processedEventRepository.save(
+                    new ProcessedIntegrationEventEntity(eventId, eventType, consumerName, Instant.now()));
+            return true;
+        } catch (DataIntegrityViolationException ex) {
+            // Concurrent delivery of the same event to this consumer
+            return false;
+        }
     }
 }
