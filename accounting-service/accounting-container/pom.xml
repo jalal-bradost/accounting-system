@@ -132,6 +132,14 @@
             <artifactId>sales-dataaccess</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.jalaldeveloper.accountingsystem</groupId>
+            <artifactId>pos-application</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jalaldeveloper.accountingsystem</groupId>
+            <artifactId>pos-dataaccess</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>

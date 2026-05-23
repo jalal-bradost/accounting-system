@@ -17,7 +17,7 @@ class ModuleBoundaryArchitectureTest {
     void crossModuleDataaccessImportsShouldNotExist() throws IOException {
         Path backendRoot = Path.of(System.getProperty("user.dir")).getParent().getParent();
         List<String> violations = new ArrayList<>();
-        String[] contexts = {"accounting", "purchase", "sales", "inventory", "contacts"};
+        String[] contexts = {"accounting", "purchase", "sales", "pos", "inventory", "contacts"};
 
         try (Stream<Path> files = Files.walk(backendRoot)) {
             files.filter(path -> path.toString().endsWith(".java"))

@@ -9,6 +9,7 @@
     <module>inventory-service</module>
     <module>purchase-service</module>
     <module>sales-service</module>
+    <module>pos-service</module>
     <module>infrastructure</module>
   </modules>
 
@@ -180,6 +181,26 @@
       <dependency>
         <groupId>com.jalaldeveloper.accountingsystem</groupId>
         <artifactId>sales-messaging</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>pos-domain-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>pos-application-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>pos-dataaccess</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>pos-application</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

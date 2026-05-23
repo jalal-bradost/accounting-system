@@ -61,6 +61,11 @@ public class PlatformRbacSeeder implements ApplicationRunner {
             // Sales
             "sales.order.read", "sales.order.write", "sales.order.confirm",
             "sales.invoice.read", "sales.invoice.write",
+            // POS
+            "pos.config.read", "pos.config.write",
+            "pos.session.open", "pos.session.close",
+            "pos.order.read", "pos.order.write", "pos.order.pay", "pos.order.finalize",
+            "pos.receipt.read",
             // Accounting (existing endpoints; not yet annotated)
             "accounting.account.read", "accounting.account.write",
             "accounting.journal.read", "accounting.journal.write",
@@ -102,6 +107,10 @@ public class PlatformRbacSeeder implements ApplicationRunner {
                     "inventory.picking.confirm", "inventory.picking.validate",
                     "sales.order.read", "sales.order.write", "sales.order.confirm",
                     "sales.invoice.read", "sales.invoice.write",
+                    "pos.config.read", "pos.config.write",
+                    "pos.session.open", "pos.session.close",
+                    "pos.order.read", "pos.order.write", "pos.order.pay", "pos.order.finalize",
+                    "pos.receipt.read",
                     "accounting.customer-invoice.read", "accounting.customer-invoice.write",
                     "accounting.customer-invoice.post", "accounting.customer-payment.register"),
             "PURCHASING", Set.of(
@@ -133,6 +142,7 @@ public class PlatformRbacSeeder implements ApplicationRunner {
                     "inventory.picking.read", "inventory.quant.read", "inventory.valuation.read",
                     "purchase.order.read", "purchase.vendor-bill.read", "purchase.fiscal-tax.read",
                     "sales.order.read", "sales.invoice.read",
+                    "pos.config.read", "pos.order.read", "pos.receipt.read",
                     "accounting.account.read", "accounting.journal.read",
                     "accounting.journal-entry.read", "accounting.fiscal-period.read",
                     "accounting.currency.read",

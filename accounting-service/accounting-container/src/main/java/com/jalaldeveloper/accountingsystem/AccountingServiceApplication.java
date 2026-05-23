@@ -15,7 +15,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         "com.jalaldeveloper.accountingsystem.contacts.dataaccess.entity",
         "com.jalaldeveloper.accountingsystem.inventory.dataaccess.entity",
         "com.jalaldeveloper.accountingsystem.purchase.dataaccess.entity",
-        "com.jalaldeveloper.accountingsystem.sales.dataaccess.entity"
+        "com.jalaldeveloper.accountingsystem.sales.dataaccess.entity",
+        "com.jalaldeveloper.accountingsystem.pos.dataaccess.entity"
 })
 @EnableJpaRepositories(basePackages = {
         "com.jalaldeveloper.accountingsystem.dataaccess.repository",
@@ -23,7 +24,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         "com.jalaldeveloper.accountingsystem.contacts.dataaccess.repository",
         "com.jalaldeveloper.accountingsystem.inventory.dataaccess.repository",
         "com.jalaldeveloper.accountingsystem.purchase.dataaccess.repository",
-        "com.jalaldeveloper.accountingsystem.sales.dataaccess.repository"
+        "com.jalaldeveloper.accountingsystem.sales.dataaccess.repository",
+        "com.jalaldeveloper.accountingsystem.pos.dataaccess.repository"
 })
 public class AccountingServiceApplication {
 
