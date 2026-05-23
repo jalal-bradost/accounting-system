@@ -23,7 +23,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -64,20 +66,17 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
         response.setFromDate(from);
         response.setToDate(to);
 
-        String currency = partner.getCurrencyCode() != null && !partner.getCurrencyCode().isBlank()
-                ? partner.getCurrencyCode()
-                : "USD";
         if (partner.isCustomer()) {
-            response.setReceivable(buildReceivableSection(companyId, partnerId, currency, from, to));
+            response.setReceivableSections(buildReceivableSections(companyId, partnerId, from, to));
         }
         if (partner.isVendor()) {
-            response.setPayable(purchaseApplicationService.payableStatement(companyId, partnerId, from, to, currency));
+            response.setPayableSections(purchaseApplicationService.payableStatement(companyId, partnerId, from, to));
         }
         return response;
     }
 
-    private PartnerStatementSectionResponse buildReceivableSection(
-            UUID companyId, UUID partnerId, String currency, LocalDate from, LocalDate to) {
+    private List<PartnerStatementSectionResponse> buildReceivableSections(
+            UUID companyId, UUID partnerId, LocalDate from, LocalDate to) {
         List<AccCustomerInvoiceEntity> invoices = customerInvoiceRepository
                 .findByCompanyIdAndCustomerPartnerIdOrderByInvoiceDateAscCreatedAtAsc(companyId, partnerId);
         for (AccCustomerInvoiceEntity inv : invoices) {
@@ -89,9 +88,37 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
         List<AccCustomerPaymentEntity> payments = customerPaymentRepository
                 .findByCompanyIdAndCustomerPartnerIdOrderByPaymentDateAscCreatedAtAsc(companyId, partnerId);
 
+        Set<String> currencies = new LinkedHashSet<>();
+        for (AccCustomerInvoiceEntity inv : invoices) {
+            if (inv.getState() == CustomerInvoiceState.POSTED && inv.getCurrencyCode() != null) {
+                currencies.add(inv.getCurrencyCode().trim().toUpperCase());
+            }
+        }
+        for (AccCustomerPaymentEntity p : payments) {
+            if (p.getCurrencyCode() != null) {
+                currencies.add(p.getCurrencyCode().trim().toUpperCase());
+            }
+        }
+
+        List<PartnerStatementSectionResponse> sections = new ArrayList<>();
+        for (String currency : currencies) {
+            sections.add(buildReceivableSectionForCurrency(currency, from, to, invoices, payments));
+        }
+        return sections;
+    }
+
+    private PartnerStatementSectionResponse buildReceivableSectionForCurrency(
+            String currency,
+            LocalDate from,
+            LocalDate to,
+            List<AccCustomerInvoiceEntity> invoices,
+            List<AccCustomerPaymentEntity> payments) {
         BigDecimal opening = BigDecimal.ZERO;
         for (AccCustomerInvoiceEntity inv : invoices) {
             if (inv.getState() != CustomerInvoiceState.POSTED) {
+                continue;
+            }
+            if (!currency.equalsIgnoreCase(inv.getCurrencyCode())) {
                 continue;
             }
             if (inv.getInvoiceDate().isBefore(from)) {
@@ -99,6 +126,9 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
             }
         }
         for (AccCustomerPaymentEntity p : payments) {
+            if (!currency.equalsIgnoreCase(p.getCurrencyCode())) {
+                continue;
+            }
             if (p.getPaymentDate().isBefore(from)) {
                 opening = opening.subtract(p.getAmount());
             }
@@ -109,13 +139,16 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
         List<ArEvt> period = new ArrayList<>();
         for (AccCustomerInvoiceEntity inv : invoices) {
             if (inv.getState() == CustomerInvoiceState.POSTED
+                    && currency.equalsIgnoreCase(inv.getCurrencyCode())
                     && !inv.getInvoiceDate().isBefore(from)
                     && !inv.getInvoiceDate().isAfter(to)) {
                 period.add(new ArEvt(inv.getInvoiceDate(), inv.getCreatedAt(), "I:" + inv.getId(), inv, null));
             }
         }
         for (AccCustomerPaymentEntity p : payments) {
-            if (!p.getPaymentDate().isBefore(from) && !p.getPaymentDate().isAfter(to)) {
+            if (currency.equalsIgnoreCase(p.getCurrencyCode())
+                    && !p.getPaymentDate().isBefore(from)
+                    && !p.getPaymentDate().isAfter(to)) {
                 period.add(new ArEvt(p.getPaymentDate(), p.getCreatedAt(), "M:" + p.getId(), null, p));
             }
         }
@@ -132,6 +165,7 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
                 BigDecimal amount = customerInvoiceTotalDocumentCurrency(inv).setScale(4, RoundingMode.HALF_UP);
                 row.setLineType("CUSTOMER_INVOICE");
                 row.setReference(inv.getReference() != null && !inv.getReference().isBlank() ? inv.getReference() : inv.getId().toString());
+                row.setCurrencyCode(inv.getCurrencyCode());
                 row.setCustomerInvoiceId(inv.getId());
                 row.setDebit(amount);
                 row.setCredit(zero);
@@ -141,6 +175,7 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
                 BigDecimal amount = payment.getAmount().setScale(4, RoundingMode.HALF_UP);
                 row.setLineType("CUSTOMER_PAYMENT");
                 row.setReference(payment.getReference() != null && !payment.getReference().isBlank() ? payment.getReference() : "Payment");
+                row.setCurrencyCode(payment.getCurrencyCode());
                 row.setCustomerInvoiceId(payment.getCustomerInvoiceId());
                 row.setCustomerPaymentId(payment.getId());
                 row.setDebit(zero);

@@ -7,4 +7,5 @@ public record CreditStatusResponse(UUID partnerId,
                                    BigDecimal creditLimit,
                                    BigDecimal outstandingReceivable,
                                    BigDecimal available,
-                                   boolean unlimited) {}
+                                   boolean unlimited,
+                                   String companyCurrencyCode) {}

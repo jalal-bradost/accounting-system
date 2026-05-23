@@ -49,11 +49,10 @@ public interface PurchaseApplicationService {
 
     List<VendorPaymentResponse> listVendorPayments(UUID companyId);
 
-    PartnerStatementSectionResponse payableStatement(UUID companyId,
+    List<PartnerStatementSectionResponse> payableStatement(UUID companyId,
                                                      UUID partnerId,
                                                      LocalDate from,
-                                                     LocalDate to,
-                                                     String currencyCode);
+                                                     LocalDate to);
 
     VendorPaymentResponse registerVendorPayment(RegisterVendorPaymentCommand command);
 

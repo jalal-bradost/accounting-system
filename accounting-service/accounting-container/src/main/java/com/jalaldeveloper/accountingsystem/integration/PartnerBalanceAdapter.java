@@ -2,6 +2,7 @@ package com.jalaldeveloper.accountingsystem.integration;
 
 import com.jalaldeveloper.accountingsystem.contacts.domain.core.valueobject.PartnerId;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.ports.output.accounting.PartnerBalancePort;
+import com.jalaldeveloper.accountingsystem.dataaccess.repository.CompanyCurrencyJpaRepository;
 import com.jalaldeveloper.accountingsystem.dataaccess.repository.JournalItemJpaRepository;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.AccountType;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
@@ -20,9 +21,12 @@ import java.math.BigDecimal;
 public class PartnerBalanceAdapter implements PartnerBalancePort {
 
     private final JournalItemJpaRepository journalItemRepository;
+    private final CompanyCurrencyJpaRepository companyCurrencyJpaRepository;
 
-    public PartnerBalanceAdapter(JournalItemJpaRepository journalItemRepository) {
+    public PartnerBalanceAdapter(JournalItemJpaRepository journalItemRepository,
+                                 CompanyCurrencyJpaRepository companyCurrencyJpaRepository) {
         this.journalItemRepository = journalItemRepository;
+        this.companyCurrencyJpaRepository = companyCurrencyJpaRepository;
     }
 
     @Override
@@ -30,5 +34,15 @@ public class PartnerBalanceAdapter implements PartnerBalancePort {
         BigDecimal sum = journalItemRepository.sumPartnerBalanceByAccountType(
                 companyId.getId(), partnerId.getId(), AccountType.RECEIVABLE);
         return new Money(sum != null ? sum : BigDecimal.ZERO);
+    }
+
+    @Override
+    public String companyBaseCurrencyCode(CompanyId companyId) {
+        return companyCurrencyJpaRepository.findByCompanyIdOrderByBaseCurrencyDescCodeAsc(companyId.getId())
+                .stream()
+                .filter(c -> c.isBaseCurrency())
+                .map(c -> c.getCode())
+                .findFirst()
+                .orElse("USD");
     }
 }

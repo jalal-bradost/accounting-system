@@ -272,13 +272,17 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
         Money outstanding = balancePort != null
                 ? balancePort.outstandingReceivable(partner.getCompanyId(), partner.getId())
                 : Money.ZERO;
+        String companyCurrency = balancePort != null
+                ? balancePort.companyBaseCurrencyCode(partner.getCompanyId())
+                : "USD";
         CreditLimitChecker.CreditStatus status = CreditLimitChecker.check(partner, outstanding);
         return new CreditStatusResponse(
                 partnerId,
                 status.creditLimit().getAmount(),
                 status.outstandingReceivable().getAmount(),
                 status.available().getAmount(),
-                status.unlimited());
+                status.unlimited(),
+                companyCurrency);
     }
 
     private Partner loadOrThrow(UUID id) {

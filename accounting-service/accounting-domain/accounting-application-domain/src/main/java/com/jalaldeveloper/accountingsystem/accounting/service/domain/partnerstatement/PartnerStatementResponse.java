@@ -1,11 +1,14 @@
 package com.jalaldeveloper.accountingsystem.accounting.service.domain.partnerstatement;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
  * Activity for a partner: optional receivable (customer invoices and receipts) and/or
  * payable (vendor bills and payments) sections, depending on partner roles and permissions.
+ * Each section is scoped to one document currency so running balances never mix FX.
  */
 public class PartnerStatementResponse {
 
@@ -13,8 +16,8 @@ public class PartnerStatementResponse {
     private String partnerDisplayName;
     private LocalDate fromDate;
     private LocalDate toDate;
-    private PartnerStatementSectionResponse receivable;
-    private PartnerStatementSectionResponse payable;
+    private List<PartnerStatementSectionResponse> receivableSections = new ArrayList<>();
+    private List<PartnerStatementSectionResponse> payableSections = new ArrayList<>();
 
     public UUID getPartnerId() {
         return partnerId;
@@ -48,19 +51,19 @@ public class PartnerStatementResponse {
         this.toDate = toDate;
     }
 
-    public PartnerStatementSectionResponse getReceivable() {
-        return receivable;
+    public List<PartnerStatementSectionResponse> getReceivableSections() {
+        return receivableSections;
     }
 
-    public void setReceivable(PartnerStatementSectionResponse receivable) {
-        this.receivable = receivable;
+    public void setReceivableSections(List<PartnerStatementSectionResponse> receivableSections) {
+        this.receivableSections = receivableSections != null ? receivableSections : new ArrayList<>();
     }
 
-    public PartnerStatementSectionResponse getPayable() {
-        return payable;
+    public List<PartnerStatementSectionResponse> getPayableSections() {
+        return payableSections;
     }
 
-    public void setPayable(PartnerStatementSectionResponse payable) {
-        this.payable = payable;
+    public void setPayableSections(List<PartnerStatementSectionResponse> payableSections) {
+        this.payableSections = payableSections != null ? payableSections : new ArrayList<>();
     }
 }

@@ -14,6 +14,7 @@ public class PartnerStatementLineResponse {
     private String lineType;
     private LocalDate entryDate;
     private String reference;
+    private String currencyCode;
     private UUID customerInvoiceId;
     private UUID customerPaymentId;
     private UUID vendorBillId;
@@ -44,6 +45,14 @@ public class PartnerStatementLineResponse {
 
     public void setReference(String reference) {
         this.reference = reference;
+    }
+
+    public String getCurrencyCode() {
+        return currencyCode;
+    }
+
+    public void setCurrencyCode(String currencyCode) {
+        this.currencyCode = currencyCode;
     }
 
     public UUID getCustomerInvoiceId() {
