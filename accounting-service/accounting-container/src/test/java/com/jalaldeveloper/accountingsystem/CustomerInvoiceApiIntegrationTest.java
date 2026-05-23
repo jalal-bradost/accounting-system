@@ -88,7 +88,14 @@ class CustomerInvoiceApiIntegrationTest {
         JsonNode pays = json.readTree(listPayRes.getResponse().getContentAsString());
         assertThat(pays.isArray()).isTrue();
         assertThat(pays.size()).isPositive();
-        assertThat(pays.get(0).get("customerInvoiceId").asText()).isEqualTo(invoiceId.toString());
+        boolean found = false;
+        for (JsonNode payRow : pays) {
+            if (invoiceId.toString().equals(payRow.get("customerInvoiceId").asText())) {
+                found = true;
+                break;
+            }
+        }
+        assertThat(found).isTrue();
     }
 
     private UUID createCustomer(UUID receivableAccountId) throws Exception {
