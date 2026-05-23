@@ -35,6 +35,10 @@ public interface CompanyCurrencyRepository {
 
     Optional<CurrencyRow> findByCompanyAndId(CompanyId companyId, UUID id);
 
+    Optional<CurrencyRow> findByCompanyAndCode(CompanyId companyId, String code);
+
+    Optional<CurrencyRow> findBaseCurrency(CompanyId companyId);
+
     boolean existsByCompanyId(CompanyId companyId);
 
     boolean existsByCompanyAndCodeIgnoreCase(CompanyId companyId, String code);

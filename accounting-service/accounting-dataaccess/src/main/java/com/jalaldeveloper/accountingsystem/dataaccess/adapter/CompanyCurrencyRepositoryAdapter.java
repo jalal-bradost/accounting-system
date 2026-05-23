@@ -50,6 +50,24 @@ public class CompanyCurrencyRepositoryAdapter implements CompanyCurrencyReposito
     }
 
     @Override
+    public Optional<CurrencyRow> findByCompanyAndCode(CompanyId companyId, String code) {
+        if (code == null || code.isBlank()) {
+            return Optional.empty();
+        }
+        return jpaRepository
+                .findByCompanyIdAndCodeIgnoreCase(companyId.getId(), code.trim())
+                .map(this::toRow);
+    }
+
+    @Override
+    public Optional<CurrencyRow> findBaseCurrency(CompanyId companyId) {
+        return jpaRepository.findByCompanyIdOrderByBaseCurrencyDescCodeAsc(companyId.getId()).stream()
+                .filter(CompanyCurrencyEntity::isBaseCurrency)
+                .findFirst()
+                .map(this::toRow);
+    }
+
+    @Override
     public boolean existsByCompanyId(CompanyId companyId) {
         return jpaRepository.existsByCompanyId(companyId.getId());
     }
