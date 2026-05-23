@@ -38,6 +38,9 @@ public class AccCustomerPaymentEntity {
     @Column(name = "currency_code", nullable = false, length = 3)
     private String currencyCode;
 
+    @Column(name = "exchange_rate_to_company", nullable = false, precision = 19, scale = 12)
+    private BigDecimal exchangeRateToCompany = BigDecimal.ONE;
+
     @Column(name = "journal_entry_id")
     private UUID journalEntryId;
 
@@ -68,6 +71,8 @@ public class AccCustomerPaymentEntity {
     public void setAmount(BigDecimal amount) { this.amount = amount; }
     public String getCurrencyCode() { return currencyCode; }
     public void setCurrencyCode(String currencyCode) { this.currencyCode = currencyCode; }
+    public BigDecimal getExchangeRateToCompany() { return exchangeRateToCompany; }
+    public void setExchangeRateToCompany(BigDecimal exchangeRateToCompany) { this.exchangeRateToCompany = exchangeRateToCompany; }
     public UUID getJournalEntryId() { return journalEntryId; }
     public void setJournalEntryId(UUID journalEntryId) { this.journalEntryId = journalEntryId; }
     public String getReference() { return reference; }

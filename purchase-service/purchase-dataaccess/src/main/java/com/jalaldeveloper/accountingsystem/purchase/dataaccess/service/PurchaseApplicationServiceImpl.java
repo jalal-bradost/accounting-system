@@ -1,8 +1,10 @@
 package com.jalaldeveloper.accountingsystem.purchase.dataaccess.service;
 
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.CurrencyMath;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.JournalEntryApplicationService;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.ReconciliationApplicationService;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.AccountingReferenceLookupPort;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.CurrencyConversionPort;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.CreateJournalEntryCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.CreateJournalEntryResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.JournalEntryResponse;
@@ -59,6 +61,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -72,6 +75,8 @@ import java.util.stream.Collectors;
 public class PurchaseApplicationServiceImpl implements PurchaseApplicationService {
 
     private static final String DEFAULT_AP_ACCOUNT_CODE = "430004";
+    private static final String EXCHANGE_GAIN_ACCOUNT_CODE = "430014";
+    private static final String EXCHANGE_LOSS_ACCOUNT_CODE = "430015";
 
     private final PurPurchaseOrderJpaRepository purchaseOrderRepository;
     private final PurFiscalTaxJpaRepository fiscalTaxRepository;
@@ -90,9 +95,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     private final ReconciliationApplicationService reconciliationApplicationService;
     private final ObjectProvider<CompanyContext> companyContextProvider;
     private final PurchaseEventPublisher purchaseEventPublisher;
-
-    @PersistenceContext
-    private EntityManager entityManager;
+    private final CurrencyConversionPort currencyConversionPort;
 
     public PurchaseApplicationServiceImpl(PurPurchaseOrderJpaRepository purchaseOrderRepository,
                                           PurFiscalTaxJpaRepository fiscalTaxRepository,
@@ -110,7 +113,8 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                                           AccountingReferenceLookupPort accountingReferenceLookupPort,
                                           ReconciliationApplicationService reconciliationApplicationService,
                                           ObjectProvider<CompanyContext> companyContextProvider,
-                                          PurchaseEventPublisher purchaseEventPublisher) {
+                                          PurchaseEventPublisher purchaseEventPublisher,
+                                          CurrencyConversionPort currencyConversionPort) {
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.fiscalTaxRepository = fiscalTaxRepository;
         this.vendorBillRepository = vendorBillRepository;
@@ -128,7 +132,11 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         this.reconciliationApplicationService = reconciliationApplicationService;
         this.companyContextProvider = companyContextProvider;
         this.purchaseEventPublisher = purchaseEventPublisher;
+        this.currencyConversionPort = currencyConversionPort;
     }
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     private UUID companyIdOrDefault(UUID fromCommand) {
         if (fromCommand != null) return fromCommand;
@@ -467,7 +475,8 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         bill.setReference(command.getReference() != null ? command.getReference() : "BILL/" + bill.getId().toString().substring(0, 8));
         bill.setCurrencyCode(po.getCurrencyCode());
         bill.setState(VendorBillState.DRAFT);
-        bill.setExchangeRateToCompany(po.getExchangeRateToCompany() != null ? po.getExchangeRateToCompany() : BigDecimal.ONE);
+        bill.setExchangeRateToCompany(resolveExchangeRate(
+                po.getCompanyId(), po.getCurrencyCode(), command.getBillDate(), po.getExchangeRateToCompany()));
         bill.setCreatedAt(now);
         bill.setUpdatedAt(now);
 
@@ -612,10 +621,12 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         UUID purchaseJournalId = accountingReferenceLookupPort.resolveJournalIdByType(
                 bill.getCompanyId(), JournalType.PURCHASE);
 
-        BigDecimal rate = bill.getExchangeRateToCompany() != null && bill.getExchangeRateToCompany().signum() > 0
-                ? bill.getExchangeRateToCompany() : BigDecimal.ONE;
+        BigDecimal rate = resolveExchangeRate(
+                bill.getCompanyId(), bill.getCurrencyCode(), bill.getBillDate(), bill.getExchangeRateToCompany());
+        bill.setExchangeRateToCompany(rate);
         List<JournalItemCommand> items = new ArrayList<>();
         BigDecimal apCreditCompany = BigDecimal.ZERO;
+        BigDecimal apDocTotal = BigDecimal.ZERO;
 
         for (PurVendorBillLineEntity line : bill.getLines()) {
             BigDecimal disc = discountForBillLine(bill, line);
@@ -625,16 +636,18 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             items.add(new JournalItemCommand(line.getAccountId(), line.getName(), netComp, BigDecimal.ZERO,
                     bill.getCurrencyCode(), lineNetDoc, null));
             apCreditCompany = apCreditCompany.add(netComp);
+            apDocTotal = apDocTotal.add(lineNetDoc);
             for (PurVendorBillLineTaxEntity ts : line.getTaxSnapshots()) {
                 BigDecimal taxDoc = ts.getTaxAmount().setScale(4, RoundingMode.HALF_UP);
                 BigDecimal taxComp = PurchaseTaxEngine.convertAtRate(taxDoc, rate);
                 items.add(new JournalItemCommand(ts.getAccountId(), ts.getTaxName(), taxComp, BigDecimal.ZERO,
                         bill.getCurrencyCode(), taxDoc, null));
                 apCreditCompany = apCreditCompany.add(taxComp);
+                apDocTotal = apDocTotal.add(taxDoc);
             }
         }
         items.add(new JournalItemCommand(payableAccount, "Accounts payable", BigDecimal.ZERO, apCreditCompany,
-                bill.getCurrencyCode(), apCreditCompany.negate(), bill.getVendorPartnerId()));
+                bill.getCurrencyCode(), apDocTotal.negate(), bill.getVendorPartnerId()));
 
         CreateJournalEntryCommand jcmd = new CreateJournalEntryCommand(
                 bill.getCompanyId(),
@@ -720,11 +733,10 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
 
     @Override
     @Transactional(readOnly = true)
-    public PartnerStatementSectionResponse payableStatement(UUID companyId,
+    public List<PartnerStatementSectionResponse> payableStatement(UUID companyId,
                                                             UUID partnerId,
                                                             LocalDate from,
-                                                            LocalDate to,
-                                                            String currencyCode) {
+                                                            LocalDate to) {
         UUID cid = companyIdOrDefault(companyId);
         if (to.isBefore(from)) {
             throw new PurchaseDomainException("Statement end date must be on or after start date");
@@ -736,11 +748,11 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         if (!partner.isVendor()) {
             throw new PurchaseDomainException("Partner is not a vendor");
         }
-        return buildPayableSection(cid, partnerId, from, to, currencyCode);
+        return buildPayableSections(cid, partnerId, from, to);
     }
 
-    private PartnerStatementSectionResponse buildPayableSection(
-            UUID cid, UUID partnerId, LocalDate from, LocalDate to, String currencyCode) {
+    private List<PartnerStatementSectionResponse> buildPayableSections(
+            UUID cid, UUID partnerId, LocalDate from, LocalDate to) {
         List<PurVendorBillEntity> bills = vendorBillRepository
                 .findByCompanyIdAndVendorPartnerIdOrderByBillDateAscCreatedAtAsc(cid, partnerId);
         for (PurVendorBillEntity b : bills) {
@@ -752,13 +764,34 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         List<PurVendorPaymentEntity> payments = vendorPaymentRepository
                 .findByCompanyIdAndVendorPartnerIdOrderByPaymentDateAscCreatedAtAsc(cid, partnerId);
 
-        String currency = currencyCode != null && !currencyCode.isBlank()
-                ? currencyCode
-                : "USD";
+        Set<String> currencies = new LinkedHashSet<>();
+        for (PurVendorBillEntity b : bills) {
+            if (b.getState() == VendorBillState.POSTED && b.getCurrencyCode() != null) {
+                currencies.add(b.getCurrencyCode().trim().toUpperCase());
+            }
+        }
+        for (PurVendorPaymentEntity p : payments) {
+            if (p.getState() == VendorPaymentState.POSTED && p.getCurrencyCode() != null) {
+                currencies.add(p.getCurrencyCode().trim().toUpperCase());
+            }
+        }
 
+        List<PartnerStatementSectionResponse> sections = new ArrayList<>();
+        for (String currency : currencies) {
+            sections.add(buildPayableSectionForCurrency(currency, from, to, bills, payments));
+        }
+        return sections;
+    }
+
+    private PartnerStatementSectionResponse buildPayableSectionForCurrency(
+            String currency, LocalDate from, LocalDate to,
+            List<PurVendorBillEntity> bills, List<PurVendorPaymentEntity> payments) {
         BigDecimal opening = BigDecimal.ZERO;
         for (PurVendorBillEntity b : bills) {
             if (b.getState() != VendorBillState.POSTED) {
+                continue;
+            }
+            if (!currency.equalsIgnoreCase(b.getCurrencyCode())) {
                 continue;
             }
             if (b.getBillDate().isBefore(from)) {
@@ -767,6 +800,9 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         }
         for (PurVendorPaymentEntity p : payments) {
             if (p.getState() != VendorPaymentState.POSTED) {
+                continue;
+            }
+            if (!currency.equalsIgnoreCase(p.getCurrencyCode())) {
                 continue;
             }
             if (p.getPaymentDate().isBefore(from)) {
@@ -782,12 +818,18 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             if (b.getState() != VendorBillState.POSTED) {
                 continue;
             }
+            if (!currency.equalsIgnoreCase(b.getCurrencyCode())) {
+                continue;
+            }
             if (!b.getBillDate().isBefore(from) && !b.getBillDate().isAfter(to)) {
                 period.add(new PayEvt(b.getBillDate(), b.getCreatedAt(), "B:" + b.getId(), b, null));
             }
         }
         for (PurVendorPaymentEntity p : payments) {
             if (p.getState() != VendorPaymentState.POSTED) {
+                continue;
+            }
+            if (!currency.equalsIgnoreCase(p.getCurrencyCode())) {
                 continue;
             }
             if (!p.getPaymentDate().isBefore(from) && !p.getPaymentDate().isAfter(to)) {
@@ -811,6 +853,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 row.setReference(b.getReference() != null && !b.getReference().isBlank()
                         ? b.getReference()
                         : b.getId().toString());
+                row.setCurrencyCode(b.getCurrencyCode());
                 row.setVendorBillId(b.getId());
                 row.setVendorPaymentId(null);
                 row.setCustomerInvoiceId(null);
@@ -825,6 +868,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 row.setReference(p.getReference() != null && !p.getReference().isBlank()
                         ? p.getReference()
                         : "Payment");
+                row.setCurrencyCode(p.getCurrencyCode());
                 row.setVendorBillId(p.getVendorBillId());
                 row.setVendorPaymentId(p.getId());
                 row.setCustomerInvoiceId(null);
@@ -871,19 +915,29 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         UUID liquidityAccountId = resolveLiquidityAccountForPaymentJournal(companyId, command.getBankJournalId());
         String liquidityLabel = paymentJournalType == JournalType.CASH ? "Cash payment" : "Bank payment";
 
-        BigDecimal amt = command.getAmount().setScale(4, RoundingMode.HALF_UP);
-        List<JournalItemCommand> items = List.of(
-                new JournalItemCommand(payableAccount, "Payment " + bill.getReference(), amt, BigDecimal.ZERO,
-                        command.getCurrencyCode(), amt, bill.getVendorPartnerId()),
-                new JournalItemCommand(liquidityAccountId, liquidityLabel, BigDecimal.ZERO, amt,
-                        command.getCurrencyCode(), amt.negate(), null)
-        );
+        BigDecimal docAmt = command.getAmount().setScale(4, RoundingMode.HALF_UP);
+        String paymentCurrency = command.getCurrencyCode() != null ? command.getCurrencyCode() : bill.getCurrencyCode();
+        BigDecimal billRate = resolveExchangeRate(
+                companyId, bill.getCurrencyCode(), bill.getBillDate(), bill.getExchangeRateToCompany());
+        BigDecimal paymentRate = resolveExchangeRate(
+                companyId, paymentCurrency, command.getPaymentDate(), command.getExchangeRateToCompany());
+
+        BigDecimal apClearComp = CurrencyMath.convertAtRate(docAmt, billRate);
+        BigDecimal liquidityComp = CurrencyMath.convertAtRate(docAmt, paymentRate);
+        BigDecimal fxDiff = apClearComp.subtract(liquidityComp).setScale(4, RoundingMode.HALF_UP);
+
+        List<JournalItemCommand> items = new ArrayList<>();
+        items.add(new JournalItemCommand(payableAccount, "Payment " + bill.getReference(), apClearComp, BigDecimal.ZERO,
+                paymentCurrency, docAmt, bill.getVendorPartnerId()));
+        items.add(new JournalItemCommand(liquidityAccountId, liquidityLabel, BigDecimal.ZERO, liquidityComp,
+                paymentCurrency, docAmt.negate(), null));
+        appendVendorExchangeDifference(items, companyId, fxDiff);
         CreateJournalEntryCommand jcmd = new CreateJournalEntryCommand(
                 companyId,
                 command.getBankJournalId(),
                 "",
                 command.getPaymentDate(),
-                command.getCurrencyCode(),
+                paymentCurrency,
                 bill.getVendorPartnerId(),
                 items);
         CreateJournalEntryResponse payEntry = journalEntryApplicationService.createJournalEntry(jcmd);
@@ -915,8 +969,9 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         p.setVendorBillId(bill.getId());
         p.setPaymentDate(command.getPaymentDate());
         p.setBankJournalId(command.getBankJournalId());
-        p.setAmount(amt);
-        p.setCurrencyCode(command.getCurrencyCode());
+        p.setAmount(docAmt);
+        p.setCurrencyCode(paymentCurrency);
+        p.setExchangeRateToCompany(paymentRate);
         p.setState(VendorPaymentState.POSTED);
         p.setJournalEntryId(payEntry.getJournalEntryId());
         p.setReference(command.getReference());
@@ -929,8 +984,9 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         r.setCompanyId(companyId);
         r.setVendorBillId(bill.getId());
         r.setPaymentDate(command.getPaymentDate());
-        r.setAmount(amt);
-        r.setCurrencyCode(command.getCurrencyCode());
+        r.setAmount(docAmt);
+        r.setCurrencyCode(paymentCurrency);
+        r.setExchangeRateToCompany(paymentRate);
         r.setState(VendorPaymentState.POSTED);
         r.setJournalEntryId(payEntry.getJournalEntryId());
         r.setReconciliationId(reconciliationId);
@@ -1064,6 +1120,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         r.setPaymentDate(p.getPaymentDate());
         r.setAmount(p.getAmount());
         r.setCurrencyCode(p.getCurrencyCode());
+        r.setExchangeRateToCompany(p.getExchangeRateToCompany());
         r.setState(p.getState());
         r.setJournalEntryId(p.getJournalEntryId());
         r.setReconciliationId(null);
@@ -1120,5 +1177,33 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         r.setRefundAccountId(t.getRefundAccountId());
         r.setActive(t.isActive());
         return r;
+    }
+
+    private BigDecimal resolveExchangeRate(
+            UUID companyId, String currencyCode, LocalDate asOf, BigDecimal explicit) {
+        if (explicit != null && explicit.signum() > 0) {
+            String base = currencyConversionPort.baseCurrencyCode(companyId);
+            if (explicit.compareTo(BigDecimal.ONE) != 0 || currencyCode.equalsIgnoreCase(base)) {
+                return explicit.setScale(12, RoundingMode.HALF_UP);
+            }
+        }
+        return currencyConversionPort.exchangeRateToCompany(companyId, currencyCode, asOf);
+    }
+
+    private void appendVendorExchangeDifference(List<JournalItemCommand> items, UUID companyId, BigDecimal fxDiff) {
+        if (fxDiff.signum() == 0) {
+            return;
+        }
+        if (fxDiff.signum() > 0) {
+            UUID gainAccount = accountingReferenceLookupPort.resolveAccountIdByCode(
+                    companyId, EXCHANGE_GAIN_ACCOUNT_CODE);
+            items.add(new JournalItemCommand(gainAccount, "Exchange gain", BigDecimal.ZERO, fxDiff,
+                    null, null, null));
+        } else {
+            UUID lossAccount = accountingReferenceLookupPort.resolveAccountIdByCode(
+                    companyId, EXCHANGE_LOSS_ACCOUNT_CODE);
+            items.add(new JournalItemCommand(lossAccount, "Exchange loss", fxDiff.abs(), BigDecimal.ZERO,
+                    null, null, null));
+        }
     }
 }

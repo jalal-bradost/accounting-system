@@ -57,6 +57,8 @@ public class DefaultCompanyChartDataSeeder implements ApplicationRunner {
         insertAccount("430011", "Stock Input (GR/IR)", AccountType.CURRENT_LIABILITIES);
         insertAccount("430012", "Stock Output", AccountType.CURRENT_ASSETS);
         insertAccount("430013", "Purchase VAT", AccountType.CURRENT_ASSETS);
+        insertAccount("430014", "Exchange Gain", AccountType.OTHER_INCOME);
+        insertAccount("430015", "Exchange Loss", AccountType.OTHER_EXPENSES);
     }
 
     private void insertAccount(String code, String name, AccountType type) {

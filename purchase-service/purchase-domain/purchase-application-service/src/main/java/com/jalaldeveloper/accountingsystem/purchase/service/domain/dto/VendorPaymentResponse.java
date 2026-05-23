@@ -13,6 +13,7 @@ public class VendorPaymentResponse {
     private LocalDate paymentDate;
     private BigDecimal amount;
     private String currencyCode;
+    private BigDecimal exchangeRateToCompany;
     private VendorPaymentState state;
     private UUID journalEntryId;
     private UUID reconciliationId;
@@ -29,6 +30,8 @@ public class VendorPaymentResponse {
     public void setAmount(BigDecimal amount) { this.amount = amount; }
     public String getCurrencyCode() { return currencyCode; }
     public void setCurrencyCode(String currencyCode) { this.currencyCode = currencyCode; }
+    public BigDecimal getExchangeRateToCompany() { return exchangeRateToCompany; }
+    public void setExchangeRateToCompany(BigDecimal exchangeRateToCompany) { this.exchangeRateToCompany = exchangeRateToCompany; }
     public VendorPaymentState getState() { return state; }
     public void setState(VendorPaymentState state) { this.state = state; }
     public UUID getJournalEntryId() { return journalEntryId; }

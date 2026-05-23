@@ -1,5 +1,6 @@
 package com.jalaldeveloper.accountingsystem.dataaccess.service;
 
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.CurrencyMath;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.CreateJournalEntryCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.CreateJournalEntryResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.JournalEntryResponse;
@@ -16,8 +17,9 @@ import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.SalesOrderInvoiceSyncPort;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.JournalEntryApplicationService;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.ReconciliationApplicationService;
-import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.messaging.AccountingEventPublisher;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.CurrencyConversionPort;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.event.CustomerInvoicePostedEvent;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.messaging.AccountingEventPublisher;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.dto.PartnerResponse;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.ports.input.PartnerApplicationService;
 import com.jalaldeveloper.accountingsystem.dataaccess.entity.AccCustomerInvoiceEntity;
@@ -57,6 +59,8 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
     private static final String DEFAULT_REVENUE_ACCOUNT_CODE = "430005";
     /** Sale journal code in {@link com.jalaldeveloper.accountingsystem.bootstrap.DefaultCompanyChartDataSeeder}. */
     private static final String SALE_JOURNAL_CODE = "430003";
+    private static final String EXCHANGE_GAIN_ACCOUNT_CODE = "430014";
+    private static final String EXCHANGE_LOSS_ACCOUNT_CODE = "430015";
 
     private final AccCustomerInvoiceJpaRepository invoiceRepository;
     private final AccCustomerPaymentJpaRepository paymentRepository;
@@ -68,6 +72,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
     private final ObjectProvider<CompanyContext> companyContextProvider;
     private final ObjectProvider<SalesOrderInvoiceSyncPort> salesOrderInvoiceSyncPortProvider;
     private final AccountingEventPublisher accountingEventPublisher;
+    private final CurrencyConversionPort currencyConversionPort;
 
     public CustomerInvoiceApplicationServiceImpl(AccCustomerInvoiceJpaRepository invoiceRepository,
                                                  AccCustomerPaymentJpaRepository paymentRepository,
@@ -78,7 +83,8 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
                                                  ReconciliationApplicationService reconciliationApplicationService,
                                                  ObjectProvider<CompanyContext> companyContextProvider,
                                                  ObjectProvider<SalesOrderInvoiceSyncPort> salesOrderInvoiceSyncPortProvider,
-                                                 AccountingEventPublisher accountingEventPublisher) {
+                                                 AccountingEventPublisher accountingEventPublisher,
+                                                 CurrencyConversionPort currencyConversionPort) {
         this.invoiceRepository = invoiceRepository;
         this.paymentRepository = paymentRepository;
         this.partnerApplicationService = partnerApplicationService;
@@ -89,6 +95,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         this.companyContextProvider = companyContextProvider;
         this.salesOrderInvoiceSyncPortProvider = salesOrderInvoiceSyncPortProvider;
         this.accountingEventPublisher = accountingEventPublisher;
+        this.currencyConversionPort = currencyConversionPort;
     }
 
     @Override
@@ -146,8 +153,8 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         inv.setReference(command.getReference());
         inv.setCurrencyCode(command.getCurrencyCode());
         inv.setSalesOrderId(command.getSalesOrderId());
-        inv.setExchangeRateToCompany(command.getExchangeRateToCompany() != null
-                ? command.getExchangeRateToCompany() : BigDecimal.ONE);
+        inv.setExchangeRateToCompany(resolveExchangeRate(
+                companyId, command.getCurrencyCode(), command.getInvoiceDate(), command.getExchangeRateToCompany()));
         inv.setState(CustomerInvoiceState.DRAFT);
         inv.setCreatedAt(now);
         inv.setUpdatedAt(now);
@@ -205,8 +212,9 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         JournalEntity saleJournal = journalJpaRepository.findByCompanyIdAndCode(inv.getCompanyId(), SALE_JOURNAL_CODE)
                 .orElseThrow(() -> new AccountingDomainException("Sale journal not found"));
 
-        BigDecimal rate = inv.getExchangeRateToCompany() != null && inv.getExchangeRateToCompany().signum() > 0
-                ? inv.getExchangeRateToCompany() : BigDecimal.ONE;
+        BigDecimal rate = resolveExchangeRate(
+                inv.getCompanyId(), inv.getCurrencyCode(), inv.getInvoiceDate(), inv.getExchangeRateToCompany());
+        inv.setExchangeRateToCompany(rate);
 
         List<JournalItemCommand> items = new ArrayList<>();
         BigDecimal arTotalComp = BigDecimal.ZERO;
@@ -215,7 +223,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         for (AccCustomerInvoiceLineEntity line : inv.getLines()) {
             BigDecimal disc = line.getDiscountPercent() != null ? line.getDiscountPercent() : BigDecimal.ZERO;
             BigDecimal lineNetDoc = lineNet(line.getQty(), line.getUnitPrice(), disc).setScale(4, RoundingMode.HALF_UP);
-            BigDecimal lineNetComp = convertAtRate(lineNetDoc, rate);
+            BigDecimal lineNetComp = CurrencyMath.convertAtRate(lineNetDoc, rate);
 
             if (line.getTaxSnapshots().isEmpty()) {
                 arTotalComp = arTotalComp.add(lineNetComp);
@@ -229,7 +237,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
                         inv.getCurrencyCode(), lineNetDoc.negate(), null));
                 for (AccCustomerInvoiceLineTaxEntity ts : line.getTaxSnapshots()) {
                     BigDecimal taxDoc = ts.getTaxAmount().setScale(4, RoundingMode.HALF_UP);
-                    BigDecimal taxComp = convertAtRate(taxDoc, rate);
+                    BigDecimal taxComp = CurrencyMath.convertAtRate(taxDoc, rate);
                     arTotalComp = arTotalComp.add(taxComp);
                     arDoc = arDoc.add(taxDoc);
                     items.add(new JournalItemCommand(ts.getAccountId(), ts.getTaxName(), BigDecimal.ZERO, taxComp,
@@ -329,20 +337,31 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         JournalEntity paymentJournal = journalJpaRepository.findById(command.getPaymentJournalId())
                 .orElseThrow(() -> new AccountingDomainException("Payment journal not found"));
 
-        BigDecimal amt = command.getAmount().setScale(4, RoundingMode.HALF_UP);
+        BigDecimal docAmt = command.getAmount().setScale(4, RoundingMode.HALF_UP);
+        String paymentCurrency = command.getCurrencyCode() != null ? command.getCurrencyCode() : inv.getCurrencyCode();
+        BigDecimal invoiceRate = resolveExchangeRate(
+                companyId, inv.getCurrencyCode(), inv.getInvoiceDate(), inv.getExchangeRateToCompany());
+        BigDecimal paymentRate = resolveExchangeRate(
+                companyId, paymentCurrency, command.getPaymentDate(), command.getExchangeRateToCompany());
+
+        BigDecimal arClearComp = CurrencyMath.convertAtRate(docAmt, invoiceRate);
+        BigDecimal liquidityComp = CurrencyMath.convertAtRate(docAmt, paymentRate);
+        BigDecimal fxDiff = arClearComp.subtract(liquidityComp).setScale(4, RoundingMode.HALF_UP);
+
         String liqLabel = paymentJournal.getType() == JournalType.CASH ? "Cash receipt" : "Bank receipt";
-        List<JournalItemCommand> items = List.of(
-                new JournalItemCommand(liquidity.getId(), liqLabel, amt, BigDecimal.ZERO,
-                        command.getCurrencyCode(), amt, null),
-                new JournalItemCommand(receivableAccount, "Payment " + (inv.getReference() != null ? inv.getReference() : ""),
-                        BigDecimal.ZERO, amt, command.getCurrencyCode(), amt.negate(), inv.getCustomerPartnerId())
-        );
+        List<JournalItemCommand> items = new ArrayList<>();
+        items.add(new JournalItemCommand(liquidity.getId(), liqLabel, liquidityComp, BigDecimal.ZERO,
+                paymentCurrency, docAmt, null));
+        items.add(new JournalItemCommand(receivableAccount,
+                "Payment " + (inv.getReference() != null ? inv.getReference() : ""),
+                BigDecimal.ZERO, arClearComp, paymentCurrency, docAmt.negate(), inv.getCustomerPartnerId()));
+        appendCustomerExchangeDifference(items, companyId, fxDiff);
         CreateJournalEntryCommand jcmd = new CreateJournalEntryCommand(
                 companyId,
                 paymentJournal.getId(),
                 "",
                 command.getPaymentDate(),
-                command.getCurrencyCode(),
+                paymentCurrency,
                 inv.getCustomerPartnerId(),
                 items);
         CreateJournalEntryResponse payEntry = journalEntryApplicationService.createJournalEntry(jcmd);
@@ -374,8 +393,9 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         p.setCustomerInvoiceId(inv.getId());
         p.setPaymentDate(command.getPaymentDate());
         p.setPaymentJournalId(command.getPaymentJournalId());
-        p.setAmount(amt);
-        p.setCurrencyCode(command.getCurrencyCode());
+        p.setAmount(docAmt);
+        p.setCurrencyCode(paymentCurrency);
+        p.setExchangeRateToCompany(paymentRate);
         p.setJournalEntryId(payEntry.getJournalEntryId());
         p.setReference(command.getReference());
         p.setCreatedAt(now);
@@ -388,8 +408,9 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         r.setCustomerInvoiceId(inv.getId());
         r.setPaymentDate(command.getPaymentDate());
         r.setPaymentJournalId(command.getPaymentJournalId());
-        r.setAmount(amt);
-        r.setCurrencyCode(command.getCurrencyCode());
+        r.setAmount(docAmt);
+        r.setCurrencyCode(paymentCurrency);
+        r.setExchangeRateToCompany(paymentRate);
         r.setJournalEntryId(payEntry.getJournalEntryId());
         r.setReconciliationId(reconciliationId);
         return r;
@@ -404,6 +425,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         r.setPaymentJournalId(p.getPaymentJournalId());
         r.setAmount(p.getAmount());
         r.setCurrencyCode(p.getCurrencyCode());
+        r.setExchangeRateToCompany(p.getExchangeRateToCompany());
         r.setJournalEntryId(p.getJournalEntryId());
         r.setReconciliationId(null);
         return r;
@@ -448,16 +470,41 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         return r;
     }
 
+    private BigDecimal resolveExchangeRate(
+            UUID companyId, String currencyCode, java.time.LocalDate asOf, BigDecimal explicit) {
+        if (explicit != null && explicit.signum() > 0) {
+            String base = currencyConversionPort.baseCurrencyCode(companyId);
+            if (explicit.compareTo(BigDecimal.ONE) != 0 || currencyCode.equalsIgnoreCase(base)) {
+                return explicit.setScale(12, RoundingMode.HALF_UP);
+            }
+        }
+        return currencyConversionPort.exchangeRateToCompany(companyId, currencyCode, asOf);
+    }
+
+    private void appendCustomerExchangeDifference(List<JournalItemCommand> items, UUID companyId, BigDecimal fxDiff) {
+        if (fxDiff.signum() == 0) {
+            return;
+        }
+        if (fxDiff.signum() > 0) {
+            UUID lossAccount = accountJpaRepository.findByCompanyIdAndCode(companyId, EXCHANGE_LOSS_ACCOUNT_CODE)
+                    .map(AccountEntity::getId)
+                    .orElseThrow(() -> new AccountingDomainException("Exchange loss account not found"));
+            items.add(new JournalItemCommand(lossAccount, "Exchange loss", fxDiff, BigDecimal.ZERO,
+                    null, null, null));
+        } else {
+            UUID gainAccount = accountJpaRepository.findByCompanyIdAndCode(companyId, EXCHANGE_GAIN_ACCOUNT_CODE)
+                    .map(AccountEntity::getId)
+                    .orElseThrow(() -> new AccountingDomainException("Exchange gain account not found"));
+            items.add(new JournalItemCommand(gainAccount, "Exchange gain", BigDecimal.ZERO, fxDiff.abs(),
+                    null, null, null));
+        }
+    }
+
     private static BigDecimal lineNet(BigDecimal qty, BigDecimal unitPrice, BigDecimal discountPercent) {
         BigDecimal disc = discountPercent != null ? discountPercent : BigDecimal.ZERO;
         BigDecimal factor = BigDecimal.ONE.subtract(
                 disc.max(BigDecimal.ZERO).min(new BigDecimal("100"))
                         .divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP));
         return qty.multiply(unitPrice).multiply(factor);
-    }
-
-    private static BigDecimal convertAtRate(BigDecimal documentAmount, BigDecimal rateToCompany) {
-        BigDecimal r = rateToCompany != null && rateToCompany.signum() > 0 ? rateToCompany : BigDecimal.ONE;
-        return documentAmount.multiply(r).setScale(4, RoundingMode.HALF_UP);
     }
 }

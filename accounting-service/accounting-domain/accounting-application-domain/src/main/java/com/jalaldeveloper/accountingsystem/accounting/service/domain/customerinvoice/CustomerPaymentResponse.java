@@ -12,6 +12,7 @@ public class CustomerPaymentResponse {
     private UUID paymentJournalId;
     private BigDecimal amount;
     private String currencyCode;
+    private BigDecimal exchangeRateToCompany;
     private UUID journalEntryId;
     private UUID reconciliationId;
 
@@ -29,6 +30,8 @@ public class CustomerPaymentResponse {
     public void setAmount(BigDecimal amount) { this.amount = amount; }
     public String getCurrencyCode() { return currencyCode; }
     public void setCurrencyCode(String currencyCode) { this.currencyCode = currencyCode; }
+    public BigDecimal getExchangeRateToCompany() { return exchangeRateToCompany; }
+    public void setExchangeRateToCompany(BigDecimal exchangeRateToCompany) { this.exchangeRateToCompany = exchangeRateToCompany; }
     public UUID getJournalEntryId() { return journalEntryId; }
     public void setJournalEntryId(UUID journalEntryId) { this.journalEntryId = journalEntryId; }
     public UUID getReconciliationId() { return reconciliationId; }
