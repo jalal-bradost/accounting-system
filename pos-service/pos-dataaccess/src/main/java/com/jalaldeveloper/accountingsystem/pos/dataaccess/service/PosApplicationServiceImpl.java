@@ -9,7 +9,9 @@ import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductR
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.StockPickingResponse;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ValidatePickingCommand;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.ProductApplicationService;
+import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductType;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.StockPickingApplicationService;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.StockValuationApplicationService;
 import com.jalaldeveloper.accountingsystem.pos.dataaccess.entity.PosConfigEntity;
 import com.jalaldeveloper.accountingsystem.pos.dataaccess.entity.PosOrderEntity;
 import com.jalaldeveloper.accountingsystem.pos.dataaccess.entity.PosOrderLineEntity;
@@ -76,6 +78,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     private final ProductApplicationService productApplicationService;
     private final SalesApplicationService salesApplicationService;
     private final StockPickingApplicationService stockPickingApplicationService;
+    private final StockValuationApplicationService stockValuationApplicationService;
     private final CustomerInvoiceApplicationService customerInvoiceApplicationService;
 
     public PosApplicationServiceImpl(PosConfigJpaRepository configRepository,
@@ -85,6 +88,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
                                      ProductApplicationService productApplicationService,
                                      SalesApplicationService salesApplicationService,
                                      StockPickingApplicationService stockPickingApplicationService,
+                                     StockValuationApplicationService stockValuationApplicationService,
                                      CustomerInvoiceApplicationService customerInvoiceApplicationService) {
         this.configRepository = configRepository;
         this.sessionRepository = sessionRepository;
@@ -93,6 +97,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         this.productApplicationService = productApplicationService;
         this.salesApplicationService = salesApplicationService;
         this.stockPickingApplicationService = stockPickingApplicationService;
+        this.stockValuationApplicationService = stockValuationApplicationService;
         this.customerInvoiceApplicationService = customerInvoiceApplicationService;
     }
 
@@ -200,7 +205,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         List<PosCatalogItemResponse> saleable = products.stream()
                 .filter(ProductResponse::isSaleOk)
                 .filter(p -> categoryId == null || categoryId.equals(p.getCategoryId()))
-                .map(p -> toCatalogItemResponse(p, categoryNames))
+                .map(p -> toCatalogItemResponse(p, categoryNames, companyId, session.getWarehouseId()))
                 .toList();
         return new PageImpl<>(saleable, pageable, saleable.size());
     }
@@ -605,7 +610,10 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         return card;
     }
 
-    private PosCatalogItemResponse toCatalogItemResponse(ProductResponse product, Map<UUID, String> categoryNames) {
+    private PosCatalogItemResponse toCatalogItemResponse(ProductResponse product,
+                                                         Map<UUID, String> categoryNames,
+                                                         CompanyId companyId,
+                                                         UUID warehouseId) {
         PosCatalogItemResponse response = new PosCatalogItemResponse();
         response.setProductId(product.getId());
         response.setSku(product.getSku());
@@ -619,6 +627,13 @@ public class PosApplicationServiceImpl implements PosApplicationService {
             response.setCategoryName(categoryNames.get(product.getCategoryId()));
         }
         response.setImageUrl(product.getImageUrl());
+        if (product.getProductType() != null) {
+            response.setProductType(product.getProductType().name());
+        }
+        if (product.getProductType() == ProductType.STOCKABLE) {
+            response.setQtyOnHand(stockValuationApplicationService.totalOnHandForWarehouse(
+                    companyId, product.getId(), warehouseId));
+        }
         return response;
     }
 

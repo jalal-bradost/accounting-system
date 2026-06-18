@@ -14,6 +14,8 @@ public class PosCatalogItemResponse {
     private UUID categoryId;
     private String categoryName;
     private String imageUrl;
+    private String productType;
+    private BigDecimal qtyOnHand;
 
     public UUID getProductId() { return productId; }
     public void setProductId(UUID productId) { this.productId = productId; }
@@ -35,4 +37,8 @@ public class PosCatalogItemResponse {
     public void setCategoryName(String categoryName) { this.categoryName = categoryName; }
     public String getImageUrl() { return imageUrl; }
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+    public String getProductType() { return productType; }
+    public void setProductType(String productType) { this.productType = productType; }
+    public BigDecimal getQtyOnHand() { return qtyOnHand; }
+    public void setQtyOnHand(BigDecimal qtyOnHand) { this.qtyOnHand = qtyOnHand; }
 }
