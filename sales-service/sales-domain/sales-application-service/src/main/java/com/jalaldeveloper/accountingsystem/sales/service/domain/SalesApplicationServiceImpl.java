@@ -1,4 +1,4 @@
-package com.jalaldeveloper.accountingsystem.sales.dataaccess.service;
+package com.jalaldeveloper.accountingsystem.sales.service.domain;
 
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CreateCustomerInvoiceCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CustomerInvoiceLineCommand;
@@ -32,30 +32,28 @@ import com.jalaldeveloper.accountingsystem.purchase.service.domain.FiscalTaxSnap
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.PurchaseTaxEngine;
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.dto.FiscalTaxResponse;
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.ports.input.PurchaseApplicationService;
-import com.jalaldeveloper.accountingsystem.sales.dataaccess.entity.SalPricelistEntity;
-import com.jalaldeveloper.accountingsystem.sales.dataaccess.entity.SalPricelistItemEntity;
-import com.jalaldeveloper.accountingsystem.sales.dataaccess.entity.SalSalesOrderEntity;
-import com.jalaldeveloper.accountingsystem.sales.dataaccess.entity.SalSalesOrderLineEntity;
-import com.jalaldeveloper.accountingsystem.sales.dataaccess.entity.SalSalesOrderLineTaxEntity;
-import com.jalaldeveloper.accountingsystem.sales.dataaccess.repository.SalPricelistJpaRepository;
-import com.jalaldeveloper.accountingsystem.sales.dataaccess.repository.SalSalesOrderJpaRepository;
 import com.jalaldeveloper.accountingsystem.sales.domain.core.SalInvoicePolicy;
 import com.jalaldeveloper.accountingsystem.sales.domain.core.SalesDomainException;
 import com.jalaldeveloper.accountingsystem.sales.domain.core.SalesOrderDeliveryStatus;
 import com.jalaldeveloper.accountingsystem.sales.domain.core.SalesOrderInvoiceStatus;
 import com.jalaldeveloper.accountingsystem.sales.domain.core.SalesOrderRules;
 import com.jalaldeveloper.accountingsystem.sales.domain.core.SalesOrderState;
+import com.jalaldeveloper.accountingsystem.sales.domain.core.entity.Pricelist;
+import com.jalaldeveloper.accountingsystem.sales.domain.core.entity.PricelistItem;
+import com.jalaldeveloper.accountingsystem.sales.domain.core.entity.SalesOrder;
+import com.jalaldeveloper.accountingsystem.sales.domain.core.entity.SalesOrderLine;
+import com.jalaldeveloper.accountingsystem.sales.domain.core.entity.SalesOrderLineTax;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.CreateCustomerInvoiceFromSalesOrderCommand;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.CreateSalesOrderCommand;
+import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.SalesOrderLineCommand;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.SalesOrderLineResponse;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.SalesOrderResponse;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.SalesOrderSummaryResponse;
-import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.SalesOrderLineCommand;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.event.SalesOrderConfirmedEvent;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.ports.input.SalesApplicationService;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.ports.output.messaging.SalesEventPublisher;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
+import com.jalaldeveloper.accountingsystem.sales.service.domain.ports.output.repository.PricelistRepository;
+import com.jalaldeveloper.accountingsystem.sales.service.domain.ports.output.repository.SalesOrderRepository;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
@@ -80,8 +78,8 @@ import java.util.UUID;
 @Validated
 public class SalesApplicationServiceImpl implements SalesApplicationService, SalesOrderInvoiceSyncPort {
 
-    private final SalSalesOrderJpaRepository salesOrderRepository;
-    private final SalPricelistJpaRepository pricelistRepository;
+    private final SalesOrderRepository salesOrderRepository;
+    private final PricelistRepository pricelistRepository;
     private final PartnerApplicationService partnerApplicationService;
     private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
@@ -94,11 +92,8 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
     private final ObjectProvider<CompanyContext> companyContextProvider;
     private final SalesEventPublisher salesEventPublisher;
 
-    @PersistenceContext
-    private EntityManager entityManager;
-
-    public SalesApplicationServiceImpl(SalSalesOrderJpaRepository salesOrderRepository,
-                                       SalPricelistJpaRepository pricelistRepository,
+    public SalesApplicationServiceImpl(SalesOrderRepository salesOrderRepository,
+                                       PricelistRepository pricelistRepository,
                                        PartnerApplicationService partnerApplicationService,
                                        ProductRepository productRepository,
                                        WarehouseRepository warehouseRepository,
@@ -144,7 +139,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
             throw new SalesDomainException("Customer belongs to another company");
         }
         if (command.getPricelistId() != null) {
-            SalPricelistEntity pl = pricelistRepository.findById(command.getPricelistId())
+            Pricelist pl = pricelistRepository.findById(command.getPricelistId())
                     .orElseThrow(() -> new SalesDomainException("Pricelist not found"));
             if (!pl.getCompanyId().equals(companyId)) {
                 throw new SalesDomainException("Pricelist company mismatch");
@@ -152,7 +147,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         }
         Instant now = Instant.now();
         LocalDate orderDate = command.getOrderDate() != null ? command.getOrderDate() : LocalDate.now();
-        SalSalesOrderEntity o = new SalSalesOrderEntity();
+        SalesOrder o = new SalesOrder();
         o.setId(UUID.randomUUID());
         o.setCompanyId(companyId);
         o.setCustomerPartnerId(command.getCustomerPartnerId());
@@ -187,9 +182,8 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
             }
             BigDecimal unitPrice = resolveUnitPrice(companyId, o.getPricelistId(), lc.getProductId(),
                     lc.getQtyOrdered(), orderDate, lc.getUnitPrice(), product);
-            SalSalesOrderLineEntity line = new SalSalesOrderLineEntity();
+            SalesOrderLine line = new SalesOrderLine();
             line.setId(UUID.randomUUID());
-            line.setSalesOrder(o);
             line.setSequence(seq);
             line.setProductId(lc.getProductId());
             line.setName(lc.getName());
@@ -213,9 +207,8 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
                 if (tax.getScope() != FiscalTaxScope.SALE && tax.getScope() != FiscalTaxScope.BOTH) {
                     throw new SalesDomainException("Tax scope not valid for sale: " + taxId);
                 }
-                SalSalesOrderLineTaxEntity lt = new SalSalesOrderLineTaxEntity();
+                SalesOrderLineTax lt = new SalesOrderLineTax();
                 lt.setId(UUID.randomUUID());
-                lt.setLine(line);
                 lt.setTaxId(taxId);
                 lt.setSequence(tseq);
                 line.getTaxes().add(lt);
@@ -241,7 +234,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         return salesOrderRepository.search(cid, state, customerPartnerId, qNorm, pageable).map(this::toSummary);
     }
 
-    private SalesOrderSummaryResponse toSummary(SalSalesOrderEntity o) {
+    private SalesOrderSummaryResponse toSummary(SalesOrder o) {
         SalesOrderSummaryResponse r = new SalesOrderSummaryResponse();
         r.setId(o.getId());
         r.setCompanyId(o.getCompanyId());
@@ -257,13 +250,13 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         return r;
     }
 
-    private boolean computeCanCreateCustomerInvoice(SalSalesOrderEntity o) {
+    private boolean computeCanCreateCustomerInvoice(SalesOrder o) {
         if (o.getState() != SalesOrderState.CONFIRMED) {
             return false;
         }
         Map<UUID, BigDecimal> draftAllocated =
                 customerInvoiceApplicationService.draftAllocatedQtyBySalesOrderLine(o.getId());
-        for (SalSalesOrderLineEntity sol : o.getLines()) {
+        for (SalesOrderLine sol : o.getLines()) {
             Product product = productRepository.findById(new ProductId(sol.getProductId())).orElse(null);
             if (product == null) {
                 continue;
@@ -276,12 +269,12 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
     }
 
     /** Quantities already reserved on draft customer invoices (not yet posted to qtyInvoiced). */
-    private BigDecimal effectiveQtyInvoiced(SalSalesOrderLineEntity sol, Map<UUID, BigDecimal> draftAllocated) {
+    private BigDecimal effectiveQtyInvoiced(SalesOrderLine sol, Map<UUID, BigDecimal> draftAllocated) {
         BigDecimal draft = draftAllocated.getOrDefault(sol.getId(), BigDecimal.ZERO);
         return sol.getQtyInvoiced().add(draft).setScale(4, RoundingMode.HALF_UP);
     }
 
-    private BigDecimal invoiceableQtyForLine(SalSalesOrderLineEntity sol,
+    private BigDecimal invoiceableQtyForLine(SalesOrderLine sol,
                                              Product product,
                                              Map<UUID, BigDecimal> draftAllocated) {
         SalInvoicePolicy pol = sol.getInvoicePolicy() != null ? sol.getInvoicePolicy()
@@ -302,25 +295,25 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         if (pricelistId == null) {
             return list.setScale(4, RoundingMode.HALF_UP);
         }
-        SalPricelistEntity pl = pricelistRepository.findByIdWithItems(pricelistId).orElse(null);
+        Pricelist pl = pricelistRepository.findByIdWithItems(pricelistId).orElse(null);
         if (pl == null || !pl.getCompanyId().equals(companyId) || !pl.isActive()) {
             return list.setScale(4, RoundingMode.HALF_UP);
         }
-        List<SalPricelistItemEntity> candidates = pl.getItems().stream()
+        List<PricelistItem> candidates = pl.getItems().stream()
                 .filter(i -> productId.equals(i.getProductId()))
                 .filter(i -> i.getMinQuantity() == null || qty.compareTo(i.getMinQuantity()) >= 0)
                 .filter(i -> i.getDateFrom() == null || !asOfDate.isBefore(i.getDateFrom()))
                 .filter(i -> i.getDateTo() == null || !asOfDate.isAfter(i.getDateTo()))
                 .sorted(Comparator
-                        .comparing((SalPricelistItemEntity i) ->
+                        .comparing((PricelistItem i) ->
                                 i.getMinQuantity() != null ? i.getMinQuantity() : BigDecimal.ZERO)
                         .reversed()
-                        .thenComparingInt(SalPricelistItemEntity::getSequence))
+                        .thenComparingInt(PricelistItem::getSequence))
                 .toList();
         if (candidates.isEmpty()) {
             return list.setScale(4, RoundingMode.HALF_UP);
         }
-        SalPricelistItemEntity it = candidates.get(0);
+        PricelistItem it = candidates.get(0);
         if (it.getFixedPrice() != null) {
             return it.getFixedPrice().setScale(4, RoundingMode.HALF_UP);
         }
@@ -332,10 +325,10 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         return list.setScale(4, RoundingMode.HALF_UP);
     }
 
-    private void recalcTotals(SalSalesOrderEntity o) {
+    private void recalcTotals(SalesOrder o) {
         BigDecimal untaxed = BigDecimal.ZERO;
         BigDecimal tax = BigDecimal.ZERO;
-        for (SalSalesOrderLineEntity line : o.getLines()) {
+        for (SalesOrderLine line : o.getLines()) {
             List<FiscalTaxSnapshot> snaps = line.getTaxes().stream()
                     .map(t -> purchaseApplicationService.getFiscalTax(t.getTaxId()))
                     .map(this::toSnapshot)
@@ -354,7 +347,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         return new FiscalTaxSnapshot(t.getId(), t.getAmountType(), t.getAmount(), t.isPriceInclude());
     }
 
-    private SalSalesOrderEntity loadOrder(UUID id) {
+    private SalesOrder loadOrder(UUID id) {
         return salesOrderRepository.findByIdWithLines(id)
                 .orElseThrow(() -> new SalesDomainException("Sales order not found: " + id));
     }
@@ -368,7 +361,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
     @Override
     @Transactional
     public SalesOrderResponse sendQuotation(UUID id) {
-        SalSalesOrderEntity o = loadOrder(id);
+        SalesOrder o = loadOrder(id);
         SalesOrderRules.ensureCanSendQuotation(o.getState());
         o.setState(SalesOrderState.QUOTATION_SENT);
         o.setQuotationSentAt(Instant.now());
@@ -379,7 +372,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
     @Override
     @Transactional
     public SalesOrderResponse confirmSalesOrder(UUID id) {
-        SalSalesOrderEntity o = loadOrder(id);
+        SalesOrder o = loadOrder(id);
         if (o.getState() == SalesOrderState.CONFIRMED) {
             return toResponse(o);
         }
@@ -405,7 +398,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         }
 
         List<StockMoveCommand> moves = new ArrayList<>();
-        for (SalSalesOrderLineEntity line : o.getLines()) {
+        for (SalesOrderLine line : o.getLines()) {
             Product product = productRepository.findById(new ProductId(line.getProductId()))
                     .orElseThrow(() -> new SalesDomainException("Product not found: " + line.getProductId()));
             if (product.getProductType() == ProductType.SERVICE) {
@@ -452,7 +445,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         o.setExchangeRateToCompany(o.getExchangeRateToCompany() != null ? o.getExchangeRateToCompany() : BigDecimal.ONE);
         o.setUpdatedAt(Instant.now());
         refreshOrderStatuses(o);
-        SalSalesOrderEntity saved = salesOrderRepository.save(o);
+        SalesOrder saved = salesOrderRepository.save(o);
         salesEventPublisher.publishSalesOrderConfirmed(new SalesOrderConfirmedEvent(
                 UUID.randomUUID(),
                 Instant.now(),
@@ -472,7 +465,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
     @Override
     @Transactional
     public SalesOrderResponse cancelSalesOrder(UUID id) {
-        SalSalesOrderEntity o = loadOrder(id);
+        SalesOrder o = loadOrder(id);
         SalesOrderRules.ensureCanCancel(o.getState());
         if (o.getState() == SalesOrderState.CONFIRMED) {
             if (customerInvoiceApplicationService.hasPostedInvoiceForSalesOrder(o.getId())) {
@@ -491,13 +484,13 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
     @Override
     @Transactional
     public void afterOutgoingPickingValidated(UUID salesOrderId) {
-        entityManager.flush();
-        SalSalesOrderEntity o = salesOrderRepository.findByIdWithLines(salesOrderId).orElse(null);
+        salesOrderRepository.flush();
+        SalesOrder o = salesOrderRepository.findByIdWithLines(salesOrderId).orElse(null);
         if (o == null) {
             return;
         }
         Instant now = Instant.now();
-        for (SalSalesOrderLineEntity line : o.getLines()) {
+        for (SalesOrderLine line : o.getLines()) {
             BigDecimal sum = stockMoveSalesQueryPort.sumPickedQuantityForSalesOrderLine(line.getId());
             line.setQtyDelivered(sum.setScale(4, RoundingMode.HALF_UP));
             line.setUpdatedAt(now);
@@ -523,13 +516,13 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
     @Override
     @Transactional
     public void applyPostedInvoiceQuantities(UUID salesOrderId, Map<UUID, BigDecimal> invoicedQtyBySalesLineId) {
-        entityManager.flush();
-        SalSalesOrderEntity o = salesOrderRepository.findByIdWithLines(salesOrderId).orElse(null);
+        salesOrderRepository.flush();
+        SalesOrder o = salesOrderRepository.findByIdWithLines(salesOrderId).orElse(null);
         if (o == null) {
             return;
         }
         Instant now = Instant.now();
-        for (SalSalesOrderLineEntity line : o.getLines()) {
+        for (SalesOrderLine line : o.getLines()) {
             BigDecimal add = invoicedQtyBySalesLineId.get(line.getId());
             if (add != null && add.signum() > 0) {
                 line.setQtyInvoiced(line.getQtyInvoiced().add(add).setScale(4, RoundingMode.HALF_UP));
@@ -537,7 +530,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
             }
         }
         boolean allInvoiced = true;
-        for (SalSalesOrderLineEntity l : o.getLines()) {
+        for (SalesOrderLine l : o.getLines()) {
             Product p = productRepository.findById(new ProductId(l.getProductId())).orElse(null);
             SalInvoicePolicy pol = l.getInvoicePolicy() != null ? l.getInvoicePolicy()
                     : (p != null && p.getProductType() == ProductType.SERVICE
@@ -556,7 +549,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         salesOrderRepository.save(o);
     }
 
-    private void refreshOrderStatuses(SalSalesOrderEntity o) {
+    private void refreshOrderStatuses(SalesOrder o) {
         boolean anyStockLine = o.getLines().stream().anyMatch(l -> {
             Optional<Product> p = productRepository.findById(new ProductId(l.getProductId()));
             return p.map(product -> product.getProductType() != ProductType.SERVICE).orElse(false);
@@ -583,7 +576,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
 
         boolean anyBillable = false;
         boolean allInvoiced = true;
-        for (SalSalesOrderLineEntity l : o.getLines()) {
+        for (SalesOrderLine l : o.getLines()) {
             Product p = productRepository.findById(new ProductId(l.getProductId())).orElse(null);
             SalInvoicePolicy pol = l.getInvoicePolicy() != null ? l.getInvoicePolicy()
                     : (p != null && p.getProductType() == ProductType.SERVICE
@@ -610,7 +603,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
     @Transactional
     public CustomerInvoiceResponse createCustomerInvoiceFromSalesOrder(CreateCustomerInvoiceFromSalesOrderCommand command) {
         UUID companyId = companyIdOrDefault(command.getCompanyId());
-        SalSalesOrderEntity o = loadOrder(command.getSalesOrderId());
+        SalesOrder o = loadOrder(command.getSalesOrderId());
         if (!o.getCompanyId().equals(companyId)) {
             throw new SalesDomainException("Sales order company mismatch");
         }
@@ -623,7 +616,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         Map<UUID, BigDecimal> draftAllocated =
                 customerInvoiceApplicationService.draftAllocatedQtyBySalesOrderLine(o.getId());
         List<CustomerInvoiceLineCommand> invLines = new ArrayList<>();
-        for (SalSalesOrderLineEntity sol : o.getLines()) {
+        for (SalesOrderLine sol : o.getLines()) {
             Product product = productRepository.findById(new ProductId(sol.getProductId()))
                     .orElseThrow(() -> new SalesDomainException("Product not found: " + sol.getProductId()));
             BigDecimal qty = invoiceableQtyForLine(sol, product, draftAllocated);
@@ -660,7 +653,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         return customerInvoiceApplicationService.createCustomerInvoice(ic);
     }
 
-    private void addInvoiceTaxSnapshots(CustomerInvoiceLineCommand invLine, SalSalesOrderLineEntity sol, BigDecimal invoiceQty) {
+    private void addInvoiceTaxSnapshots(CustomerInvoiceLineCommand invLine, SalesOrderLine sol, BigDecimal invoiceQty) {
         List<FiscalTaxSnapshot> snaps = sol.getTaxes().stream()
                 .map(t -> purchaseApplicationService.getFiscalTax(t.getTaxId()))
                 .map(this::toSnapshot)
@@ -679,7 +672,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         }
     }
 
-    private SalesOrderResponse toResponse(SalSalesOrderEntity o) {
+    private SalesOrderResponse toResponse(SalesOrder o) {
         SalesOrderResponse r = new SalesOrderResponse();
         r.setId(o.getId());
         r.setCompanyId(o.getCompanyId());
@@ -707,7 +700,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         r.setInvoicingCompletedAt(o.getInvoicingCompletedAt());
         r.setDeliveryPickingIds(stockMoveSalesQueryPort.findPickingIdsBySalesOrderId(o.getId()));
         r.setCanCreateCustomerInvoice(computeCanCreateCustomerInvoice(o));
-        r.setLines(o.getLines().stream().sorted(Comparator.comparingInt(SalSalesOrderLineEntity::getSequence)).map(l -> {
+        r.setLines(o.getLines().stream().sorted(Comparator.comparingInt(SalesOrderLine::getSequence)).map(l -> {
             SalesOrderLineResponse lr = new SalesOrderLineResponse();
             lr.setId(l.getId());
             lr.setSequence(l.getSequence());
@@ -721,7 +714,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
             lr.setDiscountPercent(l.getDiscountPercent());
             lr.setInvoicePolicy(l.getInvoicePolicy());
             lr.setRevenueAccountId(l.getRevenueAccountId());
-            lr.setTaxIds(l.getTaxes().stream().map(SalSalesOrderLineTaxEntity::getTaxId).toList());
+            lr.setTaxIds(l.getTaxes().stream().map(SalesOrderLineTax::getTaxId).toList());
             return lr;
         }).toList());
         return r;
