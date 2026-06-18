@@ -15,7 +15,7 @@ import com.jalaldeveloper.accountingsystem.inventory.dataaccess.repository.Wareh
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.LocationType;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.UomType;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ValuationMethod;
-import com.jalaldeveloper.accountingsystem.web.DashboardController;
+import com.jalaldeveloper.accountingsystem.platform.bootstrap.PlatformRbacSeeder;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -47,7 +47,7 @@ import java.util.UUID;
         matchIfMissing = true)
 public class DefaultInventorySeeder implements ApplicationRunner {
 
-    private static final UUID COMPANY_ID = DashboardController.DEFAULT_COMPANY_ID;
+    private static final UUID COMPANY_ID = PlatformRbacSeeder.DEFAULT_COMPANY_ID;
     private static final String DEFAULT_WAREHOUSE_CODE = "WH";
 
     private final AccountJpaRepository accountRepository;

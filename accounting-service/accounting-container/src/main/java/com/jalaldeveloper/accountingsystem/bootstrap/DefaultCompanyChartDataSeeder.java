@@ -6,7 +6,7 @@ import com.jalaldeveloper.accountingsystem.dataaccess.repository.AccountJpaRepos
 import com.jalaldeveloper.accountingsystem.dataaccess.repository.JournalJpaRepository;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.AccountType;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalType;
-import com.jalaldeveloper.accountingsystem.web.DashboardController;
+import com.jalaldeveloper.accountingsystem.platform.bootstrap.PlatformRbacSeeder;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -26,7 +26,7 @@ import java.util.UUID;
         matchIfMissing = true)
 public class DefaultCompanyChartDataSeeder implements ApplicationRunner {
 
-    private static final UUID COMPANY_ID = DashboardController.DEFAULT_COMPANY_ID;
+    private static final UUID COMPANY_ID = PlatformRbacSeeder.DEFAULT_COMPANY_ID;
 
     private final AccountJpaRepository accountJpaRepository;
     private final JournalJpaRepository journalJpaRepository;

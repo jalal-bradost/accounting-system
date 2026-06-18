@@ -5,7 +5,7 @@ import com.jalaldeveloper.accountingsystem.dataaccess.entity.CompanyCurrencyEnti
 import com.jalaldeveloper.accountingsystem.dataaccess.entity.CurrencyRateEntity;
 import com.jalaldeveloper.accountingsystem.dataaccess.repository.CompanyCurrencyJpaRepository;
 import com.jalaldeveloper.accountingsystem.dataaccess.repository.CurrencyRateJpaRepository;
-import com.jalaldeveloper.accountingsystem.web.DashboardController;
+import com.jalaldeveloper.accountingsystem.platform.bootstrap.PlatformRbacSeeder;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -25,7 +25,7 @@ import java.util.UUID;
 @ConditionalOnProperty(name = "accounting.currencies.seed", havingValue = "true", matchIfMissing = true)
 public class DefaultCompanyCurrencySeeder implements ApplicationRunner {
 
-    private static final UUID COMPANY_ID = DashboardController.DEFAULT_COMPANY_ID;
+    private static final UUID COMPANY_ID = PlatformRbacSeeder.DEFAULT_COMPANY_ID;
 
     private final CompanyCurrencyJpaRepository companyCurrencyJpaRepository;
     private final CurrencyRateJpaRepository currencyRateJpaRepository;

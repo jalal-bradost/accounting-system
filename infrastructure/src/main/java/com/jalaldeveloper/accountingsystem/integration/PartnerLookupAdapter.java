@@ -10,8 +10,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Container-side adapter that bridges the accounting module's {@link PartnerLookupPort}
- * to the contacts module's {@link PartnerApplicationService}. Lives in the container
+ * Infrastructure-side adapter that bridges the accounting module's {@link PartnerLookupPort}
+ * to the contacts module's {@link PartnerApplicationService}. Lives in infrastructure
  * so neither business module depends on the other at the Maven level.
  */
 @Component

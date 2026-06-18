@@ -40,7 +40,7 @@ import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.CreateSalesO
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.SalesOrderLineCommand;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.SalesOrderResponse;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.ports.input.SalesApplicationService;
-import com.jalaldeveloper.accountingsystem.web.DashboardController;
+import com.jalaldeveloper.accountingsystem.platform.bootstrap.PlatformRbacSeeder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -70,7 +70,7 @@ public class DemoBusinessDataSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DemoBusinessDataSeeder.class);
 
-    private static final UUID COMPANY_ID = DashboardController.DEFAULT_COMPANY_ID;
+    private static final UUID COMPANY_ID = PlatformRbacSeeder.DEFAULT_COMPANY_ID;
     private static final String MARKER_CUSTOMER = "Demo Customer (Seed)";
     private static final String MARKER_VENDOR = "Demo Vendor (Seed)";
     private static final String DEMO_TAX_NAME = "Demo VAT 10%";

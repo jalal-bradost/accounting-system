@@ -12,9 +12,9 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 
 /**
- * Container-side adapter that fulfils the contacts module's {@link PartnerBalancePort}
+ * Infrastructure-side adapter that fulfils the contacts module's {@link PartnerBalancePort}
  * by aggregating posted accounting journal items against the receivable account type
- * for the given partner. Lives in the container to avoid a Maven-level dependency
+ * for the given partner. Lives in infrastructure to avoid a Maven-level dependency
  * from contacts to accounting.
  */
 @Component

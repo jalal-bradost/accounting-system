@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Container-side adapter that fulfils the inventory module's {@link JournalEntryPostingPort}
+ * Infrastructure-side adapter that fulfils the inventory module's {@link JournalEntryPostingPort}
  * by delegating to the accounting module's {@link JournalEntryApplicationService}.
  *
  * <p>Inventory entries are routed to the journal whose {@code code} is {@code INV}; the
