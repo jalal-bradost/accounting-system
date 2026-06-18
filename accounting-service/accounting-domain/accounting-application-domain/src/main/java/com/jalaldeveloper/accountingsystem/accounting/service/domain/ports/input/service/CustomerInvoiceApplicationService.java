@@ -6,12 +6,17 @@ import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinv
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.RegisterCustomerPaymentCommand;
 import jakarta.validation.Valid;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public interface CustomerInvoiceApplicationService {
 
     boolean hasPostedInvoiceForSalesOrder(UUID salesOrderId);
+
+    /** Quantities reserved on draft customer invoices keyed by sales order line id. */
+    Map<UUID, BigDecimal> draftAllocatedQtyBySalesOrderLine(UUID salesOrderId);
 
     CustomerInvoiceResponse createCustomerInvoice(@Valid CreateCustomerInvoiceCommand command);
 

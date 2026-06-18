@@ -10,6 +10,8 @@ public interface AccCustomerPaymentJpaRepository extends JpaRepository<AccCustom
 
     List<AccCustomerPaymentEntity> findByCompanyIdOrderByPaymentDateDescCreatedAtDesc(UUID companyId);
 
+    List<AccCustomerPaymentEntity> findByCustomerInvoiceId(UUID customerInvoiceId);
+
     List<AccCustomerPaymentEntity> findByCompanyIdAndCustomerPartnerIdOrderByPaymentDateAscCreatedAtAsc(
             UUID companyId, UUID customerPartnerId);
 }

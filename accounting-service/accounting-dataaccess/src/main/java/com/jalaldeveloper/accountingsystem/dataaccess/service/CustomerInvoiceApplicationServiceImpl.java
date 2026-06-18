@@ -107,6 +107,27 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         return invoiceRepository.existsBySalesOrderIdAndState(salesOrderId, CustomerInvoiceState.POSTED);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, BigDecimal> draftAllocatedQtyBySalesOrderLine(UUID salesOrderId) {
+        if (salesOrderId == null) {
+            return Map.of();
+        }
+        Map<UUID, BigDecimal> allocated = new LinkedHashMap<>();
+        for (AccCustomerInvoiceEntity inv : invoiceRepository.findBySalesOrderIdWithLines(salesOrderId)) {
+            if (inv.getState() != CustomerInvoiceState.DRAFT) {
+                continue;
+            }
+            inv.getLines().size();
+            for (AccCustomerInvoiceLineEntity line : inv.getLines()) {
+                if (line.getSalesOrderLineId() != null) {
+                    allocated.merge(line.getSalesOrderLineId(), line.getQty(), BigDecimal::add);
+                }
+            }
+        }
+        return allocated;
+    }
+
     private UUID companyIdOrDefault(UUID fromCommand) {
         if (fromCommand != null) {
             return fromCommand;
@@ -326,6 +347,11 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         if (inv.getState() != CustomerInvoiceState.POSTED || inv.getJournalEntryId() == null) {
             throw new AccountingDomainException("Invoice must be posted before payment");
         }
+
+        BigDecimal docAmt = command.getAmount().setScale(4, RoundingMode.HALF_UP);
+        String paymentCurrency = command.getCurrencyCode() != null ? command.getCurrencyCode() : inv.getCurrencyCode();
+        ensurePaymentWithinOutstanding(inv, docAmt, paymentCurrency);
+
         PartnerResponse customer = partnerApplicationService.getPartner(inv.getCustomerPartnerId());
         UUID receivableAccount = customer.getReceivableAccountId() != null
                 ? customer.getReceivableAccountId()
@@ -337,8 +363,6 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         JournalEntity paymentJournal = journalJpaRepository.findById(command.getPaymentJournalId())
                 .orElseThrow(() -> new AccountingDomainException("Payment journal not found"));
 
-        BigDecimal docAmt = command.getAmount().setScale(4, RoundingMode.HALF_UP);
-        String paymentCurrency = command.getCurrencyCode() != null ? command.getCurrencyCode() : inv.getCurrencyCode();
         BigDecimal invoiceRate = resolveExchangeRate(
                 companyId, inv.getCurrencyCode(), inv.getInvoiceDate(), inv.getExchangeRateToCompany());
         BigDecimal paymentRate = resolveExchangeRate(
@@ -414,6 +438,57 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         r.setJournalEntryId(payEntry.getJournalEntryId());
         r.setReconciliationId(reconciliationId);
         return r;
+    }
+
+    private BigDecimal invoiceTotalDocumentCurrency(AccCustomerInvoiceEntity inv) {
+        inv.getLines().size();
+        BigDecimal total = BigDecimal.ZERO;
+        for (AccCustomerInvoiceLineEntity line : inv.getLines()) {
+            BigDecimal lineNet = customerLineNet(line.getQty(), line.getUnitPrice(), line.getDiscountPercent())
+                    .setScale(4, RoundingMode.HALF_UP);
+            total = total.add(lineNet);
+            line.getTaxSnapshots().size();
+            for (AccCustomerInvoiceLineTaxEntity ts : line.getTaxSnapshots()) {
+                total = total.add(ts.getTaxAmount().setScale(4, RoundingMode.HALF_UP));
+            }
+        }
+        return total;
+    }
+
+    private static BigDecimal customerLineNet(BigDecimal qty, BigDecimal unitPrice, BigDecimal discountPercent) {
+        BigDecimal disc = discountPercent != null ? discountPercent : BigDecimal.ZERO;
+        BigDecimal factor = BigDecimal.ONE.subtract(
+                disc.max(BigDecimal.ZERO).min(new BigDecimal("100"))
+                        .divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP));
+        return qty.multiply(unitPrice).multiply(factor);
+    }
+
+    private BigDecimal sumPaymentsForInvoice(UUID invoiceId, String invoiceCurrency) {
+        return paymentRepository.findByCustomerInvoiceId(invoiceId).stream()
+                .filter(p -> invoiceCurrency.equalsIgnoreCase(p.getCurrencyCode()))
+                .map(AccCustomerPaymentEntity::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private void ensurePaymentWithinOutstanding(AccCustomerInvoiceEntity inv, BigDecimal docAmt, String paymentCurrency) {
+        AccCustomerInvoiceEntity loaded = invoiceRepository.findByIdWithLines(inv.getId())
+                .orElseThrow(() -> new AccountingDomainException("Customer invoice not found"));
+        String invoiceCurrency = loaded.getCurrencyCode();
+        BigDecimal invoiceTotal = invoiceTotalDocumentCurrency(loaded);
+        BigDecimal paid = sumPaymentsForInvoice(loaded.getId(), invoiceCurrency);
+        BigDecimal outstanding = invoiceTotal.subtract(paid).setScale(4, RoundingMode.HALF_UP);
+        if (outstanding.signum() <= 0) {
+            throw new AccountingDomainException("Customer invoice is already fully paid");
+        }
+        if (!invoiceCurrency.equalsIgnoreCase(paymentCurrency)) {
+            return;
+        }
+        if (docAmt.compareTo(outstanding) > 0) {
+            throw new AccountingDomainException(
+                    "Payment amount exceeds outstanding balance of " + outstanding.toPlainString()
+                            + " " + invoiceCurrency);
+        }
     }
 
     private CustomerPaymentResponse toPaymentResponse(AccCustomerPaymentEntity p) {

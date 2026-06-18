@@ -261,21 +261,36 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         if (o.getState() != SalesOrderState.CONFIRMED) {
             return false;
         }
+        Map<UUID, BigDecimal> draftAllocated =
+                customerInvoiceApplicationService.draftAllocatedQtyBySalesOrderLine(o.getId());
         for (SalSalesOrderLineEntity sol : o.getLines()) {
             Product product = productRepository.findById(new ProductId(sol.getProductId())).orElse(null);
             if (product == null) {
                 continue;
             }
-            SalInvoicePolicy pol = sol.getInvoicePolicy() != null ? sol.getInvoicePolicy()
-                    : (product.getProductType() == ProductType.SERVICE
-                    ? SalInvoicePolicy.ORDERED : SalInvoicePolicy.DELIVERED);
-            BigDecimal targetQty = pol == SalInvoicePolicy.ORDERED
-                    ? sol.getQtyOrdered() : sol.getQtyDelivered();
-            if (targetQty.subtract(sol.getQtyInvoiced()).signum() > 0) {
+            if (invoiceableQtyForLine(sol, product, draftAllocated).signum() > 0) {
                 return true;
             }
         }
         return false;
+    }
+
+    /** Quantities already reserved on draft customer invoices (not yet posted to qtyInvoiced). */
+    private BigDecimal effectiveQtyInvoiced(SalSalesOrderLineEntity sol, Map<UUID, BigDecimal> draftAllocated) {
+        BigDecimal draft = draftAllocated.getOrDefault(sol.getId(), BigDecimal.ZERO);
+        return sol.getQtyInvoiced().add(draft).setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal invoiceableQtyForLine(SalSalesOrderLineEntity sol,
+                                             Product product,
+                                             Map<UUID, BigDecimal> draftAllocated) {
+        SalInvoicePolicy pol = sol.getInvoicePolicy() != null ? sol.getInvoicePolicy()
+                : (product.getProductType() == ProductType.SERVICE
+                ? SalInvoicePolicy.ORDERED : SalInvoicePolicy.DELIVERED);
+        BigDecimal targetQty = pol == SalInvoicePolicy.ORDERED
+                ? sol.getQtyOrdered() : sol.getQtyDelivered();
+        BigDecimal invoiced = effectiveQtyInvoiced(sol, draftAllocated);
+        return targetQty.subtract(invoiced).max(BigDecimal.ZERO);
     }
 
     private BigDecimal resolveUnitPrice(UUID companyId, UUID pricelistId, UUID productId, BigDecimal qty,
@@ -605,17 +620,13 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         if (o.getState() != SalesOrderState.CONFIRMED) {
             throw new SalesDomainException("Sales order must be confirmed before invoicing");
         }
-        Instant now = Instant.now();
+        Map<UUID, BigDecimal> draftAllocated =
+                customerInvoiceApplicationService.draftAllocatedQtyBySalesOrderLine(o.getId());
         List<CustomerInvoiceLineCommand> invLines = new ArrayList<>();
         for (SalSalesOrderLineEntity sol : o.getLines()) {
             Product product = productRepository.findById(new ProductId(sol.getProductId()))
                     .orElseThrow(() -> new SalesDomainException("Product not found: " + sol.getProductId()));
-            SalInvoicePolicy pol = sol.getInvoicePolicy() != null ? sol.getInvoicePolicy()
-                    : (product.getProductType() == ProductType.SERVICE
-                    ? SalInvoicePolicy.ORDERED : SalInvoicePolicy.DELIVERED);
-            BigDecimal targetQty = pol == SalInvoicePolicy.ORDERED
-                    ? sol.getQtyOrdered() : sol.getQtyDelivered();
-            BigDecimal qty = targetQty.subtract(sol.getQtyInvoiced());
+            BigDecimal qty = invoiceableQtyForLine(sol, product, draftAllocated);
             if (qty.signum() <= 0) {
                 continue;
             }
@@ -630,7 +641,10 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
             invLines.add(lc);
         }
         if (invLines.isEmpty()) {
-            throw new SalesDomainException("No invoiceable quantity remaining on this sales order");
+            throw new SalesDomainException(
+                    "No invoiceable quantity: for storable lines, deliver goods first (qty delivered > qty "
+                            + "invoiced); for service lines, invoice from ordered quantity. "
+                            + "If a draft invoice already exists, post or remove it first.");
         }
         CreateCustomerInvoiceCommand ic = new CreateCustomerInvoiceCommand();
         ic.setCompanyId(companyId);

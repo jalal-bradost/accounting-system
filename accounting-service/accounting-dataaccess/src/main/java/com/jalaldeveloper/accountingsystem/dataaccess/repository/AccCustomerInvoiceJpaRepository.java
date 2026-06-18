@@ -21,6 +21,9 @@ public interface AccCustomerInvoiceJpaRepository extends JpaRepository<AccCustom
 
     boolean existsBySalesOrderIdAndState(UUID salesOrderId, CustomerInvoiceState state);
 
+    @Query("select distinct i from AccCustomerInvoiceEntity i left join fetch i.lines l where i.salesOrderId = :salesOrderId")
+    List<AccCustomerInvoiceEntity> findBySalesOrderIdWithLines(@Param("salesOrderId") UUID salesOrderId);
+
     List<AccCustomerInvoiceEntity> findByCompanyIdAndCustomerPartnerIdOrderByInvoiceDateAscCreatedAtAsc(
             UUID companyId, UUID customerPartnerId);
 }
