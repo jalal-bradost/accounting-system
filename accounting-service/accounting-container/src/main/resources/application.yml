@@ -21,7 +21,12 @@ app:
       location: ./data/partner-images
       public-base-path: /media/partner-images
       max-bytes: 5242880
+    chatter-attachments:
+      location: ./data/chatter-attachments
+      public-base-path: /media/chatter-attachments
+      max-bytes: 10485760
   messaging:
+    enabled: false
     exchange: accounting.system.events
 
 accounting:
@@ -52,6 +57,8 @@ accounting:
 spring:
   application:
     name: accounting-service
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
   datasource:
     url: jdbc:h2:mem:accounting;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
@@ -62,11 +69,13 @@ spring:
       enabled: true
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:
         format_sql: true
+        type:
+          preferred_clob_mapping: TEXT
     database-platform: org.hibernate.dialect.H2Dialect
   rabbitmq:
     host: localhost

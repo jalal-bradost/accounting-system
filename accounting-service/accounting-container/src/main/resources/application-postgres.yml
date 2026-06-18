@@ -9,6 +9,8 @@ spring:
     properties:
       hibernate:
         format_sql: true
+        type:
+          preferred_clob_mapping: TEXT
   flyway:
     enabled: true
     baseline-on-migrate: true

@@ -4,10 +4,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-
 import java.time.Instant;
 import java.util.UUID;
 
@@ -25,8 +23,7 @@ public class PosReceiptEntity {
     private UUID orderId;
     @Column(name = "receipt_number", nullable = false, length = 64)
     private String receiptNumber;
-    @Lob
-    @Column(name = "payload_json", nullable = false)
+    @Column(name = "payload_json", nullable = false, columnDefinition = "TEXT")
     private String payloadJson;
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
