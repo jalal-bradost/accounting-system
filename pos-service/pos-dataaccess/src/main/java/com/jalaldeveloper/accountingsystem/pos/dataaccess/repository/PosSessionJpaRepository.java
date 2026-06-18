@@ -9,4 +9,6 @@ import java.util.UUID;
 
 public interface PosSessionJpaRepository extends JpaRepository<PosSessionEntity, UUID> {
     Optional<PosSessionEntity> findFirstByConfigIdAndStateOrderByOpenedAtDesc(UUID configId, PosSessionState state);
+
+    Optional<PosSessionEntity> findFirstByConfigIdAndStateOrderByClosedAtDesc(UUID configId, PosSessionState state);
 }

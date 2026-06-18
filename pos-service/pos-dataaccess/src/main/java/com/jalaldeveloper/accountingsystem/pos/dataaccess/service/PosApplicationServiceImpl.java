@@ -4,6 +4,7 @@ import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinv
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.RegisterCustomerPaymentCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.CustomerInvoiceApplicationService;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductCategoryResponse;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductResponse;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.StockPickingResponse;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ValidatePickingCommand;
@@ -29,6 +30,7 @@ import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.ClosePosSessio
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.CreatePosOrderCommand;
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.OpenPosSessionCommand;
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.PosCatalogItemResponse;
+import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.PosConfigCardResponse;
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.PosConfigCommand;
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.PosConfigResponse;
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.PosOrderLineCommand;
@@ -58,7 +60,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -125,6 +129,30 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<PosConfigCardResponse> listConfigCards(CompanyId companyId) {
+        return configRepository.findByCompanyIdAndActiveTrueOrderByNameAsc(companyId.getId()).stream()
+                .map(this::toConfigCardResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PosSessionResponse getSession(UUID sessionId) {
+        return toSessionResponse(loadSession(sessionId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PosSessionResponse getOpenSessionForConfig(CompanyId companyId, UUID configId) {
+        PosConfigEntity config = loadConfig(configId);
+        ensureCompany(config.getCompanyId(), companyId.getId());
+        return sessionRepository.findFirstByConfigIdAndStateOrderByOpenedAtDesc(configId, PosSessionState.OPEN)
+                .map(this::toSessionResponse)
+                .orElseThrow(() -> new PosDomainException("No open session for this POS config"));
+    }
+
+    @Override
     @Transactional
     public PosSessionResponse openSession(OpenPosSessionCommand command) {
         PosConfigEntity config = loadConfig(command.getConfigId());
@@ -162,14 +190,17 @@ public class PosApplicationServiceImpl implements PosApplicationService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<PosCatalogItemResponse> searchCatalog(CompanyId companyId, UUID sessionId, String query, Pageable pageable) {
+    public Page<PosCatalogItemResponse> searchCatalog(CompanyId companyId, UUID sessionId, String query, UUID categoryId,
+                                                      Pageable pageable) {
         PosSessionEntity session = loadSession(sessionId);
         ensureCompany(session.getCompanyId(), companyId.getId());
         PosRules.ensureSessionOpen(session.getState());
+        Map<UUID, String> categoryNames = categoryNameMap(companyId);
         Page<ProductResponse> products = productApplicationService.searchProducts(companyId, query, false, pageable);
         List<PosCatalogItemResponse> saleable = products.stream()
                 .filter(ProductResponse::isSaleOk)
-                .map(this::toCatalogItemResponse)
+                .filter(p -> categoryId == null || categoryId.equals(p.getCategoryId()))
+                .map(p -> toCatalogItemResponse(p, categoryNames))
                 .toList();
         return new PageImpl<>(saleable, pageable, saleable.size());
     }
@@ -373,6 +404,9 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     private void registerAccountingPayments(PosOrderEntity order, CustomerInvoiceResponse invoice) {
         BigDecimal remaining = order.getAmountTotal();
         for (PosPaymentEntity payment : order.getPayments().stream().sorted(Comparator.comparing(PosPaymentEntity::getPaidAt)).toList()) {
+            if (payment.getMethod() == PosPaymentMethod.CUSTOMER_ACCOUNT) {
+                continue;
+            }
             if (remaining.signum() <= 0) {
                 return;
             }
@@ -450,6 +484,9 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     private UUID resolveJournalId(PosSessionEntity session, RegisterPosPaymentCommand command) {
         if (command.getJournalId() != null) {
             return command.getJournalId();
+        }
+        if (command.getMethod() == PosPaymentMethod.CUSTOMER_ACCOUNT) {
+            return session.getBankJournalId() != null ? session.getBankJournalId() : session.getCashJournalId();
         }
         if (command.getMethod() == PosPaymentMethod.CASH) {
             return session.getCashJournalId();
@@ -532,10 +569,43 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     }
 
     private BigDecimal expectedCashSales(UUID sessionId) {
-        return BigDecimal.ZERO;
+        return orderRepository.sumCashPaymentsBySessionId(sessionId, PosOrderState.FINALIZED);
     }
 
-    private PosCatalogItemResponse toCatalogItemResponse(ProductResponse product) {
+    private Map<UUID, String> categoryNameMap(CompanyId companyId) {
+        Map<UUID, String> map = new HashMap<>();
+        for (ProductCategoryResponse cat : productApplicationService.listCategories(companyId, false)) {
+            map.put(cat.getId(), cat.getName());
+        }
+        return map;
+    }
+
+    private PosConfigCardResponse toConfigCardResponse(PosConfigEntity config) {
+        PosConfigCardResponse card = new PosConfigCardResponse();
+        card.setId(config.getId());
+        card.setName(config.getName());
+        card.setCurrencyCode(config.getCurrencyCode());
+        card.setActive(config.isActive());
+        sessionRepository.findFirstByConfigIdAndStateOrderByOpenedAtDesc(config.getId(), PosSessionState.OPEN)
+                .ifPresent(session -> {
+                    card.setOpenSessionId(session.getId());
+                    card.setOpenSessionState(session.getState().name());
+                    card.setSessionOpenedAt(session.getOpenedAt());
+                    card.setOpeningCash(session.getOpeningCash());
+                    card.setSessionSalesTotal(orderRepository.sumAmountTotalBySessionIdAndState(
+                            session.getId(), PosOrderState.FINALIZED));
+                    card.setSessionOrderCount(orderRepository.countBySessionIdAndState(
+                            session.getId(), PosOrderState.FINALIZED));
+                });
+        sessionRepository.findFirstByConfigIdAndStateOrderByClosedAtDesc(config.getId(), PosSessionState.CLOSED)
+                .ifPresent(closed -> {
+                    card.setLastClosingCash(closed.getClosingCash());
+                    card.setLastClosedAt(closed.getClosedAt());
+                });
+        return card;
+    }
+
+    private PosCatalogItemResponse toCatalogItemResponse(ProductResponse product, Map<UUID, String> categoryNames) {
         PosCatalogItemResponse response = new PosCatalogItemResponse();
         response.setProductId(product.getId());
         response.setSku(product.getSku());
@@ -544,6 +614,11 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         response.setUomId(product.getUomId());
         response.setListPrice(product.getListPrice());
         response.setSaleOk(product.isSaleOk());
+        response.setCategoryId(product.getCategoryId());
+        if (product.getCategoryId() != null) {
+            response.setCategoryName(categoryNames.get(product.getCategoryId()));
+        }
+        response.setImageUrl(product.getImageUrl());
         return response;
     }
 

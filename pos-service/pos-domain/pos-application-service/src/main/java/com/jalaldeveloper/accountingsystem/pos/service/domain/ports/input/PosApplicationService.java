@@ -6,6 +6,7 @@ import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.ClosePosSessio
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.CreatePosOrderCommand;
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.OpenPosSessionCommand;
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.PosCatalogItemResponse;
+import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.PosConfigCardResponse;
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.PosConfigCommand;
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.PosConfigResponse;
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.PosOrderLineCommand;
@@ -26,11 +27,18 @@ public interface PosApplicationService {
 
     List<PosConfigResponse> listConfigs(CompanyId companyId);
 
+    List<PosConfigCardResponse> listConfigCards(CompanyId companyId);
+
+    PosSessionResponse getSession(UUID sessionId);
+
+    PosSessionResponse getOpenSessionForConfig(CompanyId companyId, UUID configId);
+
     PosSessionResponse openSession(@Valid OpenPosSessionCommand command);
 
     PosSessionResponse closeSession(UUID sessionId, @Valid ClosePosSessionCommand command);
 
-    Page<PosCatalogItemResponse> searchCatalog(CompanyId companyId, UUID sessionId, String query, Pageable pageable);
+    Page<PosCatalogItemResponse> searchCatalog(CompanyId companyId, UUID sessionId, String query, UUID categoryId,
+                                                 Pageable pageable);
 
     PosOrderResponse createOrder(@Valid CreatePosOrderCommand command);
 

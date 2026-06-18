@@ -11,6 +11,9 @@ public class PosCatalogItemResponse {
     private UUID uomId;
     private BigDecimal listPrice;
     private boolean saleOk;
+    private UUID categoryId;
+    private String categoryName;
+    private String imageUrl;
 
     public UUID getProductId() { return productId; }
     public void setProductId(UUID productId) { this.productId = productId; }
@@ -26,4 +29,10 @@ public class PosCatalogItemResponse {
     public void setListPrice(BigDecimal listPrice) { this.listPrice = listPrice; }
     public boolean isSaleOk() { return saleOk; }
     public void setSaleOk(boolean saleOk) { this.saleOk = saleOk; }
+    public UUID getCategoryId() { return categoryId; }
+    public void setCategoryId(UUID categoryId) { this.categoryId = categoryId; }
+    public String getCategoryName() { return categoryName; }
+    public void setCategoryName(String categoryName) { this.categoryName = categoryName; }
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
 }
