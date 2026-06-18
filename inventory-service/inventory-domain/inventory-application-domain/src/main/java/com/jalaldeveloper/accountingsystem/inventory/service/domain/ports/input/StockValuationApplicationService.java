@@ -19,6 +19,9 @@ public interface StockValuationApplicationService {
     /** Sum of on-hand qty for a product across internal locations. */
     BigDecimal totalOnHand(CompanyId companyId, UUID productId);
 
+    /** On-hand qty for a product in a POS / sales warehouse. */
+    BigDecimal totalOnHandForWarehouse(CompanyId companyId, UUID productId, UUID warehouseId);
+
     /** Stock valuation layers for a product (chronological). */
     List<ValuationLayerResponse> layersByProduct(CompanyId companyId, UUID productId);
 

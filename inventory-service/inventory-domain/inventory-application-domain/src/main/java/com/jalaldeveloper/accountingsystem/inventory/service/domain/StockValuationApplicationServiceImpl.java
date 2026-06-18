@@ -12,6 +12,8 @@ import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.WarehouseId;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -51,6 +53,12 @@ class StockValuationApplicationServiceImpl implements StockValuationApplicationS
     @Transactional(readOnly = true)
     public BigDecimal totalOnHand(CompanyId companyId, UUID productId) {
         return quantRepository.sumOnHandInternal(companyId, new ProductId(productId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BigDecimal totalOnHandForWarehouse(CompanyId companyId, UUID productId, UUID warehouseId) {
+        return quantRepository.sumOnHandByWarehouse(companyId, new ProductId(productId), new WarehouseId(warehouseId));
     }
 
     @Override

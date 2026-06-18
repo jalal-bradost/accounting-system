@@ -5,6 +5,8 @@ import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.StockQua
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductId;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.StockLocationId;
 
+import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.WarehouseId;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -20,6 +22,9 @@ public interface StockQuantRepository {
 
     /** Total on-hand qty across all internal locations for the product. */
     BigDecimal sumOnHandInternal(CompanyId companyId, ProductId productId);
+
+    /** On-hand qty in internal locations belonging to the warehouse. */
+    BigDecimal sumOnHandByWarehouse(CompanyId companyId, ProductId productId, WarehouseId warehouseId);
 
     /** All quants for a product (used for valuation reports). */
     List<StockQuant> findByProduct(CompanyId companyId, ProductId productId);

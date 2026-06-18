@@ -11,6 +11,8 @@ import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.Sto
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.StockQuantRepository;
 import org.springframework.stereotype.Component;
 
+import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.WarehouseId;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -42,6 +44,13 @@ public class StockQuantRepositoryImpl implements StockQuantRepository {
     @Override
     public BigDecimal sumOnHandInternal(CompanyId companyId, ProductId productId) {
         BigDecimal sum = jpa.sumOnHandInternal(companyId.getId(), productId.getId(), LocationType.INTERNAL);
+        return sum != null ? sum : BigDecimal.ZERO;
+    }
+
+    @Override
+    public BigDecimal sumOnHandByWarehouse(CompanyId companyId, ProductId productId, WarehouseId warehouseId) {
+        BigDecimal sum = jpa.sumOnHandByWarehouse(
+                companyId.getId(), productId.getId(), warehouseId.getId(), LocationType.INTERNAL);
         return sum != null ? sum : BigDecimal.ZERO;
     }
 

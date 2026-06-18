@@ -35,6 +35,19 @@ public interface StockQuantJpaRepository extends JpaRepository<StockQuantEntity,
                                   @Param("internal") LocationType internal);
 
     @Query("""
+        SELECT COALESCE(SUM(q.quantity), 0) FROM StockQuantEntity q
+        JOIN StockLocationEntity l ON l.id = q.locationId
+        WHERE q.companyId = :companyId
+          AND q.productId = :productId
+          AND l.warehouseId = :warehouseId
+          AND l.locationType = :internal
+        """)
+    BigDecimal sumOnHandByWarehouse(@Param("companyId") UUID companyId,
+                                    @Param("productId") UUID productId,
+                                    @Param("warehouseId") UUID warehouseId,
+                                    @Param("internal") LocationType internal);
+
+    @Query("""
         SELECT q FROM StockQuantEntity q
         WHERE q.companyId = :companyId
           AND q.productId = :productId
