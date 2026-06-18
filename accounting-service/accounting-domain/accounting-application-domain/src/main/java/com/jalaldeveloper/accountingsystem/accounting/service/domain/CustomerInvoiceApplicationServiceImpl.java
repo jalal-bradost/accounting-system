@@ -1,4 +1,4 @@
-package com.jalaldeveloper.accountingsystem.dataaccess.service;
+package com.jalaldeveloper.accountingsystem.accounting.service.domain;
 
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.CurrencyMath;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.CreateJournalEntryCommand;
@@ -20,21 +20,22 @@ import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.CurrencyConversionPort;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.event.CustomerInvoicePostedEvent;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.messaging.AccountingEventPublisher;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository.AccountRepository;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository.CustomerInvoiceRepository;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository.CustomerPaymentRepository;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository.JournalRepository;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.dto.PartnerResponse;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.ports.input.PartnerApplicationService;
-import com.jalaldeveloper.accountingsystem.dataaccess.entity.AccCustomerInvoiceEntity;
-import com.jalaldeveloper.accountingsystem.dataaccess.entity.AccCustomerInvoiceLineEntity;
-import com.jalaldeveloper.accountingsystem.dataaccess.entity.AccCustomerInvoiceLineTaxEntity;
-import com.jalaldeveloper.accountingsystem.dataaccess.entity.AccCustomerPaymentEntity;
-import com.jalaldeveloper.accountingsystem.dataaccess.entity.AccountEntity;
-import com.jalaldeveloper.accountingsystem.dataaccess.entity.JournalEntity;
-import com.jalaldeveloper.accountingsystem.dataaccess.repository.AccCustomerInvoiceJpaRepository;
-import com.jalaldeveloper.accountingsystem.dataaccess.repository.AccCustomerPaymentJpaRepository;
-import com.jalaldeveloper.accountingsystem.dataaccess.repository.AccountJpaRepository;
-import com.jalaldeveloper.accountingsystem.dataaccess.repository.JournalJpaRepository;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.CustomerInvoiceState;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalId;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalType;
+import com.jalaldeveloper.accountingsystem.domain.core.entity.CustomerInvoice;
+import com.jalaldeveloper.accountingsystem.domain.core.entity.CustomerInvoiceLine;
+import com.jalaldeveloper.accountingsystem.domain.core.entity.CustomerInvoiceLineTax;
+import com.jalaldeveloper.accountingsystem.domain.core.entity.CustomerPayment;
+import com.jalaldeveloper.accountingsystem.domain.core.entity.Journal;
 import com.jalaldeveloper.accountingsystem.domain.core.exception.AccountingDomainException;
+import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import com.jalaldeveloper.accountingsystem.platform.web.CompanyContext;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
@@ -57,29 +58,28 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
 
     private static final String DEFAULT_AR_ACCOUNT_CODE = "430003";
     private static final String DEFAULT_REVENUE_ACCOUNT_CODE = "430005";
-    /** Sale journal code in {@link com.jalaldeveloper.accountingsystem.bootstrap.DefaultCompanyChartDataSeeder}. */
     private static final String SALE_JOURNAL_CODE = "430003";
     private static final String EXCHANGE_GAIN_ACCOUNT_CODE = "430014";
     private static final String EXCHANGE_LOSS_ACCOUNT_CODE = "430015";
 
-    private final AccCustomerInvoiceJpaRepository invoiceRepository;
-    private final AccCustomerPaymentJpaRepository paymentRepository;
+    private final CustomerInvoiceRepository invoiceRepository;
+    private final CustomerPaymentRepository paymentRepository;
     private final PartnerApplicationService partnerApplicationService;
     private final JournalEntryApplicationService journalEntryApplicationService;
-    private final JournalJpaRepository journalJpaRepository;
-    private final AccountJpaRepository accountJpaRepository;
+    private final JournalRepository journalRepository;
+    private final AccountRepository accountRepository;
     private final ReconciliationApplicationService reconciliationApplicationService;
     private final ObjectProvider<CompanyContext> companyContextProvider;
     private final ObjectProvider<SalesOrderInvoiceSyncPort> salesOrderInvoiceSyncPortProvider;
     private final AccountingEventPublisher accountingEventPublisher;
     private final CurrencyConversionPort currencyConversionPort;
 
-    public CustomerInvoiceApplicationServiceImpl(AccCustomerInvoiceJpaRepository invoiceRepository,
-                                                 AccCustomerPaymentJpaRepository paymentRepository,
+    public CustomerInvoiceApplicationServiceImpl(CustomerInvoiceRepository invoiceRepository,
+                                                 CustomerPaymentRepository paymentRepository,
                                                  PartnerApplicationService partnerApplicationService,
                                                  JournalEntryApplicationService journalEntryApplicationService,
-                                                 JournalJpaRepository journalJpaRepository,
-                                                 AccountJpaRepository accountJpaRepository,
+                                                 JournalRepository journalRepository,
+                                                 AccountRepository accountRepository,
                                                  ReconciliationApplicationService reconciliationApplicationService,
                                                  ObjectProvider<CompanyContext> companyContextProvider,
                                                  ObjectProvider<SalesOrderInvoiceSyncPort> salesOrderInvoiceSyncPortProvider,
@@ -89,8 +89,8 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         this.paymentRepository = paymentRepository;
         this.partnerApplicationService = partnerApplicationService;
         this.journalEntryApplicationService = journalEntryApplicationService;
-        this.journalJpaRepository = journalJpaRepository;
-        this.accountJpaRepository = accountJpaRepository;
+        this.journalRepository = journalRepository;
+        this.accountRepository = accountRepository;
         this.reconciliationApplicationService = reconciliationApplicationService;
         this.companyContextProvider = companyContextProvider;
         this.salesOrderInvoiceSyncPortProvider = salesOrderInvoiceSyncPortProvider;
@@ -114,12 +114,11 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
             return Map.of();
         }
         Map<UUID, BigDecimal> allocated = new LinkedHashMap<>();
-        for (AccCustomerInvoiceEntity inv : invoiceRepository.findBySalesOrderIdWithLines(salesOrderId)) {
+        for (CustomerInvoice inv : invoiceRepository.findBySalesOrderIdWithLines(salesOrderId)) {
             if (inv.getState() != CustomerInvoiceState.DRAFT) {
                 continue;
             }
-            inv.getLines().size();
-            for (AccCustomerInvoiceLineEntity line : inv.getLines()) {
+            for (CustomerInvoiceLine line : inv.getLines()) {
                 if (line.getSalesOrderLineId() != null) {
                     allocated.merge(line.getSalesOrderLineId(), line.getQty(), BigDecimal::add);
                 }
@@ -135,18 +134,19 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         return companyContextProvider.getObject().requireCompany().getId();
     }
 
-    private AccountEntity resolveLiquidityAccountForPaymentJournal(UUID companyId, UUID journalId) {
-        JournalEntity j = journalJpaRepository.findById(journalId)
+    private UUID resolveLiquidityAccountForPaymentJournal(UUID companyId, UUID journalId) {
+        Journal j = journalRepository.findById(new JournalId(journalId))
                 .orElseThrow(() -> new AccountingDomainException("Payment journal not found"));
-        if (!j.getCompanyId().equals(companyId)) {
+        if (!j.getCompanyId().getId().equals(companyId)) {
             throw new AccountingDomainException("Journal company mismatch");
         }
-        if (j.getType() != JournalType.CASH && j.getType() != JournalType.BANK) {
+        if (j.getJournalType() != JournalType.CASH && j.getJournalType() != JournalType.BANK) {
             throw new AccountingDomainException("Payment journal must be cash or bank");
         }
-        return accountJpaRepository.findByCompanyIdAndCode(companyId, j.getCode())
+        return accountRepository.findByCompanyIdAndCode(new CompanyId(companyId), j.getCode())
                 .orElseThrow(() -> new AccountingDomainException(
-                        "Liquidity account for journal code " + j.getCode() + " not found"));
+                        "Liquidity account for journal code " + j.getCode() + " not found"))
+                .getId().getId();
     }
 
     @Override
@@ -160,12 +160,12 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         if (!customer.getCompanyId().equals(companyId)) {
             throw new AccountingDomainException("Customer belongs to another company");
         }
-        UUID defaultRevenue = accountJpaRepository.findByCompanyIdAndCode(companyId, DEFAULT_REVENUE_ACCOUNT_CODE)
-                .map(AccountEntity::getId)
-                .orElseThrow(() -> new AccountingDomainException("Default revenue account not found"));
+        UUID defaultRevenue = accountRepository.findByCompanyIdAndCode(new CompanyId(companyId), DEFAULT_REVENUE_ACCOUNT_CODE)
+                .orElseThrow(() -> new AccountingDomainException("Default revenue account not found"))
+                .getId().getId();
 
         Instant now = Instant.now();
-        AccCustomerInvoiceEntity inv = new AccCustomerInvoiceEntity();
+        CustomerInvoice inv = new CustomerInvoice();
         inv.setId(UUID.randomUUID());
         inv.setCompanyId(companyId);
         inv.setCustomerPartnerId(command.getCustomerPartnerId());
@@ -187,9 +187,8 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
                 throw new AccountingDomainException("Line unit price must be positive");
             }
             UUID revAcc = lc.getRevenueAccountId() != null ? lc.getRevenueAccountId() : defaultRevenue;
-            AccCustomerInvoiceLineEntity line = new AccCustomerInvoiceLineEntity();
+            CustomerInvoiceLine line = new CustomerInvoiceLine();
             line.setId(UUID.randomUUID());
-            line.setInvoice(inv);
             line.setSequence(++seq);
             line.setName(lc.getName());
             line.setQty(lc.getQty().setScale(4, RoundingMode.HALF_UP));
@@ -200,9 +199,8 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
             line.setCreatedAt(now);
             line.setUpdatedAt(now);
             for (CustomerInvoiceLineTaxCommand ts : lc.getTaxSnapshots()) {
-                AccCustomerInvoiceLineTaxEntity te = new AccCustomerInvoiceLineTaxEntity();
+                CustomerInvoiceLineTax te = new CustomerInvoiceLineTax();
                 te.setId(UUID.randomUUID());
-                te.setLine(line);
                 te.setTaxId(ts.getTaxId());
                 te.setTaxName(ts.getTaxName());
                 te.setTaxBase(ts.getTaxBase().setScale(4, RoundingMode.HALF_UP));
@@ -218,7 +216,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
     @Override
     @Transactional
     public CustomerInvoiceResponse postCustomerInvoice(UUID invoiceId) {
-        AccCustomerInvoiceEntity inv = invoiceRepository.findByIdWithLines(invoiceId)
+        CustomerInvoice inv = invoiceRepository.findByIdWithLines(invoiceId)
                 .orElseThrow(() -> new AccountingDomainException("Customer invoice not found"));
         if (inv.getState() != CustomerInvoiceState.DRAFT) {
             throw new AccountingDomainException("Invoice is not draft");
@@ -226,11 +224,11 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         PartnerResponse customer = partnerApplicationService.getPartner(inv.getCustomerPartnerId());
         UUID receivableAccount = customer.getReceivableAccountId() != null
                 ? customer.getReceivableAccountId()
-                : accountJpaRepository.findByCompanyIdAndCode(inv.getCompanyId(), DEFAULT_AR_ACCOUNT_CODE)
-                .map(AccountEntity::getId)
-                .orElseThrow(() -> new AccountingDomainException("Default AR account not found"));
+                : accountRepository.findByCompanyIdAndCode(new CompanyId(inv.getCompanyId()), DEFAULT_AR_ACCOUNT_CODE)
+                .orElseThrow(() -> new AccountingDomainException("Default AR account not found"))
+                .getId().getId();
 
-        JournalEntity saleJournal = journalJpaRepository.findByCompanyIdAndCode(inv.getCompanyId(), SALE_JOURNAL_CODE)
+        Journal saleJournal = journalRepository.findByCompanyIdAndCode(new CompanyId(inv.getCompanyId()), SALE_JOURNAL_CODE)
                 .orElseThrow(() -> new AccountingDomainException("Sale journal not found"));
 
         BigDecimal rate = resolveExchangeRate(
@@ -241,7 +239,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         BigDecimal arTotalComp = BigDecimal.ZERO;
         BigDecimal arDoc = BigDecimal.ZERO;
 
-        for (AccCustomerInvoiceLineEntity line : inv.getLines()) {
+        for (CustomerInvoiceLine line : inv.getLines()) {
             BigDecimal disc = line.getDiscountPercent() != null ? line.getDiscountPercent() : BigDecimal.ZERO;
             BigDecimal lineNetDoc = lineNet(line.getQty(), line.getUnitPrice(), disc).setScale(4, RoundingMode.HALF_UP);
             BigDecimal lineNetComp = CurrencyMath.convertAtRate(lineNetDoc, rate);
@@ -256,7 +254,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
                 arDoc = arDoc.add(lineNetDoc);
                 items.add(new JournalItemCommand(line.getRevenueAccountId(), line.getName(), BigDecimal.ZERO, lineNetComp,
                         inv.getCurrencyCode(), lineNetDoc.negate(), null));
-                for (AccCustomerInvoiceLineTaxEntity ts : line.getTaxSnapshots()) {
+                for (CustomerInvoiceLineTax ts : line.getTaxSnapshots()) {
                     BigDecimal taxDoc = ts.getTaxAmount().setScale(4, RoundingMode.HALF_UP);
                     BigDecimal taxComp = CurrencyMath.convertAtRate(taxDoc, rate);
                     arTotalComp = arTotalComp.add(taxComp);
@@ -271,7 +269,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
 
         CreateJournalEntryCommand jcmd = new CreateJournalEntryCommand(
                 inv.getCompanyId(),
-                saleJournal.getId(),
+                saleJournal.getId().getId(),
                 "",
                 inv.getInvoiceDate(),
                 inv.getCurrencyCode(),
@@ -283,13 +281,13 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         inv.setJournalEntryId(created.getJournalEntryId());
         inv.setState(CustomerInvoiceState.POSTED);
         inv.setUpdatedAt(Instant.now());
-        AccCustomerInvoiceEntity saved = invoiceRepository.save(inv);
+        CustomerInvoice saved = invoiceRepository.save(inv);
 
         if (saved.getSalesOrderId() != null) {
             SalesOrderInvoiceSyncPort salesSync = salesOrderInvoiceSyncPortProvider.getIfAvailable();
             if (salesSync != null) {
                 Map<UUID, BigDecimal> qtyByLine = new LinkedHashMap<>();
-                for (AccCustomerInvoiceLineEntity line : saved.getLines()) {
+                for (CustomerInvoiceLine line : saved.getLines()) {
                     if (line.getSalesOrderLineId() != null) {
                         qtyByLine.merge(line.getSalesOrderLineId(), line.getQty(), BigDecimal::add);
                     }
@@ -339,7 +337,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
     @Transactional
     public CustomerPaymentResponse registerCustomerPayment(RegisterCustomerPaymentCommand command) {
         UUID companyId = companyIdOrDefault(command.getCompanyId());
-        AccCustomerInvoiceEntity inv = invoiceRepository.findById(command.getCustomerInvoiceId())
+        CustomerInvoice inv = invoiceRepository.findById(command.getCustomerInvoiceId())
                 .orElseThrow(() -> new AccountingDomainException("Customer invoice not found"));
         if (!inv.getCompanyId().equals(companyId)) {
             throw new AccountingDomainException("Invoice company mismatch");
@@ -355,12 +353,12 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         PartnerResponse customer = partnerApplicationService.getPartner(inv.getCustomerPartnerId());
         UUID receivableAccount = customer.getReceivableAccountId() != null
                 ? customer.getReceivableAccountId()
-                : accountJpaRepository.findByCompanyIdAndCode(companyId, DEFAULT_AR_ACCOUNT_CODE)
-                .map(AccountEntity::getId)
-                .orElseThrow(() -> new AccountingDomainException("Default AR account not found"));
+                : accountRepository.findByCompanyIdAndCode(new CompanyId(companyId), DEFAULT_AR_ACCOUNT_CODE)
+                .orElseThrow(() -> new AccountingDomainException("Default AR account not found"))
+                .getId().getId();
 
-        AccountEntity liquidity = resolveLiquidityAccountForPaymentJournal(companyId, command.getPaymentJournalId());
-        JournalEntity paymentJournal = journalJpaRepository.findById(command.getPaymentJournalId())
+        UUID liquidityAccount = resolveLiquidityAccountForPaymentJournal(companyId, command.getPaymentJournalId());
+        Journal paymentJournal = journalRepository.findById(new JournalId(command.getPaymentJournalId()))
                 .orElseThrow(() -> new AccountingDomainException("Payment journal not found"));
 
         BigDecimal invoiceRate = resolveExchangeRate(
@@ -372,9 +370,9 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         BigDecimal liquidityComp = CurrencyMath.convertAtRate(docAmt, paymentRate);
         BigDecimal fxDiff = arClearComp.subtract(liquidityComp).setScale(4, RoundingMode.HALF_UP);
 
-        String liqLabel = paymentJournal.getType() == JournalType.CASH ? "Cash receipt" : "Bank receipt";
+        String liqLabel = paymentJournal.getJournalType() == JournalType.CASH ? "Cash receipt" : "Bank receipt";
         List<JournalItemCommand> items = new ArrayList<>();
-        items.add(new JournalItemCommand(liquidity.getId(), liqLabel, liquidityComp, BigDecimal.ZERO,
+        items.add(new JournalItemCommand(liquidityAccount, liqLabel, liquidityComp, BigDecimal.ZERO,
                 paymentCurrency, docAmt, null));
         items.add(new JournalItemCommand(receivableAccount,
                 "Payment " + (inv.getReference() != null ? inv.getReference() : ""),
@@ -382,7 +380,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         appendCustomerExchangeDifference(items, companyId, fxDiff);
         CreateJournalEntryCommand jcmd = new CreateJournalEntryCommand(
                 companyId,
-                paymentJournal.getId(),
+                paymentJournal.getId().getId(),
                 "",
                 command.getPaymentDate(),
                 paymentCurrency,
@@ -410,7 +408,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
                         List.of(invArItem, payArItem), reconciliationId));
 
         Instant now = Instant.now();
-        AccCustomerPaymentEntity p = new AccCustomerPaymentEntity();
+        CustomerPayment p = new CustomerPayment();
         p.setId(UUID.randomUUID());
         p.setCompanyId(companyId);
         p.setCustomerPartnerId(inv.getCustomerPartnerId());
@@ -440,15 +438,13 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         return r;
     }
 
-    private BigDecimal invoiceTotalDocumentCurrency(AccCustomerInvoiceEntity inv) {
-        inv.getLines().size();
+    private BigDecimal invoiceTotalDocumentCurrency(CustomerInvoice inv) {
         BigDecimal total = BigDecimal.ZERO;
-        for (AccCustomerInvoiceLineEntity line : inv.getLines()) {
+        for (CustomerInvoiceLine line : inv.getLines()) {
             BigDecimal lineNet = customerLineNet(line.getQty(), line.getUnitPrice(), line.getDiscountPercent())
                     .setScale(4, RoundingMode.HALF_UP);
             total = total.add(lineNet);
-            line.getTaxSnapshots().size();
-            for (AccCustomerInvoiceLineTaxEntity ts : line.getTaxSnapshots()) {
+            for (CustomerInvoiceLineTax ts : line.getTaxSnapshots()) {
                 total = total.add(ts.getTaxAmount().setScale(4, RoundingMode.HALF_UP));
             }
         }
@@ -466,13 +462,13 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
     private BigDecimal sumPaymentsForInvoice(UUID invoiceId, String invoiceCurrency) {
         return paymentRepository.findByCustomerInvoiceId(invoiceId).stream()
                 .filter(p -> invoiceCurrency.equalsIgnoreCase(p.getCurrencyCode()))
-                .map(AccCustomerPaymentEntity::getAmount)
+                .map(CustomerPayment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(4, RoundingMode.HALF_UP);
     }
 
-    private void ensurePaymentWithinOutstanding(AccCustomerInvoiceEntity inv, BigDecimal docAmt, String paymentCurrency) {
-        AccCustomerInvoiceEntity loaded = invoiceRepository.findByIdWithLines(inv.getId())
+    private void ensurePaymentWithinOutstanding(CustomerInvoice inv, BigDecimal docAmt, String paymentCurrency) {
+        CustomerInvoice loaded = invoiceRepository.findByIdWithLines(inv.getId())
                 .orElseThrow(() -> new AccountingDomainException("Customer invoice not found"));
         String invoiceCurrency = loaded.getCurrencyCode();
         BigDecimal invoiceTotal = invoiceTotalDocumentCurrency(loaded);
@@ -491,7 +487,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         }
     }
 
-    private CustomerPaymentResponse toPaymentResponse(AccCustomerPaymentEntity p) {
+    private CustomerPaymentResponse toPaymentResponse(CustomerPayment p) {
         CustomerPaymentResponse r = new CustomerPaymentResponse();
         r.setId(p.getId());
         r.setCompanyId(p.getCompanyId());
@@ -506,7 +502,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         return r;
     }
 
-    private CustomerInvoiceResponse toResponse(AccCustomerInvoiceEntity inv) {
+    private CustomerInvoiceResponse toResponse(CustomerInvoice inv) {
         CustomerInvoiceResponse r = new CustomerInvoiceResponse();
         r.setId(inv.getId());
         r.setCompanyId(inv.getCompanyId());
@@ -518,7 +514,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         r.setState(inv.getState());
         r.setJournalEntryId(inv.getJournalEntryId());
         List<CustomerInvoiceLineResponse> lines = new ArrayList<>();
-        for (AccCustomerInvoiceLineEntity l : inv.getLines()) {
+        for (CustomerInvoiceLine l : inv.getLines()) {
             CustomerInvoiceLineResponse lr = new CustomerInvoiceLineResponse();
             lr.setId(l.getId());
             lr.setSequence(l.getSequence());
@@ -528,7 +524,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
             lr.setDiscountPercent(l.getDiscountPercent());
             lr.setRevenueAccountId(l.getRevenueAccountId());
             lr.setSalesOrderLineId(l.getSalesOrderLineId());
-            for (AccCustomerInvoiceLineTaxEntity t : l.getTaxSnapshots()) {
+            for (CustomerInvoiceLineTax t : l.getTaxSnapshots()) {
                 CustomerInvoiceLineTaxResponse tr = new CustomerInvoiceLineTaxResponse();
                 tr.setTaxId(t.getTaxId());
                 tr.setTaxName(t.getTaxName());
@@ -561,15 +557,15 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
             return;
         }
         if (fxDiff.signum() > 0) {
-            UUID lossAccount = accountJpaRepository.findByCompanyIdAndCode(companyId, EXCHANGE_LOSS_ACCOUNT_CODE)
-                    .map(AccountEntity::getId)
-                    .orElseThrow(() -> new AccountingDomainException("Exchange loss account not found"));
+            UUID lossAccount = accountRepository.findByCompanyIdAndCode(new CompanyId(companyId), EXCHANGE_LOSS_ACCOUNT_CODE)
+                    .orElseThrow(() -> new AccountingDomainException("Exchange loss account not found"))
+                    .getId().getId();
             items.add(new JournalItemCommand(lossAccount, "Exchange loss", fxDiff, BigDecimal.ZERO,
                     null, null, null));
         } else {
-            UUID gainAccount = accountJpaRepository.findByCompanyIdAndCode(companyId, EXCHANGE_GAIN_ACCOUNT_CODE)
-                    .map(AccountEntity::getId)
-                    .orElseThrow(() -> new AccountingDomainException("Exchange gain account not found"));
+            UUID gainAccount = accountRepository.findByCompanyIdAndCode(new CompanyId(companyId), EXCHANGE_GAIN_ACCOUNT_CODE)
+                    .orElseThrow(() -> new AccountingDomainException("Exchange gain account not found"))
+                    .getId().getId();
             items.add(new JournalItemCommand(gainAccount, "Exchange gain", BigDecimal.ZERO, fxDiff.abs(),
                     null, null, null));
         }

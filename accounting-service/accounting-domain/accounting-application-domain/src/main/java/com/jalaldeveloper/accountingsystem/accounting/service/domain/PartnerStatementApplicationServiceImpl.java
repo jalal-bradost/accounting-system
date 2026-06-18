@@ -1,19 +1,19 @@
-package com.jalaldeveloper.accountingsystem.dataaccess.service;
+package com.jalaldeveloper.accountingsystem.accounting.service.domain;
 
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.partnerstatement.PartnerStatementLineResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.partnerstatement.PartnerStatementResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.partnerstatement.PartnerStatementSectionResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.PartnerStatementApplicationService;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository.CustomerInvoiceRepository;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository.CustomerPaymentRepository;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.dto.PartnerResponse;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.ports.input.PartnerApplicationService;
-import com.jalaldeveloper.accountingsystem.dataaccess.entity.AccCustomerInvoiceEntity;
-import com.jalaldeveloper.accountingsystem.dataaccess.entity.AccCustomerInvoiceLineEntity;
-import com.jalaldeveloper.accountingsystem.dataaccess.entity.AccCustomerInvoiceLineTaxEntity;
-import com.jalaldeveloper.accountingsystem.dataaccess.entity.AccCustomerPaymentEntity;
-import com.jalaldeveloper.accountingsystem.dataaccess.repository.AccCustomerInvoiceJpaRepository;
-import com.jalaldeveloper.accountingsystem.dataaccess.repository.AccCustomerPaymentJpaRepository;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.CustomerInvoiceState;
-import com.jalaldeveloper.accountingsystem.purchase.service.domain.ports.input.PurchaseApplicationService;
+import com.jalaldeveloper.accountingsystem.domain.core.entity.CustomerInvoice;
+import com.jalaldeveloper.accountingsystem.domain.core.entity.CustomerInvoiceLine;
+import com.jalaldeveloper.accountingsystem.domain.core.entity.CustomerInvoiceLineTax;
+import com.jalaldeveloper.accountingsystem.domain.core.entity.CustomerPayment;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.PayableStatementPort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,19 +31,19 @@ import java.util.UUID;
 @Service
 class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicationService {
 
-    private final AccCustomerInvoiceJpaRepository customerInvoiceRepository;
-    private final AccCustomerPaymentJpaRepository customerPaymentRepository;
+    private final CustomerInvoiceRepository customerInvoiceRepository;
+    private final CustomerPaymentRepository customerPaymentRepository;
     private final PartnerApplicationService partnerApplicationService;
-    private final PurchaseApplicationService purchaseApplicationService;
+    private final PayableStatementPort payableStatementPort;
 
-    PartnerStatementApplicationServiceImpl(AccCustomerInvoiceJpaRepository customerInvoiceRepository,
-                                           AccCustomerPaymentJpaRepository customerPaymentRepository,
+    PartnerStatementApplicationServiceImpl(CustomerInvoiceRepository customerInvoiceRepository,
+                                           CustomerPaymentRepository customerPaymentRepository,
                                            PartnerApplicationService partnerApplicationService,
-                                           PurchaseApplicationService purchaseApplicationService) {
+                                           PayableStatementPort payableStatementPort) {
         this.customerInvoiceRepository = customerInvoiceRepository;
         this.customerPaymentRepository = customerPaymentRepository;
         this.partnerApplicationService = partnerApplicationService;
-        this.purchaseApplicationService = purchaseApplicationService;
+        this.payableStatementPort = payableStatementPort;
     }
 
     @Override
@@ -70,31 +70,25 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
             response.setReceivableSections(buildReceivableSections(companyId, partnerId, from, to));
         }
         if (partner.isVendor()) {
-            response.setPayableSections(purchaseApplicationService.payableStatement(companyId, partnerId, from, to));
+            response.setPayableSections(payableStatementPort.payableStatement(companyId, partnerId, from, to));
         }
         return response;
     }
 
     private List<PartnerStatementSectionResponse> buildReceivableSections(
             UUID companyId, UUID partnerId, LocalDate from, LocalDate to) {
-        List<AccCustomerInvoiceEntity> invoices = customerInvoiceRepository
+        List<CustomerInvoice> invoices = customerInvoiceRepository
                 .findByCompanyIdAndCustomerPartnerIdOrderByInvoiceDateAscCreatedAtAsc(companyId, partnerId);
-        for (AccCustomerInvoiceEntity inv : invoices) {
-            inv.getLines().size();
-            for (AccCustomerInvoiceLineEntity line : inv.getLines()) {
-                line.getTaxSnapshots().size();
-            }
-        }
-        List<AccCustomerPaymentEntity> payments = customerPaymentRepository
+        List<CustomerPayment> payments = customerPaymentRepository
                 .findByCompanyIdAndCustomerPartnerIdOrderByPaymentDateAscCreatedAtAsc(companyId, partnerId);
 
         Set<String> currencies = new LinkedHashSet<>();
-        for (AccCustomerInvoiceEntity inv : invoices) {
+        for (CustomerInvoice inv : invoices) {
             if (inv.getState() == CustomerInvoiceState.POSTED && inv.getCurrencyCode() != null) {
                 currencies.add(inv.getCurrencyCode().trim().toUpperCase());
             }
         }
-        for (AccCustomerPaymentEntity p : payments) {
+        for (CustomerPayment p : payments) {
             if (p.getCurrencyCode() != null) {
                 currencies.add(p.getCurrencyCode().trim().toUpperCase());
             }
@@ -111,10 +105,10 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
             String currency,
             LocalDate from,
             LocalDate to,
-            List<AccCustomerInvoiceEntity> invoices,
-            List<AccCustomerPaymentEntity> payments) {
+            List<CustomerInvoice> invoices,
+            List<CustomerPayment> payments) {
         BigDecimal opening = BigDecimal.ZERO;
-        for (AccCustomerInvoiceEntity inv : invoices) {
+        for (CustomerInvoice inv : invoices) {
             if (inv.getState() != CustomerInvoiceState.POSTED) {
                 continue;
             }
@@ -125,7 +119,7 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
                 opening = opening.add(customerInvoiceTotalDocumentCurrency(inv));
             }
         }
-        for (AccCustomerPaymentEntity p : payments) {
+        for (CustomerPayment p : payments) {
             if (!currency.equalsIgnoreCase(p.getCurrencyCode())) {
                 continue;
             }
@@ -135,9 +129,9 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
         }
         opening = opening.setScale(4, RoundingMode.HALF_UP);
 
-        record ArEvt(LocalDate d, Instant created, String idKey, AccCustomerInvoiceEntity inv, AccCustomerPaymentEntity pay) {}
+        record ArEvt(LocalDate d, Instant created, String idKey, CustomerInvoice inv, CustomerPayment pay) {}
         List<ArEvt> period = new ArrayList<>();
-        for (AccCustomerInvoiceEntity inv : invoices) {
+        for (CustomerInvoice inv : invoices) {
             if (inv.getState() == CustomerInvoiceState.POSTED
                     && currency.equalsIgnoreCase(inv.getCurrencyCode())
                     && !inv.getInvoiceDate().isBefore(from)
@@ -145,7 +139,7 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
                 period.add(new ArEvt(inv.getInvoiceDate(), inv.getCreatedAt(), "I:" + inv.getId(), inv, null));
             }
         }
-        for (AccCustomerPaymentEntity p : payments) {
+        for (CustomerPayment p : payments) {
             if (currency.equalsIgnoreCase(p.getCurrencyCode())
                     && !p.getPaymentDate().isBefore(from)
                     && !p.getPaymentDate().isAfter(to)) {
@@ -161,7 +155,7 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
             PartnerStatementLineResponse row = new PartnerStatementLineResponse();
             row.setEntryDate(e.d());
             if (e.inv() != null) {
-                AccCustomerInvoiceEntity inv = e.inv();
+                CustomerInvoice inv = e.inv();
                 BigDecimal amount = customerInvoiceTotalDocumentCurrency(inv).setScale(4, RoundingMode.HALF_UP);
                 row.setLineType("CUSTOMER_INVOICE");
                 row.setReference(inv.getReference() != null && !inv.getReference().isBlank() ? inv.getReference() : inv.getId().toString());
@@ -171,7 +165,7 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
                 row.setCredit(zero);
                 running = running.add(amount);
             } else {
-                AccCustomerPaymentEntity payment = e.pay();
+                CustomerPayment payment = e.pay();
                 BigDecimal amount = payment.getAmount().setScale(4, RoundingMode.HALF_UP);
                 row.setLineType("CUSTOMER_PAYMENT");
                 row.setReference(payment.getReference() != null && !payment.getReference().isBlank() ? payment.getReference() : "Payment");
@@ -194,13 +188,13 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
         return section;
     }
 
-    private BigDecimal customerInvoiceTotalDocumentCurrency(AccCustomerInvoiceEntity inv) {
+    private BigDecimal customerInvoiceTotalDocumentCurrency(CustomerInvoice inv) {
         BigDecimal total = BigDecimal.ZERO;
-        for (AccCustomerInvoiceLineEntity line : inv.getLines()) {
+        for (CustomerInvoiceLine line : inv.getLines()) {
             BigDecimal lineNet = customerLineNet(line.getQty(), line.getUnitPrice(), line.getDiscountPercent())
                     .setScale(4, RoundingMode.HALF_UP);
             total = total.add(lineNet);
-            for (AccCustomerInvoiceLineTaxEntity ts : line.getTaxSnapshots()) {
+            for (CustomerInvoiceLineTax ts : line.getTaxSnapshots()) {
                 total = total.add(ts.getTaxAmount().setScale(4, RoundingMode.HALF_UP));
             }
         }
