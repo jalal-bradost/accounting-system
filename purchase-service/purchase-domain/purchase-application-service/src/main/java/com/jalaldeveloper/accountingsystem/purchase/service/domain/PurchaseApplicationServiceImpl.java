@@ -1,4 +1,4 @@
-package com.jalaldeveloper.accountingsystem.purchase.dataaccess.service;
+package com.jalaldeveloper.accountingsystem.purchase.service.domain;
 
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.CurrencyMath;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.JournalEntryApplicationService;
@@ -36,8 +36,6 @@ import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.StockLocationRepository;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.WarehouseRepository;
 import com.jalaldeveloper.accountingsystem.platform.web.CompanyContext;
-import com.jalaldeveloper.accountingsystem.purchase.dataaccess.entity.*;
-import com.jalaldeveloper.accountingsystem.purchase.dataaccess.repository.*;
 import com.jalaldeveloper.accountingsystem.purchase.domain.core.*;
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.FiscalTaxSnapshot;
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.PurchaseTaxEngine;
@@ -45,9 +43,19 @@ import com.jalaldeveloper.accountingsystem.purchase.service.domain.dto.*;
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.event.VendorBillPostedEvent;
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.event.VendorPaymentRegisteredEvent;
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.ports.input.PurchaseApplicationService;
+import com.jalaldeveloper.accountingsystem.purchase.domain.core.entity.FiscalTax;
+import com.jalaldeveloper.accountingsystem.purchase.domain.core.entity.PurchaseOrder;
+import com.jalaldeveloper.accountingsystem.purchase.domain.core.entity.PurchaseOrderLine;
+import com.jalaldeveloper.accountingsystem.purchase.domain.core.entity.PurchaseOrderLineTax;
+import com.jalaldeveloper.accountingsystem.purchase.domain.core.entity.VendorBill;
+import com.jalaldeveloper.accountingsystem.purchase.domain.core.entity.VendorBillLine;
+import com.jalaldeveloper.accountingsystem.purchase.domain.core.entity.VendorBillLineTax;
+import com.jalaldeveloper.accountingsystem.purchase.domain.core.entity.VendorPayment;
+import com.jalaldeveloper.accountingsystem.purchase.service.domain.ports.output.repository.FiscalTaxRepository;
+import com.jalaldeveloper.accountingsystem.purchase.service.domain.ports.output.repository.PurchaseOrderRepository;
+import com.jalaldeveloper.accountingsystem.purchase.service.domain.ports.output.repository.VendorBillRepository;
+import com.jalaldeveloper.accountingsystem.purchase.service.domain.ports.output.repository.VendorPaymentRepository;
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.ports.output.messaging.PurchaseEventPublisher;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -79,10 +87,10 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     private static final String EXCHANGE_GAIN_ACCOUNT_CODE = "430014";
     private static final String EXCHANGE_LOSS_ACCOUNT_CODE = "430015";
 
-    private final PurPurchaseOrderJpaRepository purchaseOrderRepository;
-    private final PurFiscalTaxJpaRepository fiscalTaxRepository;
-    private final PurVendorBillJpaRepository vendorBillRepository;
-    private final PurVendorPaymentJpaRepository vendorPaymentRepository;
+    private final PurchaseOrderRepository purchaseOrderRepository;
+    private final FiscalTaxRepository fiscalTaxRepository;
+    private final VendorBillRepository vendorBillRepository;
+    private final VendorPaymentRepository vendorPaymentRepository;
     private final PartnerApplicationService partnerApplicationService;
     private final ProductRepository productRepository;
     private final ProductCategoryRepository categoryRepository;
@@ -98,10 +106,10 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     private final PurchaseEventPublisher purchaseEventPublisher;
     private final CurrencyConversionPort currencyConversionPort;
 
-    public PurchaseApplicationServiceImpl(PurPurchaseOrderJpaRepository purchaseOrderRepository,
-                                          PurFiscalTaxJpaRepository fiscalTaxRepository,
-                                          PurVendorBillJpaRepository vendorBillRepository,
-                                          PurVendorPaymentJpaRepository vendorPaymentRepository,
+    public PurchaseApplicationServiceImpl(PurchaseOrderRepository purchaseOrderRepository,
+                                          FiscalTaxRepository fiscalTaxRepository,
+                                          VendorBillRepository vendorBillRepository,
+                                          VendorPaymentRepository vendorPaymentRepository,
                                           PartnerApplicationService partnerApplicationService,
                                           ProductRepository productRepository,
                                           ProductCategoryRepository categoryRepository,
@@ -136,9 +144,6 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         this.currencyConversionPort = currencyConversionPort;
     }
 
-    @PersistenceContext
-    private EntityManager entityManager;
-
     private UUID companyIdOrDefault(UUID fromCommand) {
         if (fromCommand != null) return fromCommand;
         return companyContextProvider.getObject().requireCompany().getId();
@@ -164,7 +169,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             throw new PurchaseDomainException("Vendor belongs to another company");
         }
         Instant now = Instant.now();
-        PurPurchaseOrderEntity o = new PurPurchaseOrderEntity();
+        PurchaseOrder o = new PurchaseOrder();
         o.setId(UUID.randomUUID());
         o.setCompanyId(companyId);
         o.setVendorPartnerId(command.getVendorPartnerId());
@@ -191,9 +196,8 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
 
         int seq = 10;
         for (PurchaseOrderLineCommand lc : command.getLines()) {
-            PurPurchaseOrderLineEntity line = new PurPurchaseOrderLineEntity();
+            PurchaseOrderLine line = new PurchaseOrderLine();
             line.setId(UUID.randomUUID());
-            line.setPurchaseOrder(o);
             line.setSequence(seq);
             line.setProductId(lc.getProductId());
             line.setName(lc.getName());
@@ -209,7 +213,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             line.setUpdatedAt(now);
             int tseq = 10;
             for (UUID taxId : lc.getTaxIds()) {
-                PurFiscalTaxEntity tax = fiscalTaxRepository.findById(taxId)
+                FiscalTax tax = fiscalTaxRepository.findById(taxId)
                         .orElseThrow(() -> new PurchaseDomainException("Tax not found: " + taxId));
                 if (!tax.getCompanyId().equals(companyId) || !tax.isActive()) {
                     throw new PurchaseDomainException("Invalid tax: " + taxId);
@@ -217,9 +221,8 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 if (tax.getScope() != FiscalTaxScope.PURCHASE && tax.getScope() != FiscalTaxScope.BOTH) {
                     throw new PurchaseDomainException("Tax scope not valid for purchase: " + taxId);
                 }
-                PurPurchaseOrderLineTaxEntity lt = new PurPurchaseOrderLineTaxEntity();
+                PurchaseOrderLineTax lt = new PurchaseOrderLineTax();
                 lt.setId(UUID.randomUUID());
-                lt.setLine(line);
                 lt.setTaxId(taxId);
                 lt.setSequence(tseq);
                 line.getTaxes().add(lt);
@@ -244,7 +247,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         return purchaseOrderRepository.search(cid, state, vendorPartnerId, qNorm, pageable).map(this::toSummary);
     }
 
-    private PurchaseOrderSummaryResponse toSummary(PurPurchaseOrderEntity o) {
+    private PurchaseOrderSummaryResponse toSummary(PurchaseOrder o) {
         PurchaseOrderSummaryResponse r = new PurchaseOrderSummaryResponse();
         r.setId(o.getId());
         r.setCompanyId(o.getCompanyId());
@@ -258,12 +261,12 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         return r;
     }
 
-    private boolean computeCanCreateVendorBill(PurPurchaseOrderEntity po) {
+    private boolean computeCanCreateVendorBill(PurchaseOrder po) {
         if (po.getState() != PurchaseOrderState.CONFIRMED) {
             return false;
         }
         Map<UUID, BigDecimal> draftAllocated = draftBillQtyByPoLine(po.getId());
-        for (PurPurchaseOrderLineEntity pol : po.getLines()) {
+        for (PurchaseOrderLine pol : po.getLines()) {
             Optional<Product> opt = productRepository.findById(new ProductId(pol.getProductId()));
             if (opt.isEmpty()) {
                 continue;
@@ -278,12 +281,12 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     /** Quantities already reserved on draft vendor bills (not yet posted to qtyInvoiced). */
     private Map<UUID, BigDecimal> draftBillQtyByPoLine(UUID purchaseOrderId) {
         Map<UUID, BigDecimal> allocated = new HashMap<>();
-        for (PurVendorBillEntity bill : vendorBillRepository.findByPurchaseOrderId(purchaseOrderId)) {
+        for (VendorBill bill : vendorBillRepository.findByPurchaseOrderId(purchaseOrderId)) {
             if (bill.getState() != VendorBillState.DRAFT) {
                 continue;
             }
             bill.getLines().size();
-            for (PurVendorBillLineEntity line : bill.getLines()) {
+            for (VendorBillLine line : bill.getLines()) {
                 if (line.getPurchaseOrderLineId() != null) {
                     allocated.merge(line.getPurchaseOrderLineId(), line.getQty(), BigDecimal::add);
                 }
@@ -292,12 +295,12 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         return allocated;
     }
 
-    private BigDecimal effectiveQtyInvoiced(PurPurchaseOrderLineEntity pol, Map<UUID, BigDecimal> draftAllocated) {
+    private BigDecimal effectiveQtyInvoiced(PurchaseOrderLine pol, Map<UUID, BigDecimal> draftAllocated) {
         BigDecimal draft = draftAllocated.getOrDefault(pol.getId(), BigDecimal.ZERO);
         return pol.getQtyInvoiced().add(draft).setScale(4, RoundingMode.HALF_UP);
     }
 
-    private BigDecimal billableQtyForLine(PurPurchaseOrderLineEntity pol,
+    private BigDecimal billableQtyForLine(PurchaseOrderLine pol,
                                           Product product,
                                           Map<UUID, BigDecimal> draftAllocated) {
         BigDecimal invoiced = effectiveQtyInvoiced(pol, draftAllocated);
@@ -307,10 +310,10 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         return pol.getQtyReceived().subtract(invoiced).max(BigDecimal.ZERO);
     }
 
-    private void recalcTotals(PurPurchaseOrderEntity o) {
+    private void recalcTotals(PurchaseOrder o) {
         BigDecimal untaxed = BigDecimal.ZERO;
         BigDecimal tax = BigDecimal.ZERO;
-        for (PurPurchaseOrderLineEntity line : o.getLines()) {
+        for (PurchaseOrderLine line : o.getLines()) {
             List<FiscalTaxSnapshot> snaps = line.getTaxes().stream()
                     .map(lt -> fiscalTaxRepository.findById(lt.getTaxId()).orElseThrow())
                     .map(t -> new FiscalTaxSnapshot(t.getId(), t.getAmountType(), t.getAmount(), t.isPriceInclude()))
@@ -334,7 +337,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     @Override
     @Transactional
     public PurchaseOrderResponse sendPurchaseOrder(UUID id) {
-        PurPurchaseOrderEntity o = loadOrder(id);
+        PurchaseOrder o = loadOrder(id);
         PurchaseOrderRules.ensureCanSend(o.getState());
         o.setState(PurchaseOrderState.SENT);
         o.setSentAt(Instant.now());
@@ -345,7 +348,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     @Override
     @Transactional
     public PurchaseOrderResponse confirmPurchaseOrder(UUID id) {
-        PurPurchaseOrderEntity o = loadOrder(id);
+        PurchaseOrder o = loadOrder(id);
         if (o.getState() == PurchaseOrderState.CONFIRMED) {
             return toResponse(o);
         }
@@ -368,7 +371,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         }
 
         List<StockMoveCommand> moves = new ArrayList<>();
-        for (PurPurchaseOrderLineEntity line : o.getLines()) {
+        for (PurchaseOrderLine line : o.getLines()) {
             Product product = productRepository.findById(new ProductId(line.getProductId()))
                     .orElseThrow(() -> new PurchaseDomainException("Product not found: " + line.getProductId()));
             if (product.getProductType() == ProductType.SERVICE) {
@@ -423,7 +426,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     @Override
     @Transactional
     public PurchaseOrderResponse cancelPurchaseOrder(UUID id) {
-        PurPurchaseOrderEntity o = loadOrder(id);
+        PurchaseOrder o = loadOrder(id);
         PurchaseOrderRules.ensureCanCancel(o.getState());
         if (o.getState() == PurchaseOrderState.CONFIRMED) {
             if (vendorBillRepository.findByPurchaseOrderId(o.getId()).stream()
@@ -451,13 +454,13 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     @Override
     @Transactional
     public void syncPurchaseOrderLineQtyReceivedFromStockMoves(UUID purchaseOrderId) {
-        entityManager.flush();
-        PurPurchaseOrderEntity o = purchaseOrderRepository.findById(purchaseOrderId).orElse(null);
+        purchaseOrderRepository.flush();
+        PurchaseOrder o = purchaseOrderRepository.findById(purchaseOrderId).orElse(null);
         if (o == null) {
             return;
         }
         Instant now = Instant.now();
-        for (PurPurchaseOrderLineEntity line : o.getLines()) {
+        for (PurchaseOrderLine line : o.getLines()) {
             BigDecimal sum = stockMovePurchaseQueryPort.sumPickedQuantityForPurchaseOrderLine(line.getId());
             line.setQtyReceived(sum.setScale(4, RoundingMode.HALF_UP));
             line.setUpdatedAt(now);
@@ -483,7 +486,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     @Transactional
     public VendorBillResponse createVendorBillFromPo(CreateVendorBillFromPoCommand command) {
         UUID companyId = companyIdOrDefault(command.getCompanyId());
-        PurPurchaseOrderEntity po = loadOrder(command.getPurchaseOrderId());
+        PurchaseOrder po = loadOrder(command.getPurchaseOrderId());
         if (!po.getCompanyId().equals(companyId)) {
             throw new PurchaseDomainException("Purchase order company mismatch");
         }
@@ -494,7 +497,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             throw new PurchaseDomainException("Purchase order must be confirmed before billing");
         }
         Instant now = Instant.now();
-        PurVendorBillEntity bill = new PurVendorBillEntity();
+        VendorBill bill = new VendorBill();
         bill.setId(UUID.randomUUID());
         bill.setCompanyId(companyId);
         bill.setVendorPartnerId(po.getVendorPartnerId());
@@ -511,7 +514,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
 
         Map<UUID, BigDecimal> draftAllocated = draftBillQtyByPoLine(po.getId());
         int seq = 10;
-        for (PurPurchaseOrderLineEntity pol : po.getLines()) {
+        for (PurchaseOrderLine pol : po.getLines()) {
             Product product = productRepository.findById(new ProductId(pol.getProductId()))
                     .orElseThrow(() -> new PurchaseDomainException("Product not found: " + pol.getProductId()));
             BigDecimal qty = billableQtyForLine(pol, product, draftAllocated);
@@ -519,9 +522,8 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 continue;
             }
             if (product.getProductType() == ProductType.SERVICE) {
-                PurVendorBillLineEntity vbl = new PurVendorBillLineEntity();
+                VendorBillLine vbl = new VendorBillLine();
                 vbl.setId(UUID.randomUUID());
-                vbl.setVendorBill(bill);
                 vbl.setSequence(seq);
                 vbl.setPurchaseOrderLineId(pol.getId());
                 vbl.setProductId(pol.getProductId());
@@ -537,9 +539,8 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 seq += 10;
                 continue;
             }
-            PurVendorBillLineEntity vbl = new PurVendorBillLineEntity();
+            VendorBillLine vbl = new VendorBillLine();
             vbl.setId(UUID.randomUUID());
-            vbl.setVendorBill(bill);
             vbl.setSequence(seq);
             vbl.setPurchaseOrderLineId(pol.getId());
             vbl.setProductId(pol.getProductId());
@@ -563,7 +564,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         return toBillResponse(vendorBillRepository.save(bill));
     }
 
-    private void addBillTaxSnapshots(PurVendorBillLineEntity vbl, PurPurchaseOrderLineEntity pol, Instant now) {
+    private void addBillTaxSnapshots(VendorBillLine vbl, PurchaseOrderLine pol, Instant now) {
         List<FiscalTaxSnapshot> snaps = pol.getTaxes().stream()
                 .map(lt -> fiscalTaxRepository.findById(lt.getTaxId()).orElseThrow())
                 .map(t -> new FiscalTaxSnapshot(t.getId(), t.getAmountType(), t.getAmount(), t.isPriceInclude()))
@@ -571,10 +572,9 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         PurchaseTaxEngine.TaxSplit split = PurchaseTaxEngine.computeLineTaxes(
                 vbl.getQty(), vbl.getUnitPrice(), pol.getDiscountPercent(), snaps);
         for (Map.Entry<UUID, BigDecimal> e : split.taxAmountById().entrySet()) {
-            PurFiscalTaxEntity t = fiscalTaxRepository.findById(e.getKey()).orElseThrow();
-            PurVendorBillLineTaxEntity ts = new PurVendorBillLineTaxEntity();
+            FiscalTax t = fiscalTaxRepository.findById(e.getKey()).orElseThrow();
+            VendorBillLineTax ts = new VendorBillLineTax();
             ts.setId(UUID.randomUUID());
-            ts.setLine(vbl);
             ts.setTaxId(t.getId());
             ts.setTaxName(t.getName());
             ts.setTaxBase(split.net());
@@ -584,26 +584,26 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         }
     }
 
-    private BigDecimal discountForBillLine(PurVendorBillEntity bill, PurVendorBillLineEntity line) {
+    private BigDecimal discountForBillLine(VendorBill bill, VendorBillLine line) {
         if (bill.getPurchaseOrderId() == null || line.getPurchaseOrderLineId() == null) {
             return BigDecimal.ZERO;
         }
         return purchaseOrderRepository.findById(bill.getPurchaseOrderId()).stream()
                 .flatMap(po -> po.getLines().stream())
                 .filter(l -> l.getId().equals(line.getPurchaseOrderLineId()))
-                .map(PurPurchaseOrderLineEntity::getDiscountPercent)
+                .map(PurchaseOrderLine::getDiscountPercent)
                 .findFirst()
                 .orElse(BigDecimal.ZERO);
     }
 
-    private BigDecimal billTotalDocumentCurrency(PurVendorBillEntity bill) {
+    private BigDecimal billTotalDocumentCurrency(VendorBill bill) {
         BigDecimal total = BigDecimal.ZERO;
-        for (PurVendorBillLineEntity line : bill.getLines()) {
+        for (VendorBillLine line : bill.getLines()) {
             BigDecimal disc = discountForBillLine(bill, line);
             BigDecimal lineNetDoc = PurchaseOrderRules.lineNet(line.getQty(), line.getUnitPrice(), disc)
                     .setScale(4, RoundingMode.HALF_UP);
             total = total.add(lineNetDoc);
-            for (PurVendorBillLineTaxEntity ts : line.getTaxSnapshots()) {
+            for (VendorBillLineTax ts : line.getTaxSnapshots()) {
                 total = total.add(ts.getTaxAmount().setScale(4, RoundingMode.HALF_UP));
             }
         }
@@ -614,14 +614,14 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         return vendorPaymentRepository.findByVendorBillId(billId).stream()
                 .filter(p -> p.getState() == VendorPaymentState.POSTED)
                 .filter(p -> billCurrency.equalsIgnoreCase(p.getCurrencyCode()))
-                .map(PurVendorPaymentEntity::getAmount)
+                .map(VendorPayment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(4, RoundingMode.HALF_UP);
     }
 
-    private void ensurePaymentWithinOutstanding(PurVendorBillEntity bill, BigDecimal docAmt, String paymentCurrency) {
+    private void ensurePaymentWithinOutstanding(VendorBill bill, BigDecimal docAmt, String paymentCurrency) {
         bill.getLines().size();
-        for (PurVendorBillLineEntity line : bill.getLines()) {
+        for (VendorBillLine line : bill.getLines()) {
             line.getTaxSnapshots().size();
         }
         String billCurrency = bill.getCurrencyCode();
@@ -664,7 +664,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     @Override
     @Transactional
     public VendorBillResponse postVendorBill(UUID billId) {
-        PurVendorBillEntity bill = vendorBillRepository.findById(billId)
+        VendorBill bill = vendorBillRepository.findById(billId)
                 .orElseThrow(() -> new PurchaseDomainException("Vendor bill not found: " + billId));
         if (bill.getState() == VendorBillState.POSTED) {
             return toBillResponse(bill);
@@ -687,7 +687,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         BigDecimal apCreditCompany = BigDecimal.ZERO;
         BigDecimal apDocTotal = BigDecimal.ZERO;
 
-        for (PurVendorBillLineEntity line : bill.getLines()) {
+        for (VendorBillLine line : bill.getLines()) {
             BigDecimal disc = discountForBillLine(bill, line);
             BigDecimal lineNetDoc = PurchaseOrderRules.lineNet(line.getQty(), line.getUnitPrice(), disc)
                     .setScale(4, RoundingMode.HALF_UP);
@@ -696,7 +696,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                     bill.getCurrencyCode(), lineNetDoc, null));
             apCreditCompany = apCreditCompany.add(netComp);
             apDocTotal = apDocTotal.add(lineNetDoc);
-            for (PurVendorBillLineTaxEntity ts : line.getTaxSnapshots()) {
+            for (VendorBillLineTax ts : line.getTaxSnapshots()) {
                 BigDecimal taxDoc = ts.getTaxAmount().setScale(4, RoundingMode.HALF_UP);
                 BigDecimal taxComp = PurchaseTaxEngine.convertAtRate(taxDoc, rate);
                 items.add(new JournalItemCommand(ts.getAccountId(), ts.getTaxName(), taxComp, BigDecimal.ZERO,
@@ -725,9 +725,9 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         vendorBillRepository.save(bill);
 
         if (bill.getPurchaseOrderId() != null) {
-            PurPurchaseOrderEntity po = purchaseOrderRepository.findById(bill.getPurchaseOrderId()).orElse(null);
+            PurchaseOrder po = purchaseOrderRepository.findById(bill.getPurchaseOrderId()).orElse(null);
             if (po != null) {
-                for (PurVendorBillLineEntity vbl : bill.getLines()) {
+                for (VendorBillLine vbl : bill.getLines()) {
                     if (vbl.getPurchaseOrderLineId() != null) {
                         po.getLines().stream()
                                 .filter(l -> l.getId().equals(vbl.getPurchaseOrderLineId()))
@@ -759,14 +759,14 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     @Override
     @Transactional(readOnly = true)
     public VendorBillResponse getVendorBill(UUID billId) {
-        PurVendorBillEntity bill = vendorBillRepository.findById(billId)
+        VendorBill bill = vendorBillRepository.findById(billId)
                 .orElseThrow(() -> new PurchaseDomainException("Vendor bill not found"));
         UUID cid = companyContextProvider.getObject().requireCompany().getId();
         if (!bill.getCompanyId().equals(cid)) {
             throw new PurchaseDomainException("Vendor bill not found");
         }
         bill.getLines().size();
-        for (PurVendorBillLineEntity line : bill.getLines()) {
+        for (VendorBillLine line : bill.getLines()) {
             line.getTaxSnapshots().size();
         }
         return toBillResponse(bill);
@@ -812,24 +812,24 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
 
     private List<PartnerStatementSectionResponse> buildPayableSections(
             UUID cid, UUID partnerId, LocalDate from, LocalDate to) {
-        List<PurVendorBillEntity> bills = vendorBillRepository
+        List<VendorBill> bills = vendorBillRepository
                 .findByCompanyIdAndVendorPartnerIdOrderByBillDateAscCreatedAtAsc(cid, partnerId);
-        for (PurVendorBillEntity b : bills) {
+        for (VendorBill b : bills) {
             b.getLines().size();
-            for (PurVendorBillLineEntity line : b.getLines()) {
+            for (VendorBillLine line : b.getLines()) {
                 line.getTaxSnapshots().size();
             }
         }
-        List<PurVendorPaymentEntity> payments = vendorPaymentRepository
+        List<VendorPayment> payments = vendorPaymentRepository
                 .findByCompanyIdAndVendorPartnerIdOrderByPaymentDateAscCreatedAtAsc(cid, partnerId);
 
         Set<String> currencies = new LinkedHashSet<>();
-        for (PurVendorBillEntity b : bills) {
+        for (VendorBill b : bills) {
             if (b.getState() == VendorBillState.POSTED && b.getCurrencyCode() != null) {
                 currencies.add(b.getCurrencyCode().trim().toUpperCase());
             }
         }
-        for (PurVendorPaymentEntity p : payments) {
+        for (VendorPayment p : payments) {
             if (p.getState() == VendorPaymentState.POSTED && p.getCurrencyCode() != null) {
                 currencies.add(p.getCurrencyCode().trim().toUpperCase());
             }
@@ -844,9 +844,9 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
 
     private PartnerStatementSectionResponse buildPayableSectionForCurrency(
             String currency, LocalDate from, LocalDate to,
-            List<PurVendorBillEntity> bills, List<PurVendorPaymentEntity> payments) {
+            List<VendorBill> bills, List<VendorPayment> payments) {
         BigDecimal opening = BigDecimal.ZERO;
-        for (PurVendorBillEntity b : bills) {
+        for (VendorBill b : bills) {
             if (b.getState() != VendorBillState.POSTED) {
                 continue;
             }
@@ -857,7 +857,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 opening = opening.add(billTotalDocumentCurrency(b));
             }
         }
-        for (PurVendorPaymentEntity p : payments) {
+        for (VendorPayment p : payments) {
             if (p.getState() != VendorPaymentState.POSTED) {
                 continue;
             }
@@ -870,10 +870,10 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         }
         opening = opening.setScale(4, RoundingMode.HALF_UP);
 
-        record PayEvt(LocalDate d, Instant created, String idKey, PurVendorBillEntity bill, PurVendorPaymentEntity pay) {}
+        record PayEvt(LocalDate d, Instant created, String idKey, VendorBill bill, VendorPayment pay) {}
 
         List<PayEvt> period = new ArrayList<>();
-        for (PurVendorBillEntity b : bills) {
+        for (VendorBill b : bills) {
             if (b.getState() != VendorBillState.POSTED) {
                 continue;
             }
@@ -884,7 +884,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 period.add(new PayEvt(b.getBillDate(), b.getCreatedAt(), "B:" + b.getId(), b, null));
             }
         }
-        for (PurVendorPaymentEntity p : payments) {
+        for (VendorPayment p : payments) {
             if (p.getState() != VendorPaymentState.POSTED) {
                 continue;
             }
@@ -906,7 +906,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             PartnerStatementLineResponse row = new PartnerStatementLineResponse();
             row.setEntryDate(e.d());
             if (e.bill() != null) {
-                PurVendorBillEntity b = e.bill();
+                VendorBill b = e.bill();
                 BigDecimal amt = billTotalDocumentCurrency(b).setScale(4, RoundingMode.HALF_UP);
                 row.setLineType("VENDOR_BILL");
                 row.setReference(b.getReference() != null && !b.getReference().isBlank()
@@ -921,7 +921,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 row.setCredit(z);
                 running = running.add(amt);
             } else {
-                PurVendorPaymentEntity p = e.pay();
+                VendorPayment p = e.pay();
                 BigDecimal amt = p.getAmount().setScale(4, RoundingMode.HALF_UP);
                 row.setLineType("VENDOR_PAYMENT");
                 row.setReference(p.getReference() != null && !p.getReference().isBlank()
@@ -956,7 +956,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     @Transactional
     public VendorPaymentResponse registerVendorPayment(RegisterVendorPaymentCommand command) {
         UUID companyId = companyIdOrDefault(command.getCompanyId());
-        PurVendorBillEntity bill = vendorBillRepository.findById(command.getVendorBillId())
+        VendorBill bill = vendorBillRepository.findById(command.getVendorBillId())
                 .orElseThrow(() -> new PurchaseDomainException("Vendor bill not found"));
         if (!bill.getCompanyId().equals(companyId)) {
             throw new PurchaseDomainException("Bill company mismatch");
@@ -1022,7 +1022,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                         List.of(billApItem, payApItem), reconciliationId));
 
         Instant now = Instant.now();
-        PurVendorPaymentEntity p = new PurVendorPaymentEntity();
+        VendorPayment p = new VendorPayment();
         p.setId(UUID.randomUUID());
         p.setCompanyId(companyId);
         p.setVendorPartnerId(bill.getVendorPartnerId());
@@ -1064,7 +1064,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     @Transactional
     public FiscalTaxResponse createFiscalTax(CreateFiscalTaxCommand command) {
         UUID companyId = companyIdOrDefault(command.getCompanyId());
-        PurFiscalTaxEntity t = new PurFiscalTaxEntity();
+        FiscalTax t = new FiscalTax();
         t.setId(UUID.randomUUID());
         t.setCompanyId(companyId);
         t.setName(command.getName());
@@ -1090,12 +1090,12 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     @Override
     @Transactional(readOnly = true)
     public FiscalTaxResponse getFiscalTax(UUID taxId) {
-        PurFiscalTaxEntity t = fiscalTaxRepository.findById(taxId)
+        FiscalTax t = fiscalTaxRepository.findById(taxId)
                 .orElseThrow(() -> new PurchaseDomainException("Tax not found: " + taxId));
         return toTaxResponse(t);
     }
 
-    private PurPurchaseOrderEntity loadOrder(UUID id) {
+    private PurchaseOrder loadOrder(UUID id) {
         return purchaseOrderRepository.findById(id)
                 .orElseThrow(() -> new PurchaseDomainException("Purchase order not found: " + id));
     }
@@ -1108,7 +1108,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 .orElseThrow(() -> new PurchaseDomainException("Virtual supplier location VIRT/SUPPLIERS not found"));
     }
 
-    private PurchaseOrderResponse toResponse(PurPurchaseOrderEntity o) {
+    private PurchaseOrderResponse toResponse(PurchaseOrder o) {
         PurchaseOrderResponse r = new PurchaseOrderResponse();
         r.setId(o.getId());
         r.setCompanyId(o.getCompanyId());
@@ -1133,7 +1133,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         r.setCancelledAt(o.getCancelledAt());
         r.setReceiptPickingIds(stockMovePurchaseQueryPort.findPickingIdsByPurchaseOrderId(o.getId()));
         r.setCanCreateVendorBill(computeCanCreateVendorBill(o));
-        r.setLines(o.getLines().stream().sorted(Comparator.comparingInt(PurPurchaseOrderLineEntity::getSequence)).map(l -> {
+        r.setLines(o.getLines().stream().sorted(Comparator.comparingInt(PurchaseOrderLine::getSequence)).map(l -> {
             PurchaseOrderLineResponse lr = new PurchaseOrderLineResponse();
             lr.setId(l.getId());
             lr.setSequence(l.getSequence());
@@ -1147,8 +1147,8 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             lr.setUnitPrice(l.getUnitPrice());
             lr.setDiscountPercent(l.getDiscountPercent());
             lr.setExpectedDate(l.getExpectedDate());
-            lr.setTaxIds(l.getTaxes().stream().sorted(Comparator.comparingInt(PurPurchaseOrderLineTaxEntity::getSequence))
-                    .map(PurPurchaseOrderLineTaxEntity::getTaxId).collect(Collectors.toList()));
+            lr.setTaxIds(l.getTaxes().stream().sorted(Comparator.comparingInt(PurchaseOrderLineTax::getSequence))
+                    .map(PurchaseOrderLineTax::getTaxId).collect(Collectors.toList()));
             productRepository.findById(new ProductId(l.getProductId()))
                     .ifPresent(p -> lr.setProductType(p.getProductType().name()));
             return lr;
@@ -1156,7 +1156,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         return r;
     }
 
-    private VendorBillSummaryResponse toBillSummaryResponse(PurVendorBillEntity b) {
+    private VendorBillSummaryResponse toBillSummaryResponse(VendorBill b) {
         VendorBillSummaryResponse r = new VendorBillSummaryResponse();
         r.setId(b.getId());
         r.setCompanyId(b.getCompanyId());
@@ -1172,7 +1172,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         return r;
     }
 
-    private VendorPaymentResponse toVendorPaymentListRow(PurVendorPaymentEntity p) {
+    private VendorPaymentResponse toVendorPaymentListRow(VendorPayment p) {
         VendorPaymentResponse r = new VendorPaymentResponse();
         r.setId(p.getId());
         r.setCompanyId(p.getCompanyId());
@@ -1187,7 +1187,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         return r;
     }
 
-    private VendorBillResponse toBillResponse(PurVendorBillEntity b) {
+    private VendorBillResponse toBillResponse(VendorBill b) {
         VendorBillResponse r = new VendorBillResponse();
         r.setId(b.getId());
         r.setCompanyId(b.getCompanyId());
@@ -1199,7 +1199,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         r.setCurrencyCode(b.getCurrencyCode());
         r.setState(b.getState());
         r.setJournalEntryId(b.getJournalEntryId());
-        r.setLines(b.getLines().stream().sorted(Comparator.comparingInt(PurVendorBillLineEntity::getSequence)).map(l -> {
+        r.setLines(b.getLines().stream().sorted(Comparator.comparingInt(VendorBillLine::getSequence)).map(l -> {
             VendorBillLineResponse lr = new VendorBillLineResponse();
             lr.setId(l.getId());
             lr.setSequence(l.getSequence());
@@ -1224,7 +1224,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         return r;
     }
 
-    private FiscalTaxResponse toTaxResponse(PurFiscalTaxEntity t) {
+    private FiscalTaxResponse toTaxResponse(FiscalTax t) {
         FiscalTaxResponse r = new FiscalTaxResponse();
         r.setId(t.getId());
         r.setCompanyId(t.getCompanyId());
