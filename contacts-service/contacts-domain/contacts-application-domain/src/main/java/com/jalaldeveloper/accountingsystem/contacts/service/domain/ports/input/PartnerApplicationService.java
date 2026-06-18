@@ -42,4 +42,8 @@ public interface PartnerApplicationService {
     void removeBankAccount(UUID partnerId, UUID bankAccountId);
 
     CreditStatusResponse creditStatus(UUID partnerId);
+
+    PartnerResponse uploadPartnerImage(UUID partnerId, org.springframework.web.multipart.MultipartFile file);
+
+    PartnerResponse deletePartnerImage(UUID partnerId);
 }

@@ -34,6 +34,8 @@ public class PartnerResponse {
     private final String archivedBy;
     private final List<AddressResponse> addresses;
     private final List<BankAccountResponse> bankAccounts;
+    private String imageUrl;
+    private String imageContentType;
 
     public PartnerResponse(UUID id, UUID companyId, PartnerKind kind, String displayName, String legalName,
                            UUID parentId, boolean isCustomer, boolean isVendor, BigDecimal creditLimit,
@@ -97,6 +99,10 @@ public class PartnerResponse {
     public String getArchivedBy() { return archivedBy; }
     public List<AddressResponse> getAddresses() { return addresses; }
     public List<BankAccountResponse> getBankAccounts() { return bankAccounts; }
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+    public String getImageContentType() { return imageContentType; }
+    public void setImageContentType(String imageContentType) { this.imageContentType = imageContentType; }
 
     public record AddressResponse(UUID id, AddressType type, boolean defaultForType,
                                    String street1, String street2, String city,

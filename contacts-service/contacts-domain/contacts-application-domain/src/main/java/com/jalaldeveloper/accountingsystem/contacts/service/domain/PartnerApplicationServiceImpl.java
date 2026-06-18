@@ -18,6 +18,9 @@ import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.Currency;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.Money;
 import com.jalaldeveloper.accountingsystem.platform.audit.AuditLogPort;
+import com.jalaldeveloper.accountingsystem.platform.activity.ActivityApplicationService;
+import com.jalaldeveloper.accountingsystem.platform.activity.ActivityKind;
+import com.jalaldeveloper.accountingsystem.platform.activity.CreateActivityCommand;
 import com.jalaldeveloper.accountingsystem.platform.web.CompanyContext;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
@@ -25,11 +28,15 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Validated
@@ -43,19 +50,25 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
     private final ObjectProvider<CompanyContext> companyContextProvider;
     private final AuditLogPort auditLogPort;
     private final ContactsEventPublisher contactsEventPublisher;
+    private final ActivityApplicationService activityService;
+    private final com.jalaldeveloper.accountingsystem.contacts.service.domain.ports.output.storage.PartnerImageStoragePort imageStorage;
 
     PartnerApplicationServiceImpl(PartnerRepository partnerRepository,
                                   ContactsDataMapper mapper,
                                   ObjectProvider<PartnerBalancePort> partnerBalancePortProvider,
                                   ObjectProvider<CompanyContext> companyContextProvider,
                                   AuditLogPort auditLogPort,
-                                  ContactsEventPublisher contactsEventPublisher) {
+                                  ContactsEventPublisher contactsEventPublisher,
+                                  ActivityApplicationService activityService,
+                                  com.jalaldeveloper.accountingsystem.contacts.service.domain.ports.output.storage.PartnerImageStoragePort imageStorage) {
         this.partnerRepository = partnerRepository;
         this.mapper = mapper;
         this.partnerBalancePortProvider = partnerBalancePortProvider;
         this.companyContextProvider = companyContextProvider;
         this.auditLogPort = auditLogPort;
         this.contactsEventPublisher = contactsEventPublisher;
+        this.activityService = activityService;
+        this.imageStorage = imageStorage;
     }
 
     @Override
@@ -68,8 +81,43 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
         Partner saved = partnerRepository.save(partner);
         auditLogPort.recordBusinessEvent(companyId, MODEL_NAME, id,
                 "Partner created: " + saved.getDisplayName(), null);
+        recordSystemActivity(companyId, id, "Contact created");
         publishPartnerUpdated(saved);
-        return mapper.partnerToResponse(saved);
+        return toResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public PartnerResponse uploadPartnerImage(UUID partnerId, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new ContactsDomainException("Image file is required");
+        }
+        Partner partner = loadIncludingArchivedOrThrow(partnerId);
+        partnerRepository.findImageMeta(partnerId).ifPresent(meta -> imageStorage.deleteIfPresent(meta.imageUrl()));
+        com.jalaldeveloper.accountingsystem.contacts.service.domain.ports.output.storage.PartnerImageStoragePort.StoredImage stored;
+        try {
+            stored = imageStorage.store(
+                    partner.getCompanyId().getId(),
+                    partnerId,
+                    file.getContentType(),
+                    file.getSize(),
+                    file.getInputStream());
+        } catch (IOException ex) {
+            throw new ContactsDomainException("Failed to read uploaded image");
+        }
+        partnerRepository.updateImage(partnerId, stored.publicUrl(), stored.contentType());
+        auditLogPort.recordBusinessEvent(partner.getCompanyId(), MODEL_NAME, partnerId, "Partner image updated", null);
+        return getPartner(partnerId);
+    }
+
+    @Override
+    @Transactional
+    public PartnerResponse deletePartnerImage(UUID partnerId) {
+        Partner partner = loadIncludingArchivedOrThrow(partnerId);
+        partnerRepository.findImageMeta(partnerId).ifPresent(meta -> imageStorage.deleteIfPresent(meta.imageUrl()));
+        partnerRepository.clearImage(partnerId);
+        auditLogPort.recordBusinessEvent(partner.getCompanyId(), MODEL_NAME, partnerId, "Partner image removed", null);
+        return getPartner(partnerId);
     }
 
     @Override
@@ -145,7 +193,7 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
                     "Partner updated", changes);
             publishPartnerUpdated(saved);
         }
-        return mapper.partnerToResponse(saved);
+        return toResponse(saved);
     }
 
     @Override
@@ -153,14 +201,15 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
     public PartnerResponse archive(UUID partnerId) {
         Partner partner = loadOrThrow(partnerId);
         if (!partner.isActive()) {
-            return mapper.partnerToResponse(partner);
+            return toResponse(partner);
         }
         partner.archive(currentUserDisplay());
         Partner saved = partnerRepository.save(partner);
         auditLogPort.recordBusinessEvent(saved.getCompanyId(), MODEL_NAME, partnerId,
                 "Partner archived", null);
+        recordSystemActivity(saved.getCompanyId(), partnerId, "Contact archived");
         publishPartnerUpdated(saved);
-        return mapper.partnerToResponse(saved);
+        return toResponse(saved);
     }
 
     @Override
@@ -168,20 +217,21 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
     public PartnerResponse unarchive(UUID partnerId) {
         Partner partner = loadIncludingArchivedOrThrow(partnerId);
         if (partner.isActive()) {
-            return mapper.partnerToResponse(partner);
+            return toResponse(partner);
         }
         partner.unarchive();
         Partner saved = partnerRepository.save(partner);
         auditLogPort.recordBusinessEvent(saved.getCompanyId(), MODEL_NAME, partnerId,
                 "Partner unarchived", null);
+        recordSystemActivity(saved.getCompanyId(), partnerId, "Contact unarchived");
         publishPartnerUpdated(saved);
-        return mapper.partnerToResponse(saved);
+        return toResponse(saved);
     }
 
     @Override
     @Transactional(readOnly = true)
     public PartnerResponse getPartner(UUID partnerId) {
-        return mapper.partnerToResponse(loadIncludingArchivedOrThrow(partnerId));
+        return toResponse(loadIncludingArchivedOrThrow(partnerId));
     }
 
     @Override
@@ -197,8 +247,10 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
     public Page<PartnerResponse> search(CompanyId companyId, String query,
                                         Boolean isCustomer, Boolean isVendor,
                                         boolean includeArchived, Pageable pageable) {
-        return partnerRepository.search(companyId, query, isCustomer, isVendor, includeArchived, pageable)
+        Page<PartnerResponse> page = partnerRepository.search(companyId, query, isCustomer, isVendor, includeArchived, pageable)
                 .map(mapper::partnerToResponse);
+        enrichWithImages(page.getContent());
+        return page;
     }
 
     @Override
@@ -318,5 +370,37 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
                 partner.getId().getId(),
                 partner.isCustomer(),
                 partner.isVendor()));
+    }
+
+    private PartnerResponse toResponse(Partner partner) {
+        PartnerResponse response = mapper.partnerToResponse(partner);
+        partnerRepository.findImageMeta(partner.getId().getId()).ifPresent(meta -> applyImage(response, meta));
+        return response;
+    }
+
+    private void enrichWithImages(List<PartnerResponse> items) {
+        if (items.isEmpty()) return;
+        Map<UUID, PartnerImageMeta> meta = partnerRepository.findImageMetaByPartnerIds(
+                items.stream().map(PartnerResponse::getId).collect(Collectors.toList()));
+        for (PartnerResponse item : items) {
+            PartnerImageMeta image = meta.get(item.getId());
+            if (image != null) applyImage(item, image);
+        }
+    }
+
+    private static void applyImage(PartnerResponse response, PartnerImageMeta meta) {
+        response.setImageUrl(meta.imageUrl());
+        response.setImageContentType(meta.contentType());
+    }
+
+    private void recordSystemActivity(CompanyId companyId, UUID recordId, String message) {
+        CreateActivityCommand cmd = new CreateActivityCommand();
+        cmd.setCompanyId(companyId.getId());
+        cmd.setModelName(MODEL_NAME);
+        cmd.setRecordId(recordId);
+        cmd.setKind(ActivityKind.SYSTEM);
+        cmd.setSubject(message);
+        cmd.setBody(message);
+        activityService.create(cmd);
     }
 }

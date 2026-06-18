@@ -109,4 +109,17 @@ public class PartnerController {
     public ResponseEntity<CreditStatusResponse> creditStatus(@PathVariable UUID id) {
         return ResponseEntity.ok(service.creditStatus(id));
     }
+
+    @PostMapping(value = "/{id}/image", consumes = "multipart/form-data")
+    @RequiresPermission("contacts.partner.write")
+    public ResponseEntity<PartnerResponse> uploadImage(@PathVariable UUID id,
+                                                       @RequestPart("file") org.springframework.web.multipart.MultipartFile file) {
+        return ResponseEntity.ok(service.uploadPartnerImage(id, file));
+    }
+
+    @DeleteMapping("/{id}/image")
+    @RequiresPermission("contacts.partner.write")
+    public ResponseEntity<PartnerResponse> deleteImage(@PathVariable UUID id) {
+        return ResponseEntity.ok(service.deletePartnerImage(id));
+    }
 }

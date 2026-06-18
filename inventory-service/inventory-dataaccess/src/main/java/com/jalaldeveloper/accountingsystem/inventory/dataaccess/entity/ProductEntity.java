@@ -86,6 +86,12 @@ public class ProductEntity extends ArchivableEntity {
     @Column(name = "cogs_account_id_override")
     private UUID cogsAccountIdOverride;
 
+    @Column(name = "image_url", length = 512)
+    private String imageUrl;
+
+    @Column(name = "image_content_type", length = 100)
+    private String imageContentType;
+
     public ProductEntity() {}
 
     public UUID getId() { return id; }
@@ -126,4 +132,8 @@ public class ProductEntity extends ArchivableEntity {
     public void setStockOutputAccountIdOverride(UUID v) { this.stockOutputAccountIdOverride = v; }
     public UUID getCogsAccountIdOverride() { return cogsAccountIdOverride; }
     public void setCogsAccountIdOverride(UUID v) { this.cogsAccountIdOverride = v; }
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String v) { this.imageUrl = v; }
+    public String getImageContentType() { return imageContentType; }
+    public void setImageContentType(String v) { this.imageContentType = v; }
 }

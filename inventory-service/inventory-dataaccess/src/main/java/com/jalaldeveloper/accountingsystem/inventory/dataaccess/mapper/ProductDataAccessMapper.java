@@ -67,6 +67,10 @@ public class ProductDataAccessMapper {
         e.setActive(p.isActive());
         e.setArchivedAt(p.getArchivedAt());
         e.setArchivedBy(p.getArchivedBy());
+        if (existingOrNull != null) {
+            e.setImageUrl(existingOrNull.getImageUrl());
+            e.setImageContentType(existingOrNull.getImageContentType());
+        }
         return e;
     }
 }

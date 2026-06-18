@@ -11,12 +11,14 @@ import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.Uom
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.CreateProductCommand;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductCategoryCommand;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductCategoryResponse;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductImageMeta;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductResponse;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.UpdateProductCommand;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.mapper.InventoryDataMapper;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.ProductApplicationService;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.ProductCategoryRepository;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.ProductRepository;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.storage.ProductImageStoragePort;
 import com.jalaldeveloper.accountingsystem.platform.audit.AuditLogPort;
 import com.jalaldeveloper.accountingsystem.platform.web.CompanyContext;
 import org.springframework.beans.factory.ObjectProvider;
@@ -25,11 +27,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Validated
@@ -41,17 +46,20 @@ class ProductApplicationServiceImpl implements ProductApplicationService {
     private final ProductRepository productRepository;
     private final ProductCategoryRepository categoryRepository;
     private final InventoryDataMapper mapper;
+    private final ProductImageStoragePort imageStorage;
     private final ObjectProvider<CompanyContext> companyContextProvider;
     private final AuditLogPort auditLogPort;
 
     ProductApplicationServiceImpl(ProductRepository productRepository,
                                   ProductCategoryRepository categoryRepository,
                                   InventoryDataMapper mapper,
+                                  ProductImageStoragePort imageStorage,
                                   ObjectProvider<CompanyContext> companyContextProvider,
                                   AuditLogPort auditLogPort) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.mapper = mapper;
+        this.imageStorage = imageStorage;
         this.companyContextProvider = companyContextProvider;
         this.auditLogPort = auditLogPort;
     }
@@ -66,7 +74,41 @@ class ProductApplicationServiceImpl implements ProductApplicationService {
         Product saved = productRepository.save(product);
         auditLogPort.recordBusinessEvent(companyId, MODEL_NAME, id,
                 "Product created: " + saved.getSku(), null);
-        return mapper.productToResponse(saved);
+        return toResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public ProductResponse uploadProductImage(UUID productId, MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new InventoryDomainException("Image file is required");
+        }
+        Product p = loadIncludingArchivedOrThrow(productId);
+        productRepository.findImageMeta(productId).ifPresent(meta -> imageStorage.deleteIfPresent(meta.imageUrl()));
+        ProductImageStoragePort.StoredImage stored;
+        try {
+            stored = imageStorage.store(
+                    p.getCompanyId().getId(),
+                    productId,
+                    file.getContentType(),
+                    file.getSize(),
+                    file.getInputStream());
+        } catch (IOException ex) {
+            throw new InventoryDomainException("Failed to read uploaded image");
+        }
+        productRepository.updateImage(productId, stored.publicUrl(), stored.contentType());
+        auditLogPort.recordBusinessEvent(p.getCompanyId(), MODEL_NAME, productId, "Product image updated", null);
+        return getProduct(productId);
+    }
+
+    @Override
+    @Transactional
+    public ProductResponse deleteProductImage(UUID productId) {
+        Product p = loadIncludingArchivedOrThrow(productId);
+        productRepository.findImageMeta(productId).ifPresent(meta -> imageStorage.deleteIfPresent(meta.imageUrl()));
+        productRepository.clearImage(productId);
+        auditLogPort.recordBusinessEvent(p.getCompanyId(), MODEL_NAME, productId, "Product image removed", null);
+        return getProduct(productId);
     }
 
     @Override
@@ -110,43 +152,46 @@ class ProductApplicationServiceImpl implements ProductApplicationService {
             auditLogPort.recordBusinessEvent(saved.getCompanyId(), MODEL_NAME, productId,
                     "Product updated", changes);
         }
-        return mapper.productToResponse(saved);
+        return toResponse(saved);
     }
 
     @Override
     @Transactional
     public ProductResponse archiveProduct(UUID productId) {
         Product p = loadOrThrow(productId);
-        if (!p.isActive()) return mapper.productToResponse(p);
+        if (!p.isActive()) return toResponse(p);
         p.archive(currentUserDisplay());
         Product saved = productRepository.save(p);
         auditLogPort.recordBusinessEvent(saved.getCompanyId(), MODEL_NAME, productId,
                 "Product archived", null);
-        return mapper.productToResponse(saved);
+        return toResponse(saved);
     }
 
     @Override
     @Transactional
     public ProductResponse unarchiveProduct(UUID productId) {
         Product p = loadIncludingArchivedOrThrow(productId);
-        if (p.isActive()) return mapper.productToResponse(p);
+        if (p.isActive()) return toResponse(p);
         p.unarchive();
         Product saved = productRepository.save(p);
         auditLogPort.recordBusinessEvent(saved.getCompanyId(), MODEL_NAME, productId,
                 "Product unarchived", null);
-        return mapper.productToResponse(saved);
+        return toResponse(saved);
     }
 
     @Override
     @Transactional(readOnly = true)
     public ProductResponse getProduct(UUID productId) {
-        return mapper.productToResponse(loadIncludingArchivedOrThrow(productId));
+        return toResponse(loadIncludingArchivedOrThrow(productId));
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<ProductResponse> searchProducts(CompanyId companyId, String query, boolean includeArchived, Pageable pageable) {
-        return productRepository.search(companyId, query, includeArchived, pageable).map(mapper::productToResponse);
+        Page<ProductResponse> page = productRepository.search(companyId, query, includeArchived, pageable)
+                .map(mapper::productToResponse);
+        enrichWithImages(page.getContent());
+        return page;
     }
 
     @Override
@@ -206,5 +251,26 @@ class ProductApplicationServiceImpl implements ProductApplicationService {
     private String currentUserDisplay() {
         CompanyContext ctx = companyContextProvider.getIfAvailable();
         return ctx == null ? "system" : ctx.currentUserDisplay();
+    }
+
+    private ProductResponse toResponse(Product product) {
+        ProductResponse response = mapper.productToResponse(product);
+        productRepository.findImageMeta(product.getId().getId()).ifPresent(meta -> applyImage(response, meta));
+        return response;
+    }
+
+    private void enrichWithImages(List<ProductResponse> items) {
+        if (items.isEmpty()) return;
+        Map<UUID, ProductImageMeta> meta = productRepository.findImageMetaByProductIds(
+                items.stream().map(ProductResponse::getId).collect(Collectors.toList()));
+        for (ProductResponse item : items) {
+            ProductImageMeta image = meta.get(item.getId());
+            if (image != null) applyImage(item, image);
+        }
+    }
+
+    private static void applyImage(ProductResponse response, ProductImageMeta meta) {
+        response.setImageUrl(meta.imageUrl());
+        response.setImageContentType(meta.contentType());
     }
 }

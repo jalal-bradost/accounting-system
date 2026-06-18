@@ -106,6 +106,10 @@ public class PartnerDataAccessMapper {
         entity.setWebsite(domain.getWebsite());
         entity.setLanguage(domain.getLanguage());
         entity.setCurrencyCode(domain.getCurrency() != null ? domain.getCurrency().code() : null);
+        if (existingOrNull != null) {
+            entity.setImageUrl(existingOrNull.getImageUrl());
+            entity.setImageContentType(existingOrNull.getImageContentType());
+        }
         entity.setActive(domain.isActive());
         entity.setArchivedAt(domain.getArchivedAt());
         entity.setArchivedBy(domain.getArchivedBy());

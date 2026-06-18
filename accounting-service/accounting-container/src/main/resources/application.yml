@@ -12,6 +12,15 @@ app:
       strict: true
       deny-permission-codes: []
       grant-all-user-ids: []
+  storage:
+    product-images:
+      location: ./data/product-images
+      public-base-path: /media/product-images
+      max-bytes: 5242880
+    partner-images:
+      location: ./data/partner-images
+      public-base-path: /media/partner-images
+      max-bytes: 5242880
   messaging:
     exchange: accounting.system.events
 

@@ -30,6 +30,8 @@ public class ProductResponse {
     private UUID cogsAccountIdOverride;
     private boolean active;
     private Instant archivedAt;
+    private String imageUrl;
+    private String imageContentType;
 
     public UUID getId() { return id; }
     public void setId(UUID v) { this.id = v; }
@@ -73,4 +75,8 @@ public class ProductResponse {
     public void setActive(boolean v) { this.active = v; }
     public Instant getArchivedAt() { return archivedAt; }
     public void setArchivedAt(Instant v) { this.archivedAt = v; }
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String v) { this.imageUrl = v; }
+    public String getImageContentType() { return imageContentType; }
+    public void setImageContentType(String v) { this.imageContentType = v; }
 }

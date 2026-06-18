@@ -81,6 +81,12 @@ public class PartnerEntity extends ArchivableEntity {
     @Column(name = "currency_code", length = 3)
     private String currencyCode;
 
+    @Column(name = "image_url", length = 512)
+    private String imageUrl;
+
+    @Column(name = "image_content_type", length = 100)
+    private String imageContentType;
+
     @OneToMany(mappedBy = "partner", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<PartnerAddressEntity> addresses = new ArrayList<>();
 
@@ -125,6 +131,10 @@ public class PartnerEntity extends ArchivableEntity {
     public void setLanguage(String language) { this.language = language; }
     public String getCurrencyCode() { return currencyCode; }
     public void setCurrencyCode(String currencyCode) { this.currencyCode = currencyCode; }
+    public String getImageUrl() { return imageUrl; }
+    public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+    public String getImageContentType() { return imageContentType; }
+    public void setImageContentType(String imageContentType) { this.imageContentType = imageContentType; }
     public List<PartnerAddressEntity> getAddresses() { return addresses; }
     public void setAddresses(List<PartnerAddressEntity> addresses) { this.addresses = addresses != null ? addresses : new ArrayList<>(); }
     public List<PartnerBankAccountEntity> getBankAccounts() { return bankAccounts; }

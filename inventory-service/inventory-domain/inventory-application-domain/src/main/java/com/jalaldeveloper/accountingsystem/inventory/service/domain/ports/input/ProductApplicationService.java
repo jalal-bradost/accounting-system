@@ -9,6 +9,7 @@ import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.UpdatePr
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
@@ -18,6 +19,10 @@ public interface ProductApplicationService {
     ProductResponse createProduct(@Valid CreateProductCommand command);
 
     ProductResponse updateProduct(UUID productId, @Valid UpdateProductCommand command);
+
+    ProductResponse uploadProductImage(UUID productId, MultipartFile file);
+
+    ProductResponse deleteProductImage(UUID productId);
 
     ProductResponse archiveProduct(UUID productId);
 

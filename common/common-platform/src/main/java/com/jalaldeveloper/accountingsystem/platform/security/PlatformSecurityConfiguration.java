@@ -66,6 +66,8 @@ public class PlatformSecurityConfiguration {
         http.authorizeHttpRequests(a -> a
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/api/v1/auth/login", "/api/v1/auth/security-config", "/api/v1/auth/me").permitAll()
+                .requestMatchers("/media/product-images/**").permitAll()
+                .requestMatchers("/media/partner-images/**").permitAll()
                 .requestMatchers("/h2-console", "/h2-console/**").permitAll()
                 .requestMatchers("/api/**").authenticated());
         http.exceptionHandling(e -> e

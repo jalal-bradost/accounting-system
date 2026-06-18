@@ -57,6 +57,19 @@ public class ProductController {
         return ResponseEntity.ok(service.unarchiveProduct(id));
     }
 
+    @PostMapping(value = "/{id}/image", consumes = "multipart/form-data")
+    @RequiresPermission("inventory.product.write")
+    public ResponseEntity<ProductResponse> uploadImage(@PathVariable UUID id,
+                                                       @RequestPart("file") org.springframework.web.multipart.MultipartFile file) {
+        return ResponseEntity.ok(service.uploadProductImage(id, file));
+    }
+
+    @DeleteMapping("/{id}/image")
+    @RequiresPermission("inventory.product.write")
+    public ResponseEntity<ProductResponse> deleteImage(@PathVariable UUID id) {
+        return ResponseEntity.ok(service.deleteProductImage(id));
+    }
+
     @GetMapping
     @RequiresPermission("inventory.product.read")
     public ResponseEntity<PageResponse<ProductResponse>> list(@CurrentCompany CompanyId companyId,
