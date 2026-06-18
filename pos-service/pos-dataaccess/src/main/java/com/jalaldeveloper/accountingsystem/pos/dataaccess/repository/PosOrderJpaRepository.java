@@ -14,10 +14,23 @@ public interface PosOrderJpaRepository extends JpaRepository<PosOrderEntity, UUI
     @Query("""
             select distinct o from PosOrderEntity o
             left join fetch o.lines
+            where o.id = :id
+            """)
+    Optional<PosOrderEntity> findByIdWithLines(@Param("id") UUID id);
+
+    @Query("""
+            select distinct o from PosOrderEntity o
             left join fetch o.payments
             where o.id = :id
             """)
-    Optional<PosOrderEntity> findByIdWithLinesAndPayments(@Param("id") UUID id);
+    Optional<PosOrderEntity> findByIdWithPayments(@Param("id") UUID id);
+
+    default Optional<PosOrderEntity> findByIdWithLinesAndPayments(UUID id) {
+        return findByIdWithLines(id).map(order -> {
+            findByIdWithPayments(id).ifPresent(withPayments -> order.setPayments(withPayments.getPayments()));
+            return order;
+        });
+    }
 
     long countByCompanyId(UUID companyId);
 
