@@ -2,7 +2,6 @@ package com.jalaldeveloper.accountingsystem.platform.dataaccess.entity;
 
 import com.jalaldeveloper.accountingsystem.platform.audit.AuditAction;
 import jakarta.persistence.*;
-
 import java.time.Instant;
 import java.util.UUID;
 
@@ -32,8 +31,7 @@ public class AuditLogEntity {
     @Column(name = "record_id")
     private UUID recordId;
 
-    @Lob
-    @Column(name = "changes", columnDefinition = "CLOB")
+    @Column(name = "changes", columnDefinition = "TEXT")
     private String changesJson;
 
     @Column(length = 1000)

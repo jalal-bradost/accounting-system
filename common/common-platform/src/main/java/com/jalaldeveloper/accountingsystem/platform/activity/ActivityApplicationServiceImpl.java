@@ -1,7 +1,6 @@
 package com.jalaldeveloper.accountingsystem.platform.activity;
 
-import com.jalaldeveloper.accountingsystem.platform.dataaccess.entity.ActivityMessageEntity;
-import com.jalaldeveloper.accountingsystem.platform.dataaccess.repository.ActivityMessageJpaRepository;
+import com.jalaldeveloper.accountingsystem.platform.activity.ports.ActivityMessageRepository;
 import com.jalaldeveloper.accountingsystem.platform.web.CompanyContext;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
@@ -17,10 +16,10 @@ import java.util.UUID;
 @Validated
 class ActivityApplicationServiceImpl implements ActivityApplicationService {
 
-    private final ActivityMessageJpaRepository repository;
+    private final ActivityMessageRepository repository;
     private final ObjectProvider<CompanyContext> companyContextProvider;
 
-    ActivityApplicationServiceImpl(ActivityMessageJpaRepository repository,
+    ActivityApplicationServiceImpl(ActivityMessageRepository repository,
                                    ObjectProvider<CompanyContext> companyContextProvider) {
         this.repository = repository;
         this.companyContextProvider = companyContextProvider;
@@ -35,33 +34,34 @@ class ActivityApplicationServiceImpl implements ActivityApplicationService {
         if (companyId == null) {
             throw new IllegalArgumentException("companyId required (header X-Company-Id, query param, or body)");
         }
-        ActivityMessageEntity entity = new ActivityMessageEntity();
-        entity.setId(UUID.randomUUID());
-        entity.setCompanyId(companyId);
-        entity.setModelName(command.getModelName());
-        entity.setRecordId(command.getRecordId());
-        entity.setKind(command.getKind());
-        entity.setSubject(command.getSubject());
-        entity.setBody(command.getBody());
-        entity.setAuthorId(currentUser());
-        entity.setAssigneeId(command.getAssigneeId());
-        entity.setDueDate(command.getDueDate());
-        entity.setCreatedAt(Instant.now());
-        return toResponse(repository.save(entity));
+        ActivityMessage message = new ActivityMessage();
+        message.setId(UUID.randomUUID());
+        message.setCompanyId(companyId);
+        message.setModelName(command.getModelName());
+        message.setRecordId(command.getRecordId());
+        message.setKind(command.getKind());
+        message.setSubject(command.getSubject());
+        message.setBody(command.getBody());
+        message.setAuthorId(currentUser());
+        message.setAssigneeId(command.getAssigneeId());
+        message.setDueDate(command.getDueDate());
+        message.setCreatedAt(Instant.now());
+        return toResponse(repository.save(message));
     }
 
     @Override
     @Transactional
     public ActivityResponse complete(UUID activityId) {
-        ActivityMessageEntity entity = repository.findById(activityId)
+        ActivityMessage message = repository.findById(activityId)
                 .orElseThrow(() -> new IllegalArgumentException("Activity not found: " + activityId));
-        if (entity.getKind() != ActivityKind.ACTIVITY_TODO) {
+        if (message.getKind() != ActivityKind.ACTIVITY_TODO) {
             throw new IllegalArgumentException("Only ACTIVITY_TODO entries can be completed");
         }
-        if (entity.getCompletedAt() == null) {
-            entity.setCompletedAt(Instant.now());
+        if (message.getCompletedAt() == null) {
+            message.setCompletedAt(Instant.now());
+            message = repository.save(message);
         }
-        return toResponse(entity);
+        return toResponse(message);
     }
 
     @Override
@@ -86,7 +86,7 @@ class ActivityApplicationServiceImpl implements ActivityApplicationService {
                 companyId, assigneeId, pageable).map(this::toResponse);
     }
 
-    private ActivityResponse toResponse(ActivityMessageEntity e) {
+    private ActivityResponse toResponse(ActivityMessage e) {
         return new ActivityResponse(
                 e.getId(), e.getCompanyId(), e.getModelName(), e.getRecordId(),
                 e.getKind(), e.getSubject(), e.getBody(),
