@@ -1,4 +1,4 @@
-package com.jalaldeveloper.accountingsystem.pos.dataaccess.service;
+package com.jalaldeveloper.accountingsystem.pos.service.domain;
 
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CustomerInvoiceResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.RegisterCustomerPaymentCommand;
@@ -12,16 +12,16 @@ import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductType;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.StockPickingApplicationService;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.StockValuationApplicationService;
-import com.jalaldeveloper.accountingsystem.pos.dataaccess.entity.PosConfigEntity;
-import com.jalaldeveloper.accountingsystem.pos.dataaccess.entity.PosOrderEntity;
-import com.jalaldeveloper.accountingsystem.pos.dataaccess.entity.PosOrderLineEntity;
-import com.jalaldeveloper.accountingsystem.pos.dataaccess.entity.PosPaymentEntity;
-import com.jalaldeveloper.accountingsystem.pos.dataaccess.entity.PosReceiptEntity;
-import com.jalaldeveloper.accountingsystem.pos.dataaccess.entity.PosSessionEntity;
-import com.jalaldeveloper.accountingsystem.pos.dataaccess.repository.PosConfigJpaRepository;
-import com.jalaldeveloper.accountingsystem.pos.dataaccess.repository.PosOrderJpaRepository;
-import com.jalaldeveloper.accountingsystem.pos.dataaccess.repository.PosReceiptJpaRepository;
-import com.jalaldeveloper.accountingsystem.pos.dataaccess.repository.PosSessionJpaRepository;
+import com.jalaldeveloper.accountingsystem.pos.domain.core.entity.PosConfig;
+import com.jalaldeveloper.accountingsystem.pos.domain.core.entity.PosOrder;
+import com.jalaldeveloper.accountingsystem.pos.domain.core.entity.PosOrderLine;
+import com.jalaldeveloper.accountingsystem.pos.domain.core.entity.PosPayment;
+import com.jalaldeveloper.accountingsystem.pos.domain.core.entity.PosReceipt;
+import com.jalaldeveloper.accountingsystem.pos.domain.core.entity.PosSession;
+import com.jalaldeveloper.accountingsystem.pos.service.domain.ports.output.repository.PosConfigRepository;
+import com.jalaldeveloper.accountingsystem.pos.service.domain.ports.output.repository.PosOrderRepository;
+import com.jalaldeveloper.accountingsystem.pos.service.domain.ports.output.repository.PosReceiptRepository;
+import com.jalaldeveloper.accountingsystem.pos.service.domain.ports.output.repository.PosSessionRepository;
 import com.jalaldeveloper.accountingsystem.pos.domain.core.PosDomainException;
 import com.jalaldeveloper.accountingsystem.pos.domain.core.PosOrderState;
 import com.jalaldeveloper.accountingsystem.pos.domain.core.PosPaymentMethod;
@@ -71,20 +71,20 @@ import java.util.UUID;
 public class PosApplicationServiceImpl implements PosApplicationService {
     private static final BigDecimal HUNDRED = new BigDecimal("100");
 
-    private final PosConfigJpaRepository configRepository;
-    private final PosSessionJpaRepository sessionRepository;
-    private final PosOrderJpaRepository orderRepository;
-    private final PosReceiptJpaRepository receiptRepository;
+    private final PosConfigRepository configRepository;
+    private final PosSessionRepository sessionRepository;
+    private final PosOrderRepository orderRepository;
+    private final PosReceiptRepository receiptRepository;
     private final ProductApplicationService productApplicationService;
     private final SalesApplicationService salesApplicationService;
     private final StockPickingApplicationService stockPickingApplicationService;
     private final StockValuationApplicationService stockValuationApplicationService;
     private final CustomerInvoiceApplicationService customerInvoiceApplicationService;
 
-    public PosApplicationServiceImpl(PosConfigJpaRepository configRepository,
-                                     PosSessionJpaRepository sessionRepository,
-                                     PosOrderJpaRepository orderRepository,
-                                     PosReceiptJpaRepository receiptRepository,
+    public PosApplicationServiceImpl(PosConfigRepository configRepository,
+                                     PosSessionRepository sessionRepository,
+                                     PosOrderRepository orderRepository,
+                                     PosReceiptRepository receiptRepository,
                                      ProductApplicationService productApplicationService,
                                      SalesApplicationService salesApplicationService,
                                      StockPickingApplicationService stockPickingApplicationService,
@@ -109,7 +109,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
                     throw new PosDomainException("POS config already exists: " + existing.getName());
                 });
         Instant now = Instant.now();
-        PosConfigEntity entity = new PosConfigEntity();
+        PosConfig entity = new PosConfig();
         entity.setId(UUID.randomUUID());
         entity.setCompanyId(command.getCompanyId());
         entity.setName(command.getName());
@@ -150,7 +150,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     @Override
     @Transactional(readOnly = true)
     public PosSessionResponse getOpenSessionForConfig(CompanyId companyId, UUID configId) {
-        PosConfigEntity config = loadConfig(configId);
+        PosConfig config = loadConfig(configId);
         ensureCompany(config.getCompanyId(), companyId.getId());
         return sessionRepository.findFirstByConfigIdAndStateOrderByOpenedAtDesc(configId, PosSessionState.OPEN)
                 .map(this::toSessionResponse)
@@ -160,13 +160,13 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     @Override
     @Transactional
     public PosSessionResponse openSession(OpenPosSessionCommand command) {
-        PosConfigEntity config = loadConfig(command.getConfigId());
+        PosConfig config = loadConfig(command.getConfigId());
         ensureCompany(config.getCompanyId(), command.getCompanyId());
         sessionRepository.findFirstByConfigIdAndStateOrderByOpenedAtDesc(config.getId(), PosSessionState.OPEN)
                 .ifPresent(open -> {
                     throw new PosDomainException("POS config already has an open session");
                 });
-        PosSessionEntity session = new PosSessionEntity();
+        PosSession session = new PosSession();
         session.setId(UUID.randomUUID());
         session.setCompanyId(config.getCompanyId());
         session.setConfigId(config.getId());
@@ -185,7 +185,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     @Override
     @Transactional
     public PosSessionResponse closeSession(UUID sessionId, ClosePosSessionCommand command) {
-        PosSessionEntity session = loadSession(sessionId);
+        PosSession session = loadSession(sessionId);
         PosRules.ensureSessionOpen(session.getState());
         session.setState(PosSessionState.CLOSED);
         session.setClosingCash(command.getClosingCash());
@@ -197,7 +197,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     @Transactional(readOnly = true)
     public Page<PosCatalogItemResponse> searchCatalog(CompanyId companyId, UUID sessionId, String query, UUID categoryId,
                                                       Pageable pageable) {
-        PosSessionEntity session = loadSession(sessionId);
+        PosSession session = loadSession(sessionId);
         ensureCompany(session.getCompanyId(), companyId.getId());
         PosRules.ensureSessionOpen(session.getState());
         Map<UUID, String> categoryNames = categoryNameMap(companyId);
@@ -213,11 +213,11 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     @Override
     @Transactional
     public PosOrderResponse createOrder(CreatePosOrderCommand command) {
-        PosSessionEntity session = loadSession(command.getSessionId());
+        PosSession session = loadSession(command.getSessionId());
         ensureCompany(session.getCompanyId(), command.getCompanyId());
         PosRules.ensureSessionOpen(session.getState());
         Instant now = Instant.now();
-        PosOrderEntity order = new PosOrderEntity();
+        PosOrder order = new PosOrder();
         order.setId(UUID.randomUUID());
         order.setCompanyId(session.getCompanyId());
         order.setSessionId(session.getId());
@@ -246,9 +246,9 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     @Override
     @Transactional
     public PosOrderResponse addOrderLine(UUID orderId, PosOrderLineCommand command) {
-        PosOrderEntity order = loadOrder(orderId);
+        PosOrder order = loadOrder(orderId);
         PosRules.ensureOrderDraft(order.getState());
-        int nextSequence = order.getLines().stream().map(PosOrderLineEntity::getSequence).max(Integer::compareTo).orElse(0) + 10;
+        int nextSequence = order.getLines().stream().map(PosOrderLine::getSequence).max(Integer::compareTo).orElse(0) + 10;
         order.getLines().add(toLineEntity(order, command, nextSequence));
         order.setUpdatedAt(Instant.now());
         recalc(order);
@@ -258,9 +258,9 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     @Override
     @Transactional
     public PosOrderResponse updateOrderLine(UUID orderId, UUID lineId, UpdatePosOrderLineCommand command) {
-        PosOrderEntity order = loadOrder(orderId);
+        PosOrder order = loadOrder(orderId);
         PosRules.ensureOrderDraft(order.getState());
-        PosOrderLineEntity line = order.getLines().stream()
+        PosOrderLine line = order.getLines().stream()
                 .filter(l -> l.getId().equals(lineId))
                 .findFirst()
                 .orElseThrow(() -> new PosDomainException("POS order line not found: " + lineId));
@@ -285,11 +285,11 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     @Override
     @Transactional
     public PosOrderResponse registerPayment(UUID orderId, RegisterPosPaymentCommand command) {
-        PosOrderEntity order = loadOrder(orderId);
+        PosOrder order = loadOrder(orderId);
         PosRules.ensureOrderDraft(order.getState());
-        PosSessionEntity session = loadSession(order.getSessionId());
+        PosSession session = loadSession(order.getSessionId());
         UUID journalId = resolveJournalId(session, command);
-        PosPaymentEntity payment = new PosPaymentEntity();
+        PosPayment payment = new PosPayment();
         payment.setId(UUID.randomUUID());
         payment.setOrder(order);
         payment.setMethod(command.getMethod());
@@ -309,8 +309,8 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     @Override
     @Transactional
     public PosOrderResponse finalizeOrder(UUID orderId) {
-        PosOrderEntity order = loadOrder(orderId);
-        PosSessionEntity session = loadSession(order.getSessionId());
+        PosOrder order = loadOrder(orderId);
+        PosSession session = loadSession(order.getSessionId());
         PosRules.ensureSessionOpen(session.getState());
         PosRules.ensureCanFinalize(order.getState(), order.getAmountTotal(), order.getAmountPaid());
 
@@ -323,7 +323,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         order.setState(PosOrderState.FINALIZED);
         order.setFinalizedAt(Instant.now());
         order.setUpdatedAt(Instant.now());
-        PosReceiptEntity receipt = createReceipt(order);
+        PosReceipt receipt = createReceipt(order);
         order.setReceiptId(receipt.getId());
         return toOrderResponse(orderRepository.save(order));
     }
@@ -359,7 +359,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
                 .orElseThrow(() -> new PosDomainException("POS receipt not found: " + receiptId)));
     }
 
-    private SalesOrderResponse createAndDeliverSalesOrder(PosOrderEntity order, PosSessionEntity session) {
+    private SalesOrderResponse createAndDeliverSalesOrder(PosOrder order, PosSession session) {
         CreateSalesOrderCommand command = new CreateSalesOrderCommand();
         command.setCompanyId(order.getCompanyId());
         command.setCustomerPartnerId(order.getCustomerPartnerId());
@@ -369,7 +369,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         command.setOrderDate(LocalDate.now());
         command.setNotes("POS " + order.getName());
         List<SalesOrderLineCommand> salesLines = new ArrayList<>();
-        for (PosOrderLineEntity line : order.getLines()) {
+        for (PosOrderLine line : order.getLines()) {
             SalesOrderLineCommand salesLine = new SalesOrderLineCommand();
             salesLine.setProductId(line.getProductId());
             salesLine.setName(line.getName());
@@ -395,7 +395,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         return salesApplicationService.getSalesOrder(created.getId());
     }
 
-    private CustomerInvoiceResponse createAndPostInvoice(PosOrderEntity order, SalesOrderResponse salesOrder) {
+    private CustomerInvoiceResponse createAndPostInvoice(PosOrder order, SalesOrderResponse salesOrder) {
         CreateCustomerInvoiceFromSalesOrderCommand command = new CreateCustomerInvoiceFromSalesOrderCommand();
         command.setCompanyId(order.getCompanyId());
         command.setSalesOrderId(salesOrder.getId());
@@ -406,9 +406,9 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         return customerInvoiceApplicationService.postCustomerInvoice(draftInvoice.getId());
     }
 
-    private void registerAccountingPayments(PosOrderEntity order, CustomerInvoiceResponse invoice) {
+    private void registerAccountingPayments(PosOrder order, CustomerInvoiceResponse invoice) {
         BigDecimal remaining = order.getAmountTotal();
-        for (PosPaymentEntity payment : order.getPayments().stream().sorted(Comparator.comparing(PosPaymentEntity::getPaidAt)).toList()) {
+        for (PosPayment payment : order.getPayments().stream().sorted(Comparator.comparing(PosPayment::getPaidAt)).toList()) {
             if (payment.getMethod() == PosPaymentMethod.CUSTOMER_ACCOUNT) {
                 continue;
             }
@@ -429,8 +429,8 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         }
     }
 
-    private PosReceiptEntity createReceipt(PosOrderEntity order) {
-        PosReceiptEntity receipt = new PosReceiptEntity();
+    private PosReceipt createReceipt(PosOrder order) {
+        PosReceipt receipt = new PosReceipt();
         receipt.setId(UUID.randomUUID());
         receipt.setCompanyId(order.getCompanyId());
         receipt.setOrderId(order.getId());
@@ -440,12 +440,12 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         return receiptRepository.save(receipt);
     }
 
-    private PosOrderLineEntity toLineEntity(PosOrderEntity order, PosOrderLineCommand command, int sequence) {
+    private PosOrderLine toLineEntity(PosOrder order, PosOrderLineCommand command, int sequence) {
         ProductResponse product = productApplicationService.getProduct(command.getProductId());
         if (!product.isSaleOk()) {
             throw new PosDomainException("Product is not saleable: " + product.getName());
         }
-        PosOrderLineEntity line = new PosOrderLineEntity();
+        PosOrderLine line = new PosOrderLine();
         line.setId(UUID.randomUUID());
         line.setOrder(order);
         line.setSequence(sequence);
@@ -461,15 +461,15 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         return line;
     }
 
-    private void recalc(PosOrderEntity order) {
+    private void recalc(PosOrder order) {
         BigDecimal untaxed = BigDecimal.ZERO;
         BigDecimal tax = BigDecimal.ZERO;
-        for (PosOrderLineEntity line : order.getLines()) {
+        for (PosOrderLine line : order.getLines()) {
             untaxed = untaxed.add(line.getSubtotal());
             tax = tax.add(line.getTaxAmount());
         }
         BigDecimal paid = order.getPayments().stream()
-                .map(PosPaymentEntity::getAmount)
+                .map(PosPayment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         order.setAmountUntaxed(scale(untaxed));
         order.setAmountTax(scale(tax));
@@ -477,7 +477,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         order.setAmountPaid(scale(paid));
     }
 
-    private void recalcLine(PosOrderLineEntity line) {
+    private void recalcLine(PosOrderLine line) {
         BigDecimal discountMultiplier = BigDecimal.ONE.subtract(defaultZero(line.getDiscountPercent())
                 .divide(HUNDRED, 8, RoundingMode.HALF_UP));
         BigDecimal subtotal = line.getQuantity().multiply(line.getUnitPrice()).multiply(discountMultiplier);
@@ -486,7 +486,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         line.setTotal(line.getSubtotal().add(line.getTaxAmount()));
     }
 
-    private UUID resolveJournalId(PosSessionEntity session, RegisterPosPaymentCommand command) {
+    private UUID resolveJournalId(PosSession session, RegisterPosPaymentCommand command) {
         if (command.getJournalId() != null) {
             return command.getJournalId();
         }
@@ -502,17 +502,17 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         throw new PosDomainException("A bank/card journal is required for this POS payment");
     }
 
-    private PosConfigEntity loadConfig(UUID id) {
+    private PosConfig loadConfig(UUID id) {
         return configRepository.findById(id)
                 .orElseThrow(() -> new PosDomainException("POS config not found: " + id));
     }
 
-    private PosSessionEntity loadSession(UUID id) {
+    private PosSession loadSession(UUID id) {
         return sessionRepository.findById(id)
                 .orElseThrow(() -> new PosDomainException("POS session not found: " + id));
     }
 
-    private PosOrderEntity loadOrder(UUID id) {
+    private PosOrder loadOrder(UUID id) {
         return orderRepository.findById(id)
                 .orElseThrow(() -> new PosDomainException("POS order not found: " + id));
     }
@@ -539,7 +539,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         return defaultZero(value).setScale(4, RoundingMode.HALF_UP);
     }
 
-    private PosConfigResponse toConfigResponse(PosConfigEntity entity) {
+    private PosConfigResponse toConfigResponse(PosConfig entity) {
         PosConfigResponse response = new PosConfigResponse();
         response.setId(entity.getId());
         response.setCompanyId(entity.getCompanyId());
@@ -554,7 +554,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         return response;
     }
 
-    private PosSessionResponse toSessionResponse(PosSessionEntity entity) {
+    private PosSessionResponse toSessionResponse(PosSession entity) {
         PosSessionResponse response = new PosSessionResponse();
         response.setId(entity.getId());
         response.setCompanyId(entity.getCompanyId());
@@ -585,7 +585,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         return map;
     }
 
-    private PosConfigCardResponse toConfigCardResponse(PosConfigEntity config) {
+    private PosConfigCardResponse toConfigCardResponse(PosConfig config) {
         PosConfigCardResponse card = new PosConfigCardResponse();
         card.setId(config.getId());
         card.setName(config.getName());
@@ -637,7 +637,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         return response;
     }
 
-    private PosOrderResponse toOrderResponse(PosOrderEntity entity) {
+    private PosOrderResponse toOrderResponse(PosOrder entity) {
         PosOrderResponse response = new PosOrderResponse();
         response.setId(entity.getId());
         response.setCompanyId(entity.getCompanyId());
@@ -661,7 +661,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         return response;
     }
 
-    private PosOrderLineResponse toLineResponse(PosOrderLineEntity entity) {
+    private PosOrderLineResponse toLineResponse(PosOrderLine entity) {
         PosOrderLineResponse response = new PosOrderLineResponse();
         response.setId(entity.getId());
         response.setProductId(entity.getProductId());
@@ -677,7 +677,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         return response;
     }
 
-    private PosPaymentResponse toPaymentResponse(PosPaymentEntity entity) {
+    private PosPaymentResponse toPaymentResponse(PosPayment entity) {
         PosPaymentResponse response = new PosPaymentResponse();
         response.setId(entity.getId());
         response.setMethod(entity.getMethod());
@@ -688,7 +688,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         return response;
     }
 
-    private PosReceiptResponse toReceiptResponse(PosReceiptEntity entity) {
+    private PosReceiptResponse toReceiptResponse(PosReceipt entity) {
         PosReceiptResponse response = new PosReceiptResponse();
         response.setId(entity.getId());
         response.setCompanyId(entity.getCompanyId());
@@ -699,7 +699,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         return response;
     }
 
-    private String receiptJson(PosOrderEntity order) {
+    private String receiptJson(PosOrder order) {
         return """
                 {"orderId":"%s","name":"%s","currencyCode":"%s","amountTotal":%s,"amountPaid":%s,"salesOrderId":"%s","customerInvoiceId":"%s"}
                 """.formatted(order.getId(), escape(order.getName()), order.getCurrencyCode(), order.getAmountTotal(), order.getAmountPaid(),

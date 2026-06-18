@@ -31,17 +31,5 @@
             <groupId>com.jalaldeveloper.accountingsystem</groupId>
             <artifactId>common-platform</artifactId>
         </dependency>
-        <dependency>
-            <groupId>com.jalaldeveloper.accountingsystem</groupId>
-            <artifactId>inventory-application-service</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.jalaldeveloper.accountingsystem</groupId>
-            <artifactId>sales-application-service</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.jalaldeveloper.accountingsystem</groupId>
-            <artifactId>accounting-application-service</artifactId>
-        </dependency>
     </dependencies>
 </project>
