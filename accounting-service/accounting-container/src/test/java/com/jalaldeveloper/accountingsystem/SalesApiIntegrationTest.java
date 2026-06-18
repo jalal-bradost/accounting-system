@@ -154,6 +154,162 @@ class SalesApiIntegrationTest {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void duplicate_draft_customer_invoice_from_same_so_is_rejected() throws Exception {
+        UUID stockLoc = lookupLocationByCode("WH/STOCK");
+        UUID supplier = lookupLocationByCode("VIRT/SUPPLIERS");
+        UUID warehouse = lookupWarehouseByCode("WH");
+        UUID categoryId = lookupCategoryByName("All");
+        UUID uomId = lookupUomByName("Unit");
+        UUID vatAcc = accountIdByCode("430011");
+        UUID taxId = createFiscalSaleTax("S-DUP-" + UUID.randomUUID().toString().substring(0, 6), vatAcc);
+        UUID productId = createProduct("SO-DUP-" + UUID.randomUUID().toString().substring(0, 6),
+                "Duplicate invoice test", categoryId, uomId, "10.00", "100.00");
+
+        UUID receipt = createPicking(warehouse, "INCOMING", supplier, stockLoc, productId, uomId, "5", "10.00");
+        validatePicking(receipt);
+
+        UUID arAccountId = accountIdByCode("430003");
+        UUID custId = createCustomer(arAccountId);
+
+        String soBody = "{\"customerPartnerId\":\"" + custId + "\",\"currencyCode\":\"USD\",\"warehouseId\":\"" + warehouse
+                + "\",\"lines\":[{\"productId\":\"" + productId + "\",\"name\":\"Line\",\"uomId\":\"" + uomId
+                + "\",\"qtyOrdered\":2,\"unitPrice\":50,\"discountPercent\":0,\"taxIds\":[\"" + taxId + "\"]}]}";
+        JsonNode so = json.readTree(mockMvc.perform(post("/api/v1/sales/orders")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(soBody))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID soId = UUID.fromString(so.get("id").asText());
+
+        mockMvc.perform(post("/api/v1/sales/orders/" + soId + "/confirm")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk());
+
+        JsonNode soJson = json.readTree(mockMvc.perform(get("/api/v1/sales/orders/" + soId)
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID pickingId = UUID.fromString(soJson.get("deliveryPickingIds").get(0).asText());
+        mockMvc.perform(post("/api/v1/inventory/pickings/" + pickingId + "/confirm")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/inventory/pickings/" + pickingId + "/assign")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk());
+        UUID moveId = firstMoveId(pickingId);
+        validatePickingWithPicks(pickingId, moveId, "2", false);
+
+        String invCmd = "{\"salesOrderId\":\"" + soId + "\",\"invoiceDate\":\"2026-05-04\",\"dueDate\":\"2026-06-04\"}";
+        mockMvc.perform(post("/api/v1/sales/customer-invoices/from-order")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invCmd))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/sales/customer-invoices/from-order")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invCmd))
+                .andExpect(status().isUnprocessableEntity());
+
+        JsonNode soAfterInv = json.readTree(mockMvc.perform(get("/api/v1/sales/orders/" + soId)
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertThat(soAfterInv.get("canCreateCustomerInvoice").asBoolean()).isFalse();
+    }
+
+    @Test
+    void customer_payment_cannot_exceed_outstanding_balance() throws Exception {
+        UUID stockLoc = lookupLocationByCode("WH/STOCK");
+        UUID supplier = lookupLocationByCode("VIRT/SUPPLIERS");
+        UUID warehouse = lookupWarehouseByCode("WH");
+        UUID categoryId = lookupCategoryByName("All");
+        UUID uomId = lookupUomByName("Unit");
+        UUID vatAcc = accountIdByCode("430011");
+        UUID taxId = createFiscalSaleTax("S-PAY-" + UUID.randomUUID().toString().substring(0, 6), vatAcc);
+        UUID productId = createProduct("SO-PAY-" + UUID.randomUUID().toString().substring(0, 6),
+                "Overpay test", categoryId, uomId, "10.00", "100.00");
+
+        UUID receipt = createPicking(warehouse, "INCOMING", supplier, stockLoc, productId, uomId, "5", "10.00");
+        validatePicking(receipt);
+
+        UUID arAccountId = accountIdByCode("430003");
+        UUID custId = createCustomer(arAccountId);
+        UUID cashJournalId = journalIdByType("CASH");
+
+        String soBody = "{\"customerPartnerId\":\"" + custId + "\",\"currencyCode\":\"USD\",\"warehouseId\":\"" + warehouse
+                + "\",\"lines\":[{\"productId\":\"" + productId + "\",\"name\":\"Line\",\"uomId\":\"" + uomId
+                + "\",\"qtyOrdered\":1,\"unitPrice\":100,\"discountPercent\":0,\"taxIds\":[\"" + taxId + "\"]}]}";
+        JsonNode so = json.readTree(mockMvc.perform(post("/api/v1/sales/orders")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(soBody))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID soId = UUID.fromString(so.get("id").asText());
+
+        mockMvc.perform(post("/api/v1/sales/orders/" + soId + "/confirm")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk());
+
+        JsonNode soJson = json.readTree(mockMvc.perform(get("/api/v1/sales/orders/" + soId)
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID pickingId = UUID.fromString(soJson.get("deliveryPickingIds").get(0).asText());
+        mockMvc.perform(post("/api/v1/inventory/pickings/" + pickingId + "/confirm")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/inventory/pickings/" + pickingId + "/assign")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk());
+        UUID moveId = firstMoveId(pickingId);
+        validatePickingWithPicks(pickingId, moveId, "1", false);
+
+        String invCmd = "{\"salesOrderId\":\"" + soId + "\",\"invoiceDate\":\"2026-05-04\"}";
+        JsonNode inv = json.readTree(mockMvc.perform(post("/api/v1/sales/customer-invoices/from-order")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invCmd))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID invoiceId = UUID.fromString(inv.get("id").asText());
+
+        JsonNode posted = json.readTree(mockMvc.perform(post("/api/v1/accounting/customer-invoices/" + invoiceId + "/post")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID journalEntryId = UUID.fromString(posted.get("journalEntryId").asText());
+
+        JsonNode je = json.readTree(mockMvc.perform(get("/api/v1/journal-entries/" + journalEntryId))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        BigDecimal arDebit = BigDecimal.ZERO;
+        for (JsonNode it : je.get("items")) {
+            if (it.get("accountId").asText().equals(arAccountId.toString())) {
+                arDebit = arDebit.add(it.get("debit").decimalValue());
+            }
+        }
+
+        String payBody = "{\"customerInvoiceId\":\"" + invoiceId + "\",\"paymentJournalId\":\"" + cashJournalId
+                + "\",\"paymentDate\":\"2026-05-04\",\"amount\":" + arDebit.toPlainString()
+                + ",\"currencyCode\":\"USD\",\"reference\":\"PAY-1\"}";
+        mockMvc.perform(post("/api/v1/accounting/customer-invoices/payments")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payBody))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/accounting/customer-invoices/payments")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payBody))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
     private UUID createFiscalSaleTax(String name, UUID accountId) throws Exception {
         String body = "{\"name\":\"" + name + "\",\"amountType\":\"PERCENT\",\"amount\":10,\"priceInclude\":false,"
                 + "\"scope\":\"SALE\",\"accountId\":\"" + accountId + "\"}";
