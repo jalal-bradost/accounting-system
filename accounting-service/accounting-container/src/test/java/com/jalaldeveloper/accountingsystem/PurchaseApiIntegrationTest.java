@@ -170,6 +170,144 @@ class PurchaseApiIntegrationTest {
                 .isEqualByComparingTo(new BigDecimal("3"));
     }
 
+    @Test
+    void duplicate_draft_vendor_bill_from_same_po_is_rejected() throws Exception {
+        UUID apAccountId = accountIdByCode("430004");
+        UUID vatAccountId = accountIdByCode("430013");
+        UUID vendorId = createVendor(apAccountId);
+        UUID taxId = createFiscalTax(vatAccountId);
+        UUID warehouse = lookupWarehouseByCode("WH");
+        UUID categoryId = lookupCategoryByName("All");
+        UUID uomId = lookupUomByName("Unit");
+        UUID productId = createProduct("PUR-DUP-" + UUID.randomUUID().toString().substring(0, 8),
+                "Duplicate bill test", categoryId, uomId, "5.00", "12.00");
+
+        String poBody = "{\"vendorPartnerId\":\"" + vendorId + "\",\"currencyCode\":\"USD\",\"warehouseId\":\""
+                + warehouse + "\",\"lines\":[{\"productId\":\"" + productId + "\",\"name\":\"Line1\",\"uomId\":\""
+                + uomId + "\",\"qtyOrdered\":2,\"unitPrice\":10,\"discountPercent\":0,\"taxIds\":[\"" + taxId + "\"]}]}";
+        JsonNode po = json.readTree(mockMvc.perform(post("/api/v1/purchase/orders")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(poBody))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID poId = UUID.fromString(po.get("id").asText());
+
+        mockMvc.perform(post("/api/v1/purchase/orders/" + poId + "/confirm")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk());
+
+        JsonNode poJson = json.readTree(mockMvc.perform(get("/api/v1/purchase/orders/" + poId)
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID pickingId = UUID.fromString(poJson.get("receiptPickingIds").get(0).asText());
+        mockMvc.perform(post("/api/v1/purchase/receipts/" + pickingId + "/validate")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
+
+        String billBody = "{\"purchaseOrderId\":\"" + poId + "\",\"billDate\":\"2026-05-04\"}";
+        mockMvc.perform(post("/api/v1/purchase/vendor-bills/from-po")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(billBody))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/purchase/vendor-bills/from-po")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(billBody))
+                .andExpect(status().isUnprocessableEntity());
+
+        JsonNode poAfterBill = json.readTree(mockMvc.perform(get("/api/v1/purchase/orders/" + poId)
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertThat(poAfterBill.get("canCreateVendorBill").asBoolean()).isFalse();
+    }
+
+    @Test
+    void vendor_payment_cannot_exceed_outstanding_balance() throws Exception {
+        UUID apAccountId = accountIdByCode("430004");
+        UUID vatAccountId = accountIdByCode("430013");
+        UUID bankJournalId = journalIdByType("BANK");
+        UUID vendorId = createVendor(apAccountId);
+        UUID taxId = createFiscalTax(vatAccountId);
+        UUID warehouse = lookupWarehouseByCode("WH");
+        UUID categoryId = lookupCategoryByName("All");
+        UUID uomId = lookupUomByName("Unit");
+        UUID productId = createProduct("PUR-PAY-" + UUID.randomUUID().toString().substring(0, 8),
+                "Overpay test", categoryId, uomId, "5.00", "12.00");
+
+        String poBody = "{\"vendorPartnerId\":\"" + vendorId + "\",\"currencyCode\":\"USD\",\"warehouseId\":\""
+                + warehouse + "\",\"lines\":[{\"productId\":\"" + productId + "\",\"name\":\"Line1\",\"uomId\":\""
+                + uomId + "\",\"qtyOrdered\":1,\"unitPrice\":100,\"discountPercent\":0,\"taxIds\":[\"" + taxId + "\"]}]}";
+        JsonNode po = json.readTree(mockMvc.perform(post("/api/v1/purchase/orders")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(poBody))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID poId = UUID.fromString(po.get("id").asText());
+
+        mockMvc.perform(post("/api/v1/purchase/orders/" + poId + "/confirm")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk());
+
+        JsonNode poJson = json.readTree(mockMvc.perform(get("/api/v1/purchase/orders/" + poId)
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID pickingId = UUID.fromString(poJson.get("receiptPickingIds").get(0).asText());
+        mockMvc.perform(post("/api/v1/purchase/receipts/" + pickingId + "/validate")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
+
+        String billBody = "{\"purchaseOrderId\":\"" + poId + "\",\"billDate\":\"2026-05-04\"}";
+        JsonNode bill = json.readTree(mockMvc.perform(post("/api/v1/purchase/vendor-bills/from-po")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(billBody))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID billId = UUID.fromString(bill.get("id").asText());
+
+        JsonNode postedBill = json.readTree(mockMvc.perform(post("/api/v1/purchase/vendor-bills/" + billId + "/post")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID journalEntryId = UUID.fromString(postedBill.get("journalEntryId").asText());
+
+        JsonNode je = json.readTree(mockMvc.perform(get("/api/v1/journal-entries/" + journalEntryId))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        BigDecimal apCredit = BigDecimal.ZERO;
+        for (JsonNode it : je.get("items")) {
+            if (it.get("accountId").asText().equals(apAccountId.toString())) {
+                apCredit = apCredit.add(it.get("credit").decimalValue());
+            }
+        }
+
+        String payBody = "{\"vendorBillId\":\"" + billId + "\",\"bankJournalId\":\"" + bankJournalId
+                + "\",\"paymentDate\":\"2026-05-04\",\"amount\":" + apCredit.toPlainString()
+                + ",\"currencyCode\":\"USD\",\"reference\":\"PAY-1\"}";
+        mockMvc.perform(post("/api/v1/purchase/vendor-payments")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payBody))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/purchase/vendor-payments")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payBody))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
     /**
      * Validates through inventory (not purchase receipt URL) — PO line qty_received must still update.
      */

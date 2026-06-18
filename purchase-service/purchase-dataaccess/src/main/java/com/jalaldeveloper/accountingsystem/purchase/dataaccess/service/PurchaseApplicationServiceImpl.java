@@ -61,6 +61,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -261,21 +262,49 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         if (po.getState() != PurchaseOrderState.CONFIRMED) {
             return false;
         }
+        Map<UUID, BigDecimal> draftAllocated = draftBillQtyByPoLine(po.getId());
         for (PurPurchaseOrderLineEntity pol : po.getLines()) {
             Optional<Product> opt = productRepository.findById(new ProductId(pol.getProductId()));
             if (opt.isEmpty()) {
                 continue;
             }
-            Product product = opt.get();
-            if (product.getProductType() == ProductType.SERVICE) {
-                if (pol.getQtyOrdered().subtract(pol.getQtyInvoiced()).signum() > 0) {
-                    return true;
-                }
-            } else if (pol.getQtyReceived().subtract(pol.getQtyInvoiced()).signum() > 0) {
+            if (billableQtyForLine(pol, opt.get(), draftAllocated).signum() > 0) {
                 return true;
             }
         }
         return false;
+    }
+
+    /** Quantities already reserved on draft vendor bills (not yet posted to qtyInvoiced). */
+    private Map<UUID, BigDecimal> draftBillQtyByPoLine(UUID purchaseOrderId) {
+        Map<UUID, BigDecimal> allocated = new HashMap<>();
+        for (PurVendorBillEntity bill : vendorBillRepository.findByPurchaseOrderId(purchaseOrderId)) {
+            if (bill.getState() != VendorBillState.DRAFT) {
+                continue;
+            }
+            bill.getLines().size();
+            for (PurVendorBillLineEntity line : bill.getLines()) {
+                if (line.getPurchaseOrderLineId() != null) {
+                    allocated.merge(line.getPurchaseOrderLineId(), line.getQty(), BigDecimal::add);
+                }
+            }
+        }
+        return allocated;
+    }
+
+    private BigDecimal effectiveQtyInvoiced(PurPurchaseOrderLineEntity pol, Map<UUID, BigDecimal> draftAllocated) {
+        BigDecimal draft = draftAllocated.getOrDefault(pol.getId(), BigDecimal.ZERO);
+        return pol.getQtyInvoiced().add(draft).setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal billableQtyForLine(PurPurchaseOrderLineEntity pol,
+                                          Product product,
+                                          Map<UUID, BigDecimal> draftAllocated) {
+        BigDecimal invoiced = effectiveQtyInvoiced(pol, draftAllocated);
+        if (product.getProductType() == ProductType.SERVICE) {
+            return pol.getQtyOrdered().subtract(invoiced).max(BigDecimal.ZERO);
+        }
+        return pol.getQtyReceived().subtract(invoiced).max(BigDecimal.ZERO);
     }
 
     private void recalcTotals(PurPurchaseOrderEntity o) {
@@ -480,10 +509,15 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         bill.setCreatedAt(now);
         bill.setUpdatedAt(now);
 
+        Map<UUID, BigDecimal> draftAllocated = draftBillQtyByPoLine(po.getId());
         int seq = 10;
         for (PurPurchaseOrderLineEntity pol : po.getLines()) {
             Product product = productRepository.findById(new ProductId(pol.getProductId()))
                     .orElseThrow(() -> new PurchaseDomainException("Product not found: " + pol.getProductId()));
+            BigDecimal qty = billableQtyForLine(pol, product, draftAllocated);
+            if (qty.signum() <= 0) {
+                continue;
+            }
             if (product.getProductType() == ProductType.SERVICE) {
                 PurVendorBillLineEntity vbl = new PurVendorBillLineEntity();
                 vbl.setId(UUID.randomUUID());
@@ -493,21 +527,14 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 vbl.setProductId(pol.getProductId());
                 vbl.setName(pol.getName());
                 vbl.setUomId(pol.getUomId());
-                BigDecimal qty = pol.getQtyOrdered().subtract(pol.getQtyInvoiced());
-                if (qty.signum() > 0) {
-                    vbl.setQty(qty);
-                    vbl.setUnitPrice(pol.getUnitPrice());
-                    vbl.setAccountId(resolveExpenseAccount(product));
-                    vbl.setCreatedAt(now);
-                    vbl.setUpdatedAt(now);
-                    addBillTaxSnapshots(vbl, pol, now);
-                    bill.getLines().add(vbl);
-                }
+                vbl.setQty(qty);
+                vbl.setUnitPrice(pol.getUnitPrice());
+                vbl.setAccountId(resolveExpenseAccount(product));
+                vbl.setCreatedAt(now);
+                vbl.setUpdatedAt(now);
+                addBillTaxSnapshots(vbl, pol, now);
+                bill.getLines().add(vbl);
                 seq += 10;
-                continue;
-            }
-            BigDecimal qty = pol.getQtyReceived().subtract(pol.getQtyInvoiced());
-            if (qty.signum() <= 0) {
                 continue;
             }
             PurVendorBillLineEntity vbl = new PurVendorBillLineEntity();
@@ -530,7 +557,8 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         if (bill.getLines().isEmpty()) {
             throw new PurchaseDomainException(
                     "No billable quantity: for stockable/consumable lines, receive goods first (qty received > qty "
-                            + "invoiced); for service lines, bill from ordered quantity.");
+                            + "invoiced); for service lines, bill from ordered quantity. "
+                            + "If a draft bill already exists, post or remove it first.");
         }
         return toBillResponse(vendorBillRepository.save(bill));
     }
@@ -580,6 +608,37 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             }
         }
         return total;
+    }
+
+    private BigDecimal sumPostedPaymentsForBill(UUID billId, String billCurrency) {
+        return vendorPaymentRepository.findByVendorBillId(billId).stream()
+                .filter(p -> p.getState() == VendorPaymentState.POSTED)
+                .filter(p -> billCurrency.equalsIgnoreCase(p.getCurrencyCode()))
+                .map(PurVendorPaymentEntity::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private void ensurePaymentWithinOutstanding(PurVendorBillEntity bill, BigDecimal docAmt, String paymentCurrency) {
+        bill.getLines().size();
+        for (PurVendorBillLineEntity line : bill.getLines()) {
+            line.getTaxSnapshots().size();
+        }
+        String billCurrency = bill.getCurrencyCode();
+        BigDecimal billTotal = billTotalDocumentCurrency(bill);
+        BigDecimal paid = sumPostedPaymentsForBill(bill.getId(), billCurrency);
+        BigDecimal outstanding = billTotal.subtract(paid).setScale(4, RoundingMode.HALF_UP);
+        if (outstanding.signum() <= 0) {
+            throw new PurchaseDomainException("Vendor bill is already fully paid");
+        }
+        if (!billCurrency.equalsIgnoreCase(paymentCurrency)) {
+            return;
+        }
+        if (docAmt.compareTo(outstanding) > 0) {
+            throw new PurchaseDomainException(
+                    "Payment amount exceeds outstanding balance of " + outstanding.toPlainString()
+                            + " " + billCurrency);
+        }
     }
 
     private UUID resolveStockInputAccount(Product product) {
@@ -905,6 +964,9 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         if (bill.getState() != VendorBillState.POSTED || bill.getJournalEntryId() == null) {
             throw new PurchaseDomainException("Bill must be posted before payment");
         }
+        String paymentCurrency = command.getCurrencyCode() != null ? command.getCurrencyCode() : bill.getCurrencyCode();
+        BigDecimal docAmt = command.getAmount().setScale(4, RoundingMode.HALF_UP);
+        ensurePaymentWithinOutstanding(bill, docAmt, paymentCurrency);
         PartnerResponse vendor = partnerApplicationService.getPartner(bill.getVendorPartnerId());
         UUID payableAccount = vendor.getPayableAccountId() != null
                 ? vendor.getPayableAccountId()
@@ -915,8 +977,6 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         UUID liquidityAccountId = resolveLiquidityAccountForPaymentJournal(companyId, command.getBankJournalId());
         String liquidityLabel = paymentJournalType == JournalType.CASH ? "Cash payment" : "Bank payment";
 
-        BigDecimal docAmt = command.getAmount().setScale(4, RoundingMode.HALF_UP);
-        String paymentCurrency = command.getCurrencyCode() != null ? command.getCurrencyCode() : bill.getCurrencyCode();
         BigDecimal billRate = resolveExchangeRate(
                 companyId, bill.getCurrencyCode(), bill.getBillDate(), bill.getExchangeRateToCompany());
         BigDecimal paymentRate = resolveExchangeRate(

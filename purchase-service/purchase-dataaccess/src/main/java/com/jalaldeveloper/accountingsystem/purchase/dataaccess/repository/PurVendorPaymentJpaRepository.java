@@ -8,6 +8,8 @@ import java.util.UUID;
 
 public interface PurVendorPaymentJpaRepository extends JpaRepository<PurVendorPaymentEntity, UUID> {
 
+    List<PurVendorPaymentEntity> findByVendorBillId(UUID vendorBillId);
+
     List<PurVendorPaymentEntity> findByCompanyIdOrderByPaymentDateDescCreatedAtDesc(UUID companyId);
 
     List<PurVendorPaymentEntity> findByCompanyIdAndVendorPartnerIdOrderByPaymentDateAscCreatedAtAsc(UUID companyId,
