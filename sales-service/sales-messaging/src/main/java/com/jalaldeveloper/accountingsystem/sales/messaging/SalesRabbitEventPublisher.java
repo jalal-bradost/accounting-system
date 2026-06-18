@@ -6,11 +6,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Component
+@ConditionalOnProperty(name = "app.messaging.enabled", havingValue = "true")
 public class SalesRabbitEventPublisher implements SalesEventPublisher {
 
     private static final Logger log = LoggerFactory.getLogger(SalesRabbitEventPublisher.class);

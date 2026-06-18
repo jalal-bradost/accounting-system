@@ -11,8 +11,11 @@ import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +24,7 @@ import java.util.Map;
 
 @Configuration
 @EnableConfigurationProperties(MessagingProperties.class)
+@ConditionalOnProperty(name = "app.messaging.enabled", havingValue = "true")
 public class RabbitMessagingConfiguration {
 
     @Bean
@@ -31,29 +35,15 @@ public class RabbitMessagingConfiguration {
     @Bean
     Declarables integrationEventTopology(TopicExchange integrationEventExchange) {
         DirectExchange dlx = new DirectExchange("accounting.events.dlx", true, false);
-        Queue accounting = durableQueue("accounting.events.q");
-        Queue purchase = durableQueue("purchase.events.q");
         Queue purchaseInventorySync = durableQueue("purchase.inventory-sync.q");
-        Queue sales = durableQueue("sales.events.q");
         Queue salesInventorySync = durableQueue("sales.inventory-sync.q");
-        Queue inventory = durableQueue("inventory.events.q");
-        Queue contacts = durableQueue("contacts.events.q");
         Queue deadLetterQueue = new Queue("accounting.events.dlq", true);
 
         return new Declarables(
-                dlx, accounting, purchase, purchaseInventorySync, sales, salesInventorySync,
-                inventory, contacts, deadLetterQueue,
+                dlx, purchaseInventorySync, salesInventorySync, deadLetterQueue,
                 BindingBuilder.bind(deadLetterQueue).to(dlx).with("integration.dead"),
-                bind(accounting, integrationEventExchange, "accounting.#"),
-                bind(accounting, integrationEventExchange, "purchase.#"),
-                bind(accounting, integrationEventExchange, "inventory.#"),
-                bind(accounting, integrationEventExchange, "contacts.#"),
-                bind(purchase, integrationEventExchange, "purchase.#"),
                 bind(purchaseInventorySync, integrationEventExchange, "inventory.stock-picking.validated"),
-                bind(sales, integrationEventExchange, "sales.#"),
-                bind(salesInventorySync, integrationEventExchange, "inventory.stock-picking.validated"),
-                bind(inventory, integrationEventExchange, "inventory.#"),
-                bind(contacts, integrationEventExchange, "contacts.#")
+                bind(salesInventorySync, integrationEventExchange, "inventory.stock-picking.validated")
         );
     }
 
@@ -65,13 +55,22 @@ public class RabbitMessagingConfiguration {
     }
 
     @Bean
+    RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory, MessageConverter integrationMessageConverter) {
+        RabbitTemplate template = new RabbitTemplate(connectionFactory);
+        template.setMessageConverter(integrationMessageConverter);
+        return template;
+    }
+
+    @Bean
     SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
             ConnectionFactory connectionFactory,
-            MessageConverter integrationMessageConverter) {
+            MessageConverter integrationMessageConverter,
+            @Value("${spring.rabbitmq.listener.simple.auto-startup:true}") boolean autoStartup) {
         SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
         factory.setConnectionFactory(connectionFactory);
         factory.setMessageConverter(integrationMessageConverter);
         factory.setDefaultRequeueRejected(false);
+        factory.setAutoStartup(autoStartup);
         return factory;
     }
 

@@ -4,9 +4,11 @@ import com.jalaldeveloper.accountingsystem.inventory.service.domain.event.StockP
 import com.jalaldeveloper.accountingsystem.messaging.consumer.IntegrationEventDedupService;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.ports.input.SalesApplicationService;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnProperty(name = "app.messaging.enabled", havingValue = "true")
 public class StockPickingValidatedSalesListener {
 
     private final SalesApplicationService salesApplicationService;

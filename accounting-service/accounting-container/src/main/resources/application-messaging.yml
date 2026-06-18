@@ -1,0 +1,8 @@
+# Activate with: spring.profiles.active=messaging (or include in your local profile)
+app:
+  messaging:
+    enabled: true
+
+spring:
+  autoconfigure:
+    exclude: []
