@@ -14,6 +14,8 @@ public interface AppUserJpaRepository extends JpaRepository<AppUserEntity, UUID>
 
     Optional<AppUserEntity> findByCompanyIdAndUsername(UUID companyId, String username);
 
+    Optional<AppUserEntity> findFirstByUsernameIgnoreCaseOrderByCompanyIdAsc(String username);
+
     Optional<AppUserEntity> findByCompanyIdAndEmail(UUID companyId, String email);
 
     @Query("select u from AppUserEntity u where u.companyId = :companyId "

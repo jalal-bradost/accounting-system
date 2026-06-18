@@ -33,8 +33,7 @@ public class PlatformAuthenticationService {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST, "JWT login is disabled (app.security.enabled=false)");
         }
-        AppUserEntity user = appUserJpaRepository
-                .findByCompanyIdAndUsername(companyId, username)
+        AppUserEntity user = resolveUser(companyId, username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
         if (!user.isActive()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User inactive");
@@ -46,6 +45,13 @@ public class PlatformAuthenticationService {
         String token = jwtService.createAccessToken(user.getId(), user.getCompanyId());
         long expSec = securityProperties.getJwt().getExpirationMinutes() * 60L;
         return new LoginResult(token, expSec, user.getId(), user.getCompanyId());
+    }
+
+    private java.util.Optional<AppUserEntity> resolveUser(UUID companyId, String username) {
+        if (companyId != null) {
+            return appUserJpaRepository.findByCompanyIdAndUsername(companyId, username);
+        }
+        return appUserJpaRepository.findFirstByUsernameIgnoreCaseOrderByCompanyIdAsc(username.trim());
     }
 
     public record LoginResult(String accessToken, long expiresInSeconds, UUID userId, UUID companyId) {}

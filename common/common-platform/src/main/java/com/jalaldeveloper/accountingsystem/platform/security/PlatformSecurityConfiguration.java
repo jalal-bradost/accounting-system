@@ -65,7 +65,7 @@ public class PlatformSecurityConfiguration {
         http.headers(h -> h.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin));
         http.authorizeHttpRequests(a -> a
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers("/api/v1/auth/login", "/api/v1/auth/security-config").permitAll()
+                .requestMatchers("/api/v1/auth/login", "/api/v1/auth/security-config", "/api/v1/auth/me").permitAll()
                 .requestMatchers("/h2-console", "/h2-console/**").permitAll()
                 .requestMatchers("/api/**").authenticated());
         http.exceptionHandling(e -> e
