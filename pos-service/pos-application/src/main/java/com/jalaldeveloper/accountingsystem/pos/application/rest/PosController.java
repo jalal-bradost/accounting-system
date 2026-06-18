@@ -9,6 +9,7 @@ import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.ClosePosSessio
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.CreatePosOrderCommand;
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.OpenPosSessionCommand;
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.PosCatalogItemResponse;
+import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.PosConfigCardResponse;
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.PosConfigCommand;
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.PosConfigResponse;
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.PosOrderLineCommand;
@@ -50,6 +51,12 @@ public class PosController {
         return ResponseEntity.ok(posApplicationService.listConfigs(companyId));
     }
 
+    @GetMapping("/dashboard")
+    @RequiresPermission("pos.config.read")
+    public ResponseEntity<List<PosConfigCardResponse>> dashboard(@CurrentCompany CompanyId companyId) {
+        return ResponseEntity.ok(posApplicationService.listConfigCards(companyId));
+    }
+
     @PostMapping("/configs")
     @RequiresPermission("pos.config.write")
     public ResponseEntity<PosConfigResponse> createConfig(@CurrentCompany CompanyId companyId,
@@ -66,6 +73,19 @@ public class PosController {
         return ResponseEntity.ok(posApplicationService.openSession(command));
     }
 
+    @GetMapping("/sessions/{sessionId}")
+    @RequiresPermission("pos.order.read")
+    public ResponseEntity<PosSessionResponse> getSession(@PathVariable UUID sessionId) {
+        return ResponseEntity.ok(posApplicationService.getSession(sessionId));
+    }
+
+    @GetMapping("/sessions/open")
+    @RequiresPermission("pos.order.read")
+    public ResponseEntity<PosSessionResponse> getOpenSession(@CurrentCompany CompanyId companyId,
+                                                             @RequestParam UUID configId) {
+        return ResponseEntity.ok(posApplicationService.getOpenSessionForConfig(companyId, configId));
+    }
+
     @PostMapping("/sessions/{sessionId}/close")
     @RequiresPermission("pos.session.close")
     public ResponseEntity<PosSessionResponse> closeSession(@PathVariable UUID sessionId,
@@ -78,10 +98,11 @@ public class PosController {
     public ResponseEntity<PageResponse<PosCatalogItemResponse>> catalog(@CurrentCompany CompanyId companyId,
                                                                         @RequestParam UUID sessionId,
                                                                         @RequestParam(required = false) String search,
+                                                                        @RequestParam(required = false) UUID categoryId,
                                                                         @RequestParam(defaultValue = "0") int page,
                                                                         @RequestParam(defaultValue = "50") int size) {
         var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "name"));
-        var result = posApplicationService.searchCatalog(companyId, sessionId, search, pageable);
+        var result = posApplicationService.searchCatalog(companyId, sessionId, search, categoryId, pageable);
         return ResponseEntity.ok(PageResponse.of(result, Function.identity()));
     }
 
