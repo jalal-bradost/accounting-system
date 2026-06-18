@@ -1,6 +1,6 @@
 package com.jalaldeveloper.accountingsystem;
 
-import com.jalaldeveloper.accountingsystem.web.DashboardController;
+import com.jalaldeveloper.accountingsystem.platform.bootstrap.PlatformRbacSeeder;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -23,7 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class CompanyCurrencyApiIntegrationTest {
 
-    private static final UUID COMPANY_ID = DashboardController.DEFAULT_COMPANY_ID;
+    private static final UUID COMPANY_ID = PlatformRbacSeeder.DEFAULT_COMPANY_ID;
 
     @Autowired
     private MockMvc mockMvc;

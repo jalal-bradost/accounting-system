@@ -1,6 +1,5 @@
 accounting:
   seed:
-    # Keep integration tests free of demo PO/SO/invoice side effects
     demo-business-data: false
   currencies:
     seed: true
@@ -15,9 +14,23 @@ accounting:
         rate-per-usd: "1310.000000"
         active: true
 
+app:
+  messaging:
+    enabled: false
+
 spring:
   application:
     name: accounting-service-test
+  rabbitmq:
+    listener:
+      simple:
+        auto-startup: false
+
+---
+spring:
+  config:
+    activate:
+      on-profile: "!postgres"
   datasource:
     url: jdbc:h2:mem:accounting_test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
@@ -25,7 +38,7 @@ spring:
     password:
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate
     database-platform: org.hibernate.dialect.H2Dialect
   flyway:
     enabled: true
