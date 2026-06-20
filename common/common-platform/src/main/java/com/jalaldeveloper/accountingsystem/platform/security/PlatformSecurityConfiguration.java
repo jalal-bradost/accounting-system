@@ -68,6 +68,7 @@ public class PlatformSecurityConfiguration {
                 .requestMatchers("/api/v1/auth/login", "/api/v1/auth/security-config", "/api/v1/auth/me").permitAll()
                 .requestMatchers("/media/product-images/**").permitAll()
                 .requestMatchers("/media/partner-images/**").permitAll()
+                .requestMatchers("/media/employee-images/**").permitAll()
                 .requestMatchers("/media/chatter-attachments/**").permitAll()
                 .requestMatchers("/h2-console", "/h2-console/**").permitAll()
                 .requestMatchers("/api/**").authenticated());
