@@ -105,6 +105,18 @@
         </dependency>
         <dependency>
             <groupId>com.jalaldeveloper.accountingsystem</groupId>
+            <artifactId>hr-application-service</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jalaldeveloper.accountingsystem</groupId>
+            <artifactId>hr-application</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jalaldeveloper.accountingsystem</groupId>
+            <artifactId>hr-dataaccess</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.jalaldeveloper.accountingsystem</groupId>
             <artifactId>inventory-application-service</artifactId>
         </dependency>
         <dependency>

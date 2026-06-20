@@ -6,6 +6,7 @@
     <module>common</module>
     <module>accounting-service</module>
     <module>contacts-service</module>
+    <module>hr-service</module>
     <module>inventory-service</module>
     <module>purchase-service</module>
     <module>sales-service</module>
@@ -76,6 +77,26 @@
       <dependency>
         <groupId>com.jalaldeveloper.accountingsystem</groupId>
         <artifactId>contacts-dataaccess</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>hr-domain-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>hr-application-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>hr-application</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>hr-dataaccess</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

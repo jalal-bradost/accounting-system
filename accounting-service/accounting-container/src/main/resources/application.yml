@@ -21,12 +21,16 @@ app:
       location: ./data/partner-images
       public-base-path: /media/partner-images
       max-bytes: 5242880
+    employee-images:
+      location: ./data/employee-images
+      public-base-path: /media/employee-images
+      max-bytes: 5242880
     chatter-attachments:
       location: ./data/chatter-attachments
       public-base-path: /media/chatter-attachments
       max-bytes: 10485760
   messaging:
-    enabled: false
+    enabled: true
     exchange: accounting.system.events
 
 accounting:
@@ -35,6 +39,11 @@ accounting:
     default-company-chart: true
     # Demo partners, products, PO/SO, vendor bill, customer invoice, and payments (idempotent; disable in production)
     demo-business-data: false
+
+hr:
+  seed:
+    # Demo departments and employees (idempotent; disable in production)
+    demo-data: true
   # Company currencies: base USD + optional extras (seeded once per company when table is empty)
   currencies:
     seed: true

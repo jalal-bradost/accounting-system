@@ -43,6 +43,9 @@ public class PlatformRbacSeeder implements ApplicationRunner {
             // Contacts
             "contacts.partner.read", "contacts.partner.write", "contacts.partner.archive",
             "contacts.payment-terms.read", "contacts.payment-terms.write",
+            // HR
+            "hr.employee.read", "hr.employee.write", "hr.employee.archive",
+            "hr.department.read", "hr.department.write",
             // Inventory (registered up-front so role assignment doesn't need to know about future modules)
             "inventory.product.read", "inventory.product.write",
             "inventory.product-category.read", "inventory.product-category.write",
@@ -85,6 +88,8 @@ public class PlatformRbacSeeder implements ApplicationRunner {
             "ACCOUNTANT", Set.of(
                     "platform.activity.read", "platform.activity.write", "platform.audit.read",
                     "contacts.partner.read", "contacts.payment-terms.read",
+                    "hr.employee.read", "hr.employee.write", "hr.employee.archive",
+                    "hr.department.read", "hr.department.write",
                     "purchase.order.read", "purchase.vendor-bill.read", "purchase.vendor-bill.post",
                     "purchase.payment.register", "purchase.fiscal-tax.read",
                     "sales.order.read", "sales.invoice.read", "sales.invoice.write",
@@ -102,6 +107,8 @@ public class PlatformRbacSeeder implements ApplicationRunner {
             "SALES", Set.of(
                     "platform.activity.read", "platform.activity.write",
                     "contacts.partner.read", "contacts.partner.write",
+                    "hr.employee.read", "hr.employee.write", "hr.employee.archive",
+                    "hr.department.read", "hr.department.write",
                     "inventory.product.read", "inventory.warehouse.read",
                     "inventory.picking.read", "inventory.picking.write",
                     "inventory.picking.confirm", "inventory.picking.validate",
@@ -116,6 +123,8 @@ public class PlatformRbacSeeder implements ApplicationRunner {
             "PURCHASING", Set.of(
                     "platform.activity.read", "platform.activity.write",
                     "contacts.partner.read", "contacts.partner.write",
+                    "hr.employee.read", "hr.employee.write", "hr.employee.archive",
+                    "hr.department.read", "hr.department.write",
                     "inventory.product.read", "inventory.warehouse.read",
                     "inventory.picking.read", "inventory.picking.write",
                     "inventory.picking.confirm", "inventory.picking.validate",
@@ -138,6 +147,7 @@ public class PlatformRbacSeeder implements ApplicationRunner {
                     "platform.activity.read", "platform.audit.read",
                     "platform.company.read", "platform.permission.read",
                     "contacts.partner.read", "contacts.payment-terms.read",
+                    "hr.employee.read", "hr.department.read",
                     "inventory.product.read", "inventory.warehouse.read",
                     "inventory.picking.read", "inventory.quant.read", "inventory.valuation.read",
                     "purchase.order.read", "purchase.vendor-bill.read", "purchase.fiscal-tax.read",

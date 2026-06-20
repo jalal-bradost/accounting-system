@@ -30,6 +30,8 @@ class FlywayMigrationIntegrationTest {
         assertTrue(tables.contains("accounts"));
         assertTrue(tables.contains("platform_company"));
         assertTrue(tables.contains("contacts_partner"));
+        assertTrue(tables.contains("hr_employee"));
+        assertTrue(tables.contains("hr_department"));
         assertTrue(tables.contains("inv_product"));
         assertTrue(tables.contains("sal_sales_order"));
         assertTrue(tables.contains("pur_purchase_order"));
