@@ -337,6 +337,26 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
                 companyCurrency);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public PayableStatusResponse payableStatus(UUID partnerId) {
+        Partner partner = loadIncludingArchivedOrThrow(partnerId);
+        if (!partner.isVendor()) {
+            throw new ContactsDomainException("Partner is not a vendor");
+        }
+        PartnerBalancePort balancePort = partnerBalancePortProvider.getIfAvailable();
+        Money outstanding = balancePort != null
+                ? balancePort.outstandingPayable(partner.getCompanyId(), partner.getId())
+                : Money.ZERO;
+        String companyCurrency = balancePort != null
+                ? balancePort.companyBaseCurrencyCode(partner.getCompanyId())
+                : "USD";
+        return new PayableStatusResponse(
+                partnerId,
+                outstanding.getAmount(),
+                companyCurrency);
+    }
+
     private Partner loadOrThrow(UUID id) {
         return partnerRepository.findById(new PartnerId(id))
                 .orElseThrow(() -> new IllegalArgumentException("Partner not found: " + id));

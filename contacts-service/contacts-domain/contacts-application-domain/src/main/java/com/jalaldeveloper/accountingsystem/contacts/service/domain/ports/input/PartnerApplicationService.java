@@ -43,6 +43,8 @@ public interface PartnerApplicationService {
 
     CreditStatusResponse creditStatus(UUID partnerId);
 
+    PayableStatusResponse payableStatus(UUID partnerId);
+
     PartnerResponse uploadPartnerImage(UUID partnerId, org.springframework.web.multipart.MultipartFile file);
 
     PartnerResponse deletePartnerImage(UUID partnerId);

@@ -110,6 +110,12 @@ public class PartnerController {
         return ResponseEntity.ok(service.creditStatus(id));
     }
 
+    @GetMapping("/{id}/payable-status")
+    @RequiresPermission("contacts.partner.read")
+    public ResponseEntity<PayableStatusResponse> payableStatus(@PathVariable UUID id) {
+        return ResponseEntity.ok(service.payableStatus(id));
+    }
+
     @PostMapping(value = "/{id}/image", consumes = "multipart/form-data")
     @RequiresPermission("contacts.partner.write")
     public ResponseEntity<PartnerResponse> uploadImage(@PathVariable UUID id,

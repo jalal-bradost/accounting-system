@@ -37,6 +37,17 @@ public class PartnerBalanceAdapter implements PartnerBalancePort {
     }
 
     @Override
+    public Money outstandingPayable(CompanyId companyId, PartnerId partnerId) {
+        BigDecimal sum = journalItemRepository.sumPartnerBalanceByAccountType(
+                companyId.getId(), partnerId.getId(), AccountType.PAYABLE);
+        if (sum == null || sum.signum() == 0) {
+            return Money.ZERO;
+        }
+        // Payable accounts are credit-normal; negate (debit - credit) so positive means amount owed.
+        return new Money(sum.negate());
+    }
+
+    @Override
     public String companyBaseCurrencyCode(CompanyId companyId) {
         return companyCurrencyJpaRepository.findByCompanyIdOrderByBaseCurrencyDescCodeAsc(companyId.getId())
                 .stream()
