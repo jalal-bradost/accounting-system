@@ -32,6 +32,13 @@ public class AccountingReferenceLookupAdapter implements AccountingReferenceLook
     }
 
     @Override
+    public UUID resolveJournalIdByCode(UUID companyId, String code) {
+        return journalRepository.findByCompanyIdAndCode(new CompanyId(companyId), code)
+                .map(j -> j.getId().getId())
+                .orElseThrow(() -> new AccountingDomainException("Journal code not found: " + code));
+    }
+
+    @Override
     public UUID resolveLiquidityAccountIdForJournal(UUID companyId, UUID journalId) {
         Journal journal = journalRepository.findById(new JournalId(journalId))
                 .orElseThrow(() -> new AccountingDomainException("Payment journal not found"));

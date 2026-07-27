@@ -13,6 +13,8 @@ public interface AccountingReferenceLookupPort {
 
     UUID resolveAccountIdByCode(UUID companyId, String code);
 
+    UUID resolveJournalIdByCode(UUID companyId, String code);
+
     UUID resolveLiquidityAccountIdForJournal(UUID companyId, UUID journalId);
 
     UUID resolveJournalIdByType(UUID companyId, JournalType journalType);

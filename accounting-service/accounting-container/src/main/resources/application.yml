@@ -39,11 +39,6 @@ accounting:
     default-company-chart: true
     # Demo partners, products, PO/SO, vendor bill, customer invoice, and payments (idempotent; disable in production)
     demo-business-data: false
-
-hr:
-  seed:
-    # Demo departments and employees (idempotent; disable in production)
-    demo-data: true
   # Company currencies: base USD + optional extras (seeded once per company when table is empty)
   currencies:
     seed: true
@@ -62,6 +57,11 @@ hr:
     # Comma-separated list of origins allowed to call /api/v1/**
     # The Next.js dev server runs on http://localhost:3000 by default.
     allowed-origins: http://localhost:3000
+
+hr:
+  seed:
+    # Demo departments and employees (idempotent; disable in production)
+    demo-data: true
 
 spring:
   application:
