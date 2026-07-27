@@ -20,6 +20,8 @@ public interface EmployeeApplicationService {
 
     EmployeeResponse get(UUID id);
 
+    EmployeeResponse getMe();
+
     Page<EmployeeSummaryResponse> search(CompanyId companyId, String q, UUID departmentId,
                                          boolean includeArchived, Pageable pageable);
 

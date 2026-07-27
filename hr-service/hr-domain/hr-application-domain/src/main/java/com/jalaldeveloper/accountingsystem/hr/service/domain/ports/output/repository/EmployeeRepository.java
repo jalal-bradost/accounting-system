@@ -1,6 +1,7 @@
 package com.jalaldeveloper.accountingsystem.hr.service.domain.ports.output.repository;
 
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
+import com.jalaldeveloper.accountingsystem.domain.valueobject.UserId;
 import com.jalaldeveloper.accountingsystem.hr.domain.core.entity.Employee;
 import com.jalaldeveloper.accountingsystem.hr.domain.core.valueobject.EmployeeId;
 import com.jalaldeveloper.accountingsystem.hr.service.domain.dto.EmployeeDisplayMeta;
@@ -9,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -33,6 +35,10 @@ public interface EmployeeRepository {
     void updateImage(UUID employeeId, String imageUrl, String contentType);
 
     void clearImage(UUID employeeId);
+
+    Optional<Employee> findByUserId(CompanyId companyId, UserId userId);
+
+    List<Employee> findByCompanyId(CompanyId companyId);
 
     long countByDepartmentId(UUID departmentId);
 }

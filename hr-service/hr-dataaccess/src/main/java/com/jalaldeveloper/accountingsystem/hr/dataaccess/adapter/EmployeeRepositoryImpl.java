@@ -1,6 +1,7 @@
 package com.jalaldeveloper.accountingsystem.hr.dataaccess.adapter;
 
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
+import com.jalaldeveloper.accountingsystem.domain.valueobject.UserId;
 import com.jalaldeveloper.accountingsystem.hr.dataaccess.entity.EmployeeEntity;
 import com.jalaldeveloper.accountingsystem.hr.dataaccess.mapper.EmployeeDataAccessMapper;
 import com.jalaldeveloper.accountingsystem.hr.dataaccess.repository.EmployeeJpaRepository;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -104,6 +106,20 @@ public class EmployeeRepositoryImpl implements EmployeeRepository {
         e.setImageUrl(null);
         e.setImageContentType(null);
         jpaRepository.save(e);
+    }
+
+    @Override
+    public Optional<Employee> findByUserId(CompanyId companyId, UserId userId) {
+        return jpaRepository.findByCompanyIdAndUserId(companyId.getId(), userId.getId())
+                .filter(EmployeeEntity::isActive)
+                .map(mapper::entityToDomain);
+    }
+
+    @Override
+    public List<Employee> findByCompanyId(CompanyId companyId) {
+        return jpaRepository.findByCompanyIdAndActiveTrueOrderByDisplayNameAsc(companyId.getId()).stream()
+                .map(mapper::entityToDomain)
+                .toList();
     }
 
     @Override

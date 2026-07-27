@@ -34,6 +34,12 @@ public class EmployeeController {
         return ResponseEntity.ok(service.create(cmd));
     }
 
+    @GetMapping("/me")
+    @RequiresPermission(value = {"hr.employee.self.read", "hr.employee.read"}, op = RequiresPermission.LogicalOp.OR)
+    public ResponseEntity<EmployeeResponse> getMe() {
+        return ResponseEntity.ok(service.getMe());
+    }
+
     @GetMapping("/{id}")
     @RequiresPermission("hr.employee.read")
     public ResponseEntity<EmployeeResponse> get(@PathVariable UUID id) {

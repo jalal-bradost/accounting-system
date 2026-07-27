@@ -1,6 +1,7 @@
 package com.jalaldeveloper.accountingsystem.hr.service.domain;
 
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
+import com.jalaldeveloper.accountingsystem.domain.valueobject.UserId;
 import com.jalaldeveloper.accountingsystem.hr.domain.core.entity.Employee;
 import com.jalaldeveloper.accountingsystem.hr.domain.core.exception.HrDomainException;
 import com.jalaldeveloper.accountingsystem.hr.domain.core.valueobject.DepartmentId;
@@ -8,6 +9,7 @@ import com.jalaldeveloper.accountingsystem.hr.domain.core.valueobject.EmployeeId
 import com.jalaldeveloper.accountingsystem.hr.service.domain.dto.*;
 import com.jalaldeveloper.accountingsystem.hr.service.domain.mapper.HrDataMapper;
 import com.jalaldeveloper.accountingsystem.hr.service.domain.ports.input.EmployeeApplicationService;
+import com.jalaldeveloper.accountingsystem.hr.service.domain.ports.output.platform.PlatformUserLookupPort;
 import com.jalaldeveloper.accountingsystem.hr.service.domain.ports.output.repository.DepartmentRepository;
 import com.jalaldeveloper.accountingsystem.hr.service.domain.ports.output.repository.EmployeeRepository;
 import com.jalaldeveloper.accountingsystem.hr.service.domain.ports.output.storage.EmployeeImageStoragePort;
@@ -29,17 +31,20 @@ class EmployeeApplicationServiceImpl implements EmployeeApplicationService {
 
     private final EmployeeRepository employeeRepository;
     private final DepartmentRepository departmentRepository;
+    private final PlatformUserLookupPort platformUserLookupPort;
     private final HrDataMapper mapper;
     private final ObjectProvider<CompanyContext> companyContextProvider;
     private final EmployeeImageStoragePort imageStorage;
 
     EmployeeApplicationServiceImpl(EmployeeRepository employeeRepository,
                                    DepartmentRepository departmentRepository,
+                                   PlatformUserLookupPort platformUserLookupPort,
                                    HrDataMapper mapper,
                                    ObjectProvider<CompanyContext> companyContextProvider,
                                    EmployeeImageStoragePort imageStorage) {
         this.employeeRepository = employeeRepository;
         this.departmentRepository = departmentRepository;
+        this.platformUserLookupPort = platformUserLookupPort;
         this.mapper = mapper;
         this.companyContextProvider = companyContextProvider;
         this.imageStorage = imageStorage;
@@ -51,6 +56,7 @@ class EmployeeApplicationServiceImpl implements EmployeeApplicationService {
         CompanyId companyId = resolveCompany(cmd.getCompanyId());
         UUID id = UUID.randomUUID();
         Employee employee = mapper.createCommandToEmployee(cmd, id, companyId);
+        validateUserLink(companyId, cmd.getUserId(), null);
         employee.validate();
         Employee saved = employeeRepository.save(employee);
         return toResponse(saved);
@@ -60,6 +66,8 @@ class EmployeeApplicationServiceImpl implements EmployeeApplicationService {
     @Transactional
     public EmployeeResponse update(UUID id, UpdateEmployeeCommand cmd) {
         Employee existing = loadOrThrow(id);
+        UserId linkedUserId = resolveLinkedUserId(cmd, existing);
+        validateUserLink(existing.getCompanyId(), linkedUserId != null ? linkedUserId.getId() : null, id);
         Employee updated = Employee.builder()
                 .id(existing.getId())
                 .companyId(existing.getCompanyId())
@@ -70,6 +78,7 @@ class EmployeeApplicationServiceImpl implements EmployeeApplicationService {
                 .jobTitle(cmd.getJobTitle() != null ? cmd.getJobTitle() : existing.getJobTitle())
                 .departmentId(resolveDepartmentId(cmd, existing))
                 .managerId(resolveManagerId(cmd, existing))
+                .linkedUserId(linkedUserId)
                 .hireDate(cmd.getHireDate() != null ? cmd.getHireDate() : existing.getHireDate())
                 .workStreet(cmd.getWorkStreet() != null ? cmd.getWorkStreet() : existing.getWorkStreet())
                 .workCity(cmd.getWorkCity() != null ? cmd.getWorkCity() : existing.getWorkCity())
@@ -84,6 +93,19 @@ class EmployeeApplicationServiceImpl implements EmployeeApplicationService {
         updated.validate();
         Employee saved = employeeRepository.save(updated);
         return toResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public EmployeeResponse getMe() {
+        CompanyContext ctx = companyContextProvider.getIfAvailable();
+        if (ctx == null) {
+            throw new HrDomainException("No authenticated context");
+        }
+        EmployeeContextResolver resolver = new EmployeeContextResolver(ctx, employeeRepository);
+        return resolver.currentEmployee()
+                .map(this::toResponse)
+                .orElseThrow(() -> new HrDomainException("No employee linked to current user"));
     }
 
     @Override
@@ -190,13 +212,50 @@ class EmployeeApplicationServiceImpl implements EmployeeApplicationService {
             }
         }
         EmployeeImageMeta imageMeta = employeeRepository.findImageMeta(employee.getId().getId()).orElse(null);
+        UUID userId = null;
+        String userDisplayName = null;
+        String userEmail = null;
+        if (employee.getLinkedUserId() != null) {
+            userId = employee.getLinkedUserId().getId();
+            var userInfo = platformUserLookupPort.findUser(employee.getCompanyId(), employee.getLinkedUserId());
+            if (userInfo.isPresent()) {
+                userDisplayName = userInfo.get().displayName();
+                userEmail = userInfo.get().email();
+            }
+        }
         return mapper.employeeToResponse(
                 employee,
                 departmentName,
                 managerName,
                 managerImageUrl,
                 imageMeta != null ? imageMeta.imageUrl() : null,
-                imageMeta != null ? imageMeta.contentType() : null);
+                imageMeta != null ? imageMeta.contentType() : null,
+                userId,
+                userDisplayName,
+                userEmail);
+    }
+
+    private UserId resolveLinkedUserId(UpdateEmployeeCommand cmd, Employee existing) {
+        if (Boolean.TRUE.equals(cmd.getUserIdReset())) {
+            return null;
+        }
+        if (cmd.getUserId() != null) {
+            return new UserId(cmd.getUserId());
+        }
+        return existing.getLinkedUserId();
+    }
+
+    private void validateUserLink(CompanyId companyId, UUID userId, UUID excludeEmployeeId) {
+        if (userId == null) {
+            return;
+        }
+        UserId uid = new UserId(userId);
+        if (!platformUserLookupPort.userExistsInCompany(companyId, uid)) {
+            throw new HrDomainException("Platform user not found in company: " + userId);
+        }
+        if (platformUserLookupPort.isUserLinkedToAnotherEmployee(companyId, uid, excludeEmployeeId)) {
+            throw new HrDomainException("User is already linked to another employee");
+        }
     }
 
     private DepartmentId resolveDepartmentId(UpdateEmployeeCommand cmd, Employee existing) {

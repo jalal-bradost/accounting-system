@@ -14,6 +14,7 @@ public class CreateEmployeeCommand {
     private String jobTitle;
     private UUID departmentId;
     private UUID managerId;
+    private UUID userId;
     private LocalDate hireDate;
     private String workStreet;
     private String workCity;
@@ -38,6 +39,8 @@ public class CreateEmployeeCommand {
     public void setDepartmentId(UUID v) { this.departmentId = v; }
     public UUID getManagerId() { return managerId; }
     public void setManagerId(UUID v) { this.managerId = v; }
+    public UUID getUserId() { return userId; }
+    public void setUserId(UUID v) { this.userId = v; }
     public LocalDate getHireDate() { return hireDate; }
     public void setHireDate(LocalDate v) { this.hireDate = v; }
     public String getWorkStreet() { return workStreet; }

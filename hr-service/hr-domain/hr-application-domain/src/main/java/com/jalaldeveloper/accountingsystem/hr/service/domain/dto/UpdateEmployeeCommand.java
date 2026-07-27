@@ -13,6 +13,8 @@ public class UpdateEmployeeCommand {
     private Boolean departmentIdReset;
     private UUID managerId;
     private Boolean managerIdReset;
+    private UUID userId;
+    private Boolean userIdReset;
     private LocalDate hireDate;
     private String workStreet;
     private String workCity;
@@ -39,6 +41,10 @@ public class UpdateEmployeeCommand {
     public void setManagerId(UUID v) { this.managerId = v; }
     public Boolean getManagerIdReset() { return managerIdReset; }
     public void setManagerIdReset(Boolean v) { this.managerIdReset = v; }
+    public UUID getUserId() { return userId; }
+    public void setUserId(UUID v) { this.userId = v; }
+    public Boolean getUserIdReset() { return userIdReset; }
+    public void setUserIdReset(Boolean v) { this.userIdReset = v; }
     public LocalDate getHireDate() { return hireDate; }
     public void setHireDate(LocalDate v) { this.hireDate = v; }
     public String getWorkStreet() { return workStreet; }

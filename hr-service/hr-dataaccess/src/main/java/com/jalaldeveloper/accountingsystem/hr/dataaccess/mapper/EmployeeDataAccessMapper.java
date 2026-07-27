@@ -1,6 +1,7 @@
 package com.jalaldeveloper.accountingsystem.hr.dataaccess.mapper;
 
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
+import com.jalaldeveloper.accountingsystem.domain.valueobject.UserId;
 import com.jalaldeveloper.accountingsystem.hr.dataaccess.entity.EmployeeEntity;
 import com.jalaldeveloper.accountingsystem.hr.domain.core.entity.Employee;
 import com.jalaldeveloper.accountingsystem.hr.domain.core.valueobject.DepartmentId;
@@ -22,6 +23,7 @@ public class EmployeeDataAccessMapper {
                 .jobTitle(e.getJobTitle())
                 .departmentId(e.getDepartmentId() != null ? new DepartmentId(e.getDepartmentId()) : null)
                 .managerId(e.getManagerId() != null ? new EmployeeId(e.getManagerId()) : null)
+                .linkedUserId(e.getUserId() != null ? new UserId(e.getUserId()) : null)
                 .hireDate(e.getHireDate())
                 .workStreet(e.getWorkStreet())
                 .workCity(e.getWorkCity())
@@ -47,6 +49,7 @@ public class EmployeeDataAccessMapper {
         e.setJobTitle(d.getJobTitle());
         e.setDepartmentId(d.getDepartmentId() != null ? d.getDepartmentId().getId() : null);
         e.setManagerId(d.getManagerId() != null ? d.getManagerId().getId() : null);
+        e.setUserId(d.getLinkedUserId() != null ? d.getLinkedUserId().getId() : null);
         e.setHireDate(d.getHireDate());
         e.setWorkStreet(d.getWorkStreet());
         e.setWorkCity(d.getWorkCity());

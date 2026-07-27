@@ -1,6 +1,7 @@
 package com.jalaldeveloper.accountingsystem.hr.service.domain.mapper;
 
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
+import com.jalaldeveloper.accountingsystem.domain.valueobject.UserId;
 import com.jalaldeveloper.accountingsystem.hr.domain.core.entity.Department;
 import com.jalaldeveloper.accountingsystem.hr.domain.core.entity.Employee;
 import com.jalaldeveloper.accountingsystem.hr.domain.core.valueobject.DepartmentId;
@@ -24,6 +25,7 @@ public class HrDataMapper {
                 .jobTitle(cmd.getJobTitle())
                 .departmentId(cmd.getDepartmentId() != null ? new DepartmentId(cmd.getDepartmentId()) : null)
                 .managerId(cmd.getManagerId() != null ? new EmployeeId(cmd.getManagerId()) : null)
+                .linkedUserId(cmd.getUserId() != null ? new UserId(cmd.getUserId()) : null)
                 .hireDate(cmd.getHireDate())
                 .workStreet(cmd.getWorkStreet())
                 .workCity(cmd.getWorkCity())
@@ -50,7 +52,10 @@ public class HrDataMapper {
                                                String managerName,
                                                String managerImageUrl,
                                                String imageUrl,
-                                               String imageContentType) {
+                                               String imageContentType,
+                                               UUID userId,
+                                               String userDisplayName,
+                                               String userEmail) {
         if (e == null) return null;
         return new EmployeeResponse(
                 e.getId().getId(),
@@ -65,6 +70,9 @@ public class HrDataMapper {
                 e.getManagerId() != null ? e.getManagerId().getId() : null,
                 managerName,
                 managerImageUrl,
+                userId,
+                userDisplayName,
+                userEmail,
                 e.getHireDate(),
                 e.getWorkStreet(),
                 e.getWorkCity(),

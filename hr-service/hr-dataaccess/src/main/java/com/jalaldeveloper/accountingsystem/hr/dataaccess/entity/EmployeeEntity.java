@@ -64,6 +64,9 @@ public class EmployeeEntity extends ArchivableEntity {
     @Column(name = "image_content_type", length = 100)
     private String imageContentType;
 
+    @Column(name = "user_id")
+    private UUID userId;
+
     public EmployeeEntity() {}
 
     public UUID getId() { return id; }
@@ -102,4 +105,6 @@ public class EmployeeEntity extends ArchivableEntity {
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
     public String getImageContentType() { return imageContentType; }
     public void setImageContentType(String imageContentType) { this.imageContentType = imageContentType; }
+    public UUID getUserId() { return userId; }
+    public void setUserId(UUID userId) { this.userId = userId; }
 }
