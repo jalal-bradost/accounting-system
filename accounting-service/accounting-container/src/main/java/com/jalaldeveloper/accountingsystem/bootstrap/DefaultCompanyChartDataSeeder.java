@@ -62,6 +62,8 @@ public class DefaultCompanyChartDataSeeder implements ApplicationRunner {
         insertAccount("430016", "Salary Expense", AccountType.EXPENSES);
         insertAccount("430017", "Salaries Payable", AccountType.CURRENT_LIABILITIES);
         insertAccount("430018", "Payroll Deductions Payable", AccountType.CURRENT_LIABILITIES);
+        insertAccount("430019", "Opening Balance Equity", AccountType.EQUITY);
+        insertAccount("430020", "Owner Capital", AccountType.EQUITY);
     }
 
     private void insertAccount(String code, String name, AccountType type) {
@@ -85,6 +87,7 @@ public class DefaultCompanyChartDataSeeder implements ApplicationRunner {
         insertJournal("430004", "Purchase", JournalType.PURCHASE);
         insertJournal("INV", "Inventory Valuation", JournalType.MISC);
         insertJournal("PAY", "Payroll", JournalType.MISC);
+        insertJournal("OPEN", "Opening Balances", JournalType.MISC);
     }
 
     private void insertJournal(String code, String name, JournalType type) {
