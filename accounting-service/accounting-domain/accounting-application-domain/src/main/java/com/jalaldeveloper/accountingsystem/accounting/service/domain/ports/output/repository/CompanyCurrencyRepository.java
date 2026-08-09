@@ -63,6 +63,13 @@ public interface CompanyCurrencyRepository {
             boolean active,
             LocalDate lastRateUpdated);
 
+    /**
+     * Re-points the company's base currency to {@code newBaseId}: clears the base flag
+     * from every other currency and marks the target as base with {@code ratePerBase = 1}
+     * and {@code active = true}. Callers must guarantee the target belongs to the company.
+     */
+    void reassignBaseCurrency(CompanyId companyId, UUID newBaseId);
+
     /** Newest-first dated history for the currency (preserves all prior lines). */
     List<RateLine> listRates(UUID currencyId);
 

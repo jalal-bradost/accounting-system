@@ -43,4 +43,21 @@ public interface CompanyCurrencyApplicationService {
 
     /** Resolves the rate that applies on a given transaction date. */
     Optional<RateLine> rateOn(UUID companyId, UUID currencyId, LocalDate date);
+
+    /** The company's current base (functional) currency, if one is configured. */
+    Optional<CurrencyRow> baseCurrency(UUID companyId);
+
+    /**
+     * True when the base currency can no longer be changed because the company already
+     * has ledger activity (any journal entry). Used to disable the control up front.
+     */
+    boolean baseCurrencyLocked(UUID companyId);
+
+    /**
+     * Re-points the company's base currency to {@code code}, creating the currency row
+     * when it does not yet exist. No-op when {@code code} is already the base. This is the
+     * accounting side of a base-currency change; callers must enforce the transaction
+     * guard (see {@link #baseCurrencyLocked(UUID)}) before invoking it.
+     */
+    CurrencyRow setBaseCurrency(UUID companyId, String code);
 }

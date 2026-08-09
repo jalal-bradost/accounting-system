@@ -127,6 +127,32 @@ public class CompanyCurrencyRepositoryAdapter implements CompanyCurrencyReposito
     }
 
     @Override
+    @Transactional
+    public void reassignBaseCurrency(CompanyId companyId, UUID newBaseId) {
+        List<CompanyCurrencyEntity> all =
+                jpaRepository.findByCompanyIdOrderByBaseCurrencyDescCodeAsc(companyId.getId());
+        CompanyCurrencyEntity target = null;
+        for (CompanyCurrencyEntity e : all) {
+            if (e.getId().equals(newBaseId)) {
+                target = e;
+            } else if (e.isBaseCurrency()) {
+                // Demote the previous base. Its stored rate stays as-is (was 1); with no
+                // transactions on the company this is a harmless placeholder the user can adjust.
+                e.setBaseCurrency(false);
+            }
+        }
+        if (target == null) {
+            throw new IllegalArgumentException("Currency not found for company");
+        }
+        target.setBaseCurrency(true);
+        target.setRatePerBase(BigDecimal.ONE);
+        target.setActive(true);
+        jpaRepository.saveAll(all);
+        // A base currency always converts at 1; anchor today's rate line so lookups resolve.
+        upsertRate(newBaseId, LocalDate.now(), BigDecimal.ONE);
+    }
+
+    @Override
     public List<RateLine> listRates(UUID currencyId) {
         return rateJpaRepository.findByCurrencyIdOrderByEffectiveDateDesc(currencyId).stream()
                 .map(this::toRateLine)

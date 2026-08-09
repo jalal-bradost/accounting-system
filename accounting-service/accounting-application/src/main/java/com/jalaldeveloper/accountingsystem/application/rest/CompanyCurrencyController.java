@@ -46,6 +46,18 @@ public class CompanyCurrencyController {
         return ResponseEntity.ok(body);
     }
 
+    @GetMapping("/base")
+    @RequiresPermission("accounting.currency.read")
+    public ResponseEntity<BaseCurrencyResponse> base(@PathVariable UUID companyId) {
+        CurrencyResponse base =
+                companyCurrencyApplicationService
+                        .baseCurrency(companyId)
+                        .map(CurrencyResponse::from)
+                        .orElse(null);
+        boolean locked = companyCurrencyApplicationService.baseCurrencyLocked(companyId);
+        return ResponseEntity.ok(new BaseCurrencyResponse(base, locked));
+    }
+
     @PostMapping
     @RequiresPermission("accounting.currency.write")
     public ResponseEntity<CurrencyResponse> create(
@@ -112,6 +124,9 @@ public class CompanyCurrencyController {
                 .map(line -> ResponseEntity.ok(CurrencyRateResponse.from(line)))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
+
+    /** Current base currency (nullable when none configured) plus whether it is locked. */
+    public record BaseCurrencyResponse(CurrencyResponse baseCurrency, boolean locked) {}
 
     public static final class CurrencyResponse {
         private final UUID id;

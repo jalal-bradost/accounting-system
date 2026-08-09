@@ -6,6 +6,7 @@ import com.jalaldeveloper.accountingsystem.platform.dataaccess.repository.AppUse
 import com.jalaldeveloper.accountingsystem.platform.dataaccess.repository.CompanyJpaRepository;
 import com.jalaldeveloper.accountingsystem.platform.dataaccess.repository.RoleJpaRepository;
 import com.jalaldeveloper.accountingsystem.platform.dataaccess.repository.UserRoleJpaRepository;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,15 +25,18 @@ public class CompanyApplicationService {
     private final UserRoleJpaRepository userRoleRepository;
     private final RoleJpaRepository roleRepository;
     private final AppUserJpaRepository appUserRepository;
+    private final ObjectProvider<BaseCurrencyChangeHandler> baseCurrencyChangeHandler;
 
     public CompanyApplicationService(CompanyJpaRepository companyRepository,
                                      UserRoleJpaRepository userRoleRepository,
                                      RoleJpaRepository roleRepository,
-                                     AppUserJpaRepository appUserRepository) {
+                                     AppUserJpaRepository appUserRepository,
+                                     ObjectProvider<BaseCurrencyChangeHandler> baseCurrencyChangeHandler) {
         this.companyRepository = companyRepository;
         this.userRoleRepository = userRoleRepository;
         this.roleRepository = roleRepository;
         this.appUserRepository = appUserRepository;
+        this.baseCurrencyChangeHandler = baseCurrencyChangeHandler;
     }
 
     @Transactional(readOnly = true)
@@ -87,8 +91,19 @@ public class CompanyApplicationService {
     @Transactional
     public CompanyResponse update(UUID id, CompanyWriteRequest req) {
         CompanyEntity c = load(id);
+        String previousCurrency = c.getDefaultCurrency();
         applyWrite(c, req);
         companyRepository.save(c);
+        // Keep the accounting base currency in sync when the default currency actually
+        // changes. Runs in the same transaction, so a rejection (transactions exist)
+        // rolls back the default_currency change too.
+        String newCurrency = c.getDefaultCurrency();
+        if (newCurrency != null && !newCurrency.equalsIgnoreCase(previousCurrency)) {
+            BaseCurrencyChangeHandler handler = baseCurrencyChangeHandler.getIfAvailable();
+            if (handler != null) {
+                handler.changeBaseCurrency(id, newCurrency);
+            }
+        }
         return CompanyResponse.from(c);
     }
 

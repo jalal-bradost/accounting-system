@@ -13,6 +13,8 @@ public interface JournalEntryJpaRepository extends JpaRepository<JournalEntryEnt
 
     List<JournalEntryEntity> findByCompanyId(UUID companyId);
 
+    boolean existsByCompanyId(UUID companyId);
+
     List<JournalEntryEntity> findByCompanyIdAndJournalIdAndEntryDateBetween(
             UUID companyId, UUID journalId, LocalDate from, LocalDate to);
 

@@ -5,6 +5,7 @@ import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.outpu
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository.CompanyCurrencyRepository.CurrencyRow;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository.CompanyCurrencyRepository.PageResult;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository.CompanyCurrencyRepository.RateLine;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository.LedgerActivityRepository;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,9 +20,13 @@ import java.util.UUID;
 class CompanyCurrencyApplicationServiceImpl implements CompanyCurrencyApplicationService {
 
     private final CompanyCurrencyRepository companyCurrencyRepository;
+    private final LedgerActivityRepository ledgerActivityRepository;
 
-    CompanyCurrencyApplicationServiceImpl(CompanyCurrencyRepository companyCurrencyRepository) {
+    CompanyCurrencyApplicationServiceImpl(
+            CompanyCurrencyRepository companyCurrencyRepository,
+            LedgerActivityRepository ledgerActivityRepository) {
         this.companyCurrencyRepository = companyCurrencyRepository;
+        this.ledgerActivityRepository = ledgerActivityRepository;
     }
 
     @Override
@@ -156,6 +161,56 @@ class CompanyCurrencyApplicationServiceImpl implements CompanyCurrencyApplicatio
                 .findByCompanyAndId(new CompanyId(companyId), currencyId)
                 .orElseThrow(() -> new IllegalArgumentException("Currency not found"));
         return companyCurrencyRepository.findEffectiveRate(currencyId, date);
+    }
+
+    @Override
+    public Optional<CurrencyRow> baseCurrency(UUID companyId) {
+        return companyCurrencyRepository.findBaseCurrency(new CompanyId(companyId));
+    }
+
+    @Override
+    public boolean baseCurrencyLocked(UUID companyId) {
+        return ledgerActivityRepository.hasJournalEntries(new CompanyId(companyId));
+    }
+
+    @Override
+    @Transactional
+    public CurrencyRow setBaseCurrency(UUID companyId, String code) {
+        CompanyId cid = new CompanyId(companyId);
+        String normalized = code == null ? "" : code.trim().toUpperCase();
+        if (normalized.length() != 3) {
+            throw new IllegalArgumentException("Currency code must be exactly 3 letters");
+        }
+
+        Optional<CurrencyRow> current = companyCurrencyRepository.findBaseCurrency(cid);
+        if (current.isPresent() && current.get().code().equalsIgnoreCase(normalized)) {
+            return current.get();
+        }
+
+        UUID targetId =
+                companyCurrencyRepository
+                        .findByCompanyAndCode(cid, normalized)
+                        .map(CurrencyRow::id)
+                        .orElse(null);
+        if (targetId == null) {
+            targetId = UUID.randomUUID();
+            // Seed a sensible default row; the user can refine symbol/name afterwards.
+            companyCurrencyRepository.insert(
+                    targetId,
+                    cid,
+                    normalized,
+                    normalized,
+                    normalized,
+                    BigDecimal.ONE,
+                    false,
+                    true,
+                    LocalDate.now());
+        }
+
+        companyCurrencyRepository.reassignBaseCurrency(cid, targetId);
+        return companyCurrencyRepository
+                .findByCompanyAndId(cid, targetId)
+                .orElseThrow(() -> new IllegalStateException("Failed to load base currency"));
     }
 
     private LocalDate recomputeLastRateUpdated(UUID currencyId, LocalDate today, LocalDate fallback) {
