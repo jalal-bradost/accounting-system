@@ -57,6 +57,13 @@ public class ProductController {
         return ResponseEntity.ok(service.unarchiveProduct(id));
     }
 
+    @DeleteMapping("/{id}")
+    @RequiresPermission("inventory.product.write")
+    public ResponseEntity<Void> delete(@PathVariable UUID id) {
+        service.deleteProduct(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping(value = "/{id}/image", consumes = "multipart/form-data")
     @RequiresPermission("inventory.product.write")
     public ResponseEntity<ProductResponse> uploadImage(@PathVariable UUID id,

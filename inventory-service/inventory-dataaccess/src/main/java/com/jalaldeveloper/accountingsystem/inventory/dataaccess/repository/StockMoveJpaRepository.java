@@ -28,4 +28,6 @@ public interface StockMoveJpaRepository extends JpaRepository<StockMoveEntity, U
             """)
     BigDecimal sumPickedForSalesOrderLine(@Param("lineId") UUID salesOrderLineId,
                                           @Param("doneState") MoveState doneState);
+
+    boolean existsByProductId(UUID productId);
 }

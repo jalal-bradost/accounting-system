@@ -180,6 +180,21 @@ class ProductApplicationServiceImpl implements ProductApplicationService {
     }
 
     @Override
+    @Transactional
+    public void deleteProduct(UUID productId) {
+        Product p = loadIncludingArchivedOrThrow(productId);
+        if (productRepository.hasStockActivity(p.getId())) {
+            throw new InventoryDomainException(
+                    "Cannot delete product \"" + p.getName() + "\" because it has stock activity "
+                            + "(moves, valuation layers, or on-hand quantities). Archive it instead.");
+        }
+        productRepository.findImageMeta(productId).ifPresent(meta -> imageStorage.deleteIfPresent(meta.imageUrl()));
+        productRepository.deleteById(p.getId());
+        auditLogPort.recordBusinessEvent(p.getCompanyId(), MODEL_NAME, productId,
+                "Product deleted: " + p.getSku(), null);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public ProductResponse getProduct(UUID productId) {
         return toResponse(loadIncludingArchivedOrThrow(productId));
@@ -218,6 +233,27 @@ class ProductApplicationServiceImpl implements ProductApplicationService {
                 cmd.getStockOutputAccountId(), cmd.getCogsAccountId());
         c.validate();
         return mapper.categoryToResponse(categoryRepository.save(c));
+    }
+
+    @Override
+    @Transactional
+    public void deleteCategory(UUID categoryId) {
+        ProductCategoryId id = new ProductCategoryId(categoryId);
+        ProductCategory c = categoryRepository.findByIdIncludingArchived(id)
+                .orElseThrow(() -> new InventoryDomainException("Product category not found: " + categoryId));
+        if (productRepository.existsByCategory(id)) {
+            throw new InventoryDomainException(
+                    "Cannot delete category \"" + c.getName() + "\" because products are assigned to it. "
+                            + "Reassign or remove those products first.");
+        }
+        if (categoryRepository.hasChildren(id)) {
+            throw new InventoryDomainException(
+                    "Cannot delete category \"" + c.getName() + "\" because it has child categories. "
+                            + "Delete or reparent them first.");
+        }
+        categoryRepository.deleteById(id);
+        auditLogPort.recordBusinessEvent(c.getCompanyId(), CATEGORY_MODEL_NAME, categoryId,
+                "Product category deleted: " + c.getName(), null);
     }
 
     @Override

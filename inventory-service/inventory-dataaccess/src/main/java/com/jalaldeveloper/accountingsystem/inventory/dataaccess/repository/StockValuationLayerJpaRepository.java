@@ -44,4 +44,6 @@ public interface StockValuationLayerJpaRepository extends JpaRepository<StockVal
         """)
     List<StockValuationLayerEntity> findByProduct(@Param("companyId") UUID companyId,
                                                    @Param("productId") UUID productId);
+
+    boolean existsByProductId(UUID productId);
 }

@@ -28,6 +28,9 @@ public interface ProductApplicationService {
 
     ProductResponse unarchiveProduct(UUID productId);
 
+    /** Permanently delete a product. Fails if the product has stock activity. */
+    void deleteProduct(UUID productId);
+
     ProductResponse getProduct(UUID productId);
 
     Page<ProductResponse> searchProducts(CompanyId companyId,
@@ -38,6 +41,9 @@ public interface ProductApplicationService {
     ProductCategoryResponse createCategory(@Valid ProductCategoryCommand command);
 
     ProductCategoryResponse updateCategory(UUID categoryId, @Valid ProductCategoryCommand command);
+
+    /** Permanently delete a category. Fails if products reference it or it has child categories. */
+    void deleteCategory(UUID categoryId);
 
     List<ProductCategoryResponse> listCategories(CompanyId companyId, boolean includeArchived);
 }

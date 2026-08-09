@@ -4,7 +4,11 @@ import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import com.jalaldeveloper.accountingsystem.inventory.dataaccess.entity.ProductEntity;
 import com.jalaldeveloper.accountingsystem.inventory.dataaccess.mapper.ProductDataAccessMapper;
 import com.jalaldeveloper.accountingsystem.inventory.dataaccess.repository.ProductJpaRepository;
+import com.jalaldeveloper.accountingsystem.inventory.dataaccess.repository.StockMoveJpaRepository;
+import com.jalaldeveloper.accountingsystem.inventory.dataaccess.repository.StockQuantJpaRepository;
+import com.jalaldeveloper.accountingsystem.inventory.dataaccess.repository.StockValuationLayerJpaRepository;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.Product;
+import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductCategoryId;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductId;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductImageMeta;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.ProductRepository;
@@ -23,10 +27,20 @@ public class ProductRepositoryImpl implements ProductRepository {
 
     private final ProductJpaRepository jpa;
     private final ProductDataAccessMapper mapper;
+    private final StockQuantJpaRepository quantJpa;
+    private final StockValuationLayerJpaRepository valuationLayerJpa;
+    private final StockMoveJpaRepository moveJpa;
 
-    public ProductRepositoryImpl(ProductJpaRepository jpa, ProductDataAccessMapper mapper) {
+    public ProductRepositoryImpl(ProductJpaRepository jpa,
+                                 ProductDataAccessMapper mapper,
+                                 StockQuantJpaRepository quantJpa,
+                                 StockValuationLayerJpaRepository valuationLayerJpa,
+                                 StockMoveJpaRepository moveJpa) {
         this.jpa = jpa;
         this.mapper = mapper;
+        this.quantJpa = quantJpa;
+        this.valuationLayerJpa = valuationLayerJpa;
+        this.moveJpa = moveJpa;
     }
 
     @Override
@@ -91,5 +105,23 @@ public class ProductRepositoryImpl implements ProductRepository {
         e.setImageUrl(null);
         e.setImageContentType(null);
         jpa.save(e);
+    }
+
+    @Override
+    public void deleteById(ProductId id) {
+        jpa.deleteById(id.getId());
+    }
+
+    @Override
+    public boolean existsByCategory(ProductCategoryId categoryId) {
+        return jpa.existsByCategoryId(categoryId.getId());
+    }
+
+    @Override
+    public boolean hasStockActivity(ProductId id) {
+        UUID productId = id.getId();
+        return moveJpa.existsByProductId(productId)
+                || valuationLayerJpa.existsByProductId(productId)
+                || quantJpa.existsByProductId(productId);
     }
 }

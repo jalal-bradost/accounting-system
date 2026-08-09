@@ -18,4 +18,6 @@ public interface ProductCategoryJpaRepository extends JpaRepository<ProductCateg
         """)
     List<ProductCategoryEntity> findByCompany(@Param("companyId") UUID companyId,
                                                @Param("includeArchived") boolean includeArchived);
+
+    boolean existsByParentId(UUID parentId);
 }

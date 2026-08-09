@@ -27,4 +27,6 @@ public interface ProductJpaRepository extends JpaRepository<ProductEntity, UUID>
                                 @Param("query") String query,
                                 @Param("includeArchived") boolean includeArchived,
                                 Pageable pageable);
+
+    boolean existsByCategoryId(UUID categoryId);
 }

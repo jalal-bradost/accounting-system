@@ -2,6 +2,7 @@ package com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.outpu
 
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.Product;
+import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductCategoryId;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductId;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductImageMeta;
 import org.springframework.data.domain.Page;
@@ -25,4 +26,15 @@ public interface ProductRepository {
     void updateImage(UUID productId, String imageUrl, String contentType);
 
     void clearImage(UUID productId);
+
+    void deleteById(ProductId id);
+
+    /** True when any product references the given category (active or archived). */
+    boolean existsByCategory(ProductCategoryId categoryId);
+
+    /**
+     * True when the product has stock activity that makes deletion unsafe: any stock move,
+     * valuation layer, or stock quant referencing it.
+     */
+    boolean hasStockActivity(ProductId id);
 }

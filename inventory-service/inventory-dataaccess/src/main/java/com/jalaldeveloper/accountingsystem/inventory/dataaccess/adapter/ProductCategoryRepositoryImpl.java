@@ -49,4 +49,14 @@ public class ProductCategoryRepositoryImpl implements ProductCategoryRepository 
                 .map(mapper::entityToDomain)
                 .toList();
     }
+
+    @Override
+    public void deleteById(ProductCategoryId id) {
+        jpa.deleteById(id.getId());
+    }
+
+    @Override
+    public boolean hasChildren(ProductCategoryId id) {
+        return jpa.existsByParentId(id.getId());
+    }
 }

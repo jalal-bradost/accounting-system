@@ -36,6 +36,13 @@ public class ProductCategoryController {
         return ResponseEntity.ok(service.updateCategory(id, cmd));
     }
 
+    @DeleteMapping("/{id}")
+    @RequiresPermission("inventory.product.write")
+    public ResponseEntity<Void> delete(@PathVariable UUID id) {
+        service.deleteCategory(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping
     @RequiresPermission("inventory.product.read")
     public ResponseEntity<List<ProductCategoryResponse>> list(@CurrentCompany CompanyId companyId,

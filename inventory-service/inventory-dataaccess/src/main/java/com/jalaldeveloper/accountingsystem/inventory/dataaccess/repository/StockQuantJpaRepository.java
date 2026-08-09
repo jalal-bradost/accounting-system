@@ -64,4 +64,6 @@ public interface StockQuantJpaRepository extends JpaRepository<StockQuantEntity,
         """)
     List<StockQuantEntity> findByLocation(@Param("companyId") UUID companyId,
                                            @Param("locationId") UUID locationId);
+
+    boolean existsByProductId(UUID productId);
 }
