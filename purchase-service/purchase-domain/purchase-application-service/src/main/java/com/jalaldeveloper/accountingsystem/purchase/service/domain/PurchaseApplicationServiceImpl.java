@@ -70,6 +70,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -280,9 +281,21 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
 
     /** Quantities already reserved on draft vendor bills (not yet posted to qtyInvoiced). */
     private Map<UUID, BigDecimal> draftBillQtyByPoLine(UUID purchaseOrderId) {
+        return draftBillQtyByPoLine(purchaseOrderId, VendorBillMoveType.BILL);
+    }
+
+    private Map<UUID, BigDecimal> draftCreditNoteQtyByPoLine(UUID purchaseOrderId) {
+        return draftBillQtyByPoLine(purchaseOrderId, VendorBillMoveType.CREDIT_NOTE);
+    }
+
+    private Map<UUID, BigDecimal> draftBillQtyByPoLine(UUID purchaseOrderId, VendorBillMoveType moveType) {
         Map<UUID, BigDecimal> allocated = new HashMap<>();
         for (VendorBill bill : vendorBillRepository.findByPurchaseOrderId(purchaseOrderId)) {
             if (bill.getState() != VendorBillState.DRAFT) {
+                continue;
+            }
+            VendorBillMoveType type = bill.getMoveType() != null ? bill.getMoveType() : VendorBillMoveType.BILL;
+            if (type != moveType) {
                 continue;
             }
             bill.getLines().size();
@@ -512,6 +525,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         bill.setReference(command.getReference() != null ? command.getReference() : "BILL/" + bill.getId().toString().substring(0, 8));
         bill.setCurrencyCode(po.getCurrencyCode());
         bill.setState(VendorBillState.DRAFT);
+        bill.setMoveType(VendorBillMoveType.BILL);
         bill.setExchangeRateToCompany(resolveExchangeRate(
                 po.getCompanyId(), po.getCurrencyCode(), command.getBillDate(), po.getExchangeRateToCompany()));
         bill.setCreatedAt(now);
@@ -668,6 +682,97 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
 
     @Override
     @Transactional
+    public VendorBillResponse createCreditNoteFromVendorBill(UUID billId, CreateCreditNoteFromVendorBillCommand command) {
+        VendorBill source = vendorBillRepository.findById(billId)
+                .orElseThrow(() -> new PurchaseDomainException("Vendor bill not found: " + billId));
+        UUID companyId = companyIdOrDefault(command.getCompanyId());
+        if (!source.getCompanyId().equals(companyId)) {
+            throw new PurchaseDomainException("Bill company mismatch");
+        }
+        if (source.getState() != VendorBillState.POSTED) {
+            throw new PurchaseDomainException("Only posted vendor bills can be credited");
+        }
+        if (source.getMoveType() == VendorBillMoveType.CREDIT_NOTE) {
+            throw new PurchaseDomainException("Cannot create a credit note from another credit note");
+        }
+        source.getLines().size();
+        for (VendorBillLine line : source.getLines()) {
+            line.getTaxSnapshots().size();
+        }
+
+        Map<UUID, BigDecimal> qtyByLineId = new LinkedHashMap<>();
+        if (command.getLines() == null || command.getLines().isEmpty()) {
+            for (VendorBillLine line : source.getLines()) {
+                qtyByLineId.put(line.getId(), line.getQty());
+            }
+        } else {
+            for (CreateCreditNoteFromVendorBillCommand.CreditNoteLineQtyCommand lc : command.getLines()) {
+                qtyByLineId.merge(lc.getBillLineId(), lc.getQty(), BigDecimal::add);
+            }
+        }
+
+        Instant now = Instant.now();
+        VendorBill cn = new VendorBill();
+        cn.setId(UUID.randomUUID());
+        cn.setCompanyId(companyId);
+        cn.setVendorPartnerId(source.getVendorPartnerId());
+        cn.setPurchaseOrderId(source.getPurchaseOrderId());
+        cn.setBillDate(command.getBillDate());
+        cn.setDueDate(command.getDueDate());
+        cn.setReference(command.getReference() != null ? command.getReference()
+                : "CN/" + (source.getReference() != null ? source.getReference() : source.getId()));
+        cn.setCurrencyCode(source.getCurrencyCode());
+        cn.setState(VendorBillState.DRAFT);
+        cn.setMoveType(VendorBillMoveType.CREDIT_NOTE);
+        cn.setReversedBillId(source.getId());
+        cn.setExchangeRateToCompany(source.getExchangeRateToCompany());
+        cn.setCreatedAt(now);
+        cn.setUpdatedAt(now);
+        cn.setRowVersion(0L);
+
+        int seq = 0;
+        for (VendorBillLine srcLine : source.getLines()) {
+            BigDecimal qty = qtyByLineId.get(srcLine.getId());
+            if (qty == null || qty.signum() <= 0) {
+                continue;
+            }
+            if (qty.compareTo(srcLine.getQty()) > 0) {
+                throw new PurchaseDomainException(
+                        "Credit qty " + qty + " exceeds bill line qty " + srcLine.getQty() + " for " + srcLine.getName());
+            }
+            BigDecimal ratio = qty.divide(srcLine.getQty(), 8, RoundingMode.HALF_UP);
+            VendorBillLine line = new VendorBillLine();
+            line.setId(UUID.randomUUID());
+            line.setSequence(++seq);
+            line.setPurchaseOrderLineId(srcLine.getPurchaseOrderLineId());
+            line.setProductId(srcLine.getProductId());
+            line.setName(srcLine.getName());
+            line.setUomId(srcLine.getUomId());
+            line.setQty(qty.setScale(4, RoundingMode.HALF_UP));
+            line.setUnitPrice(srcLine.getUnitPrice());
+            line.setAccountId(srcLine.getAccountId());
+            line.setCreatedAt(now);
+            line.setUpdatedAt(now);
+            for (VendorBillLineTax tax : srcLine.getTaxSnapshots()) {
+                VendorBillLineTax ts = new VendorBillLineTax();
+                ts.setId(UUID.randomUUID());
+                ts.setTaxId(tax.getTaxId());
+                ts.setTaxName(tax.getTaxName());
+                ts.setTaxBase(tax.getTaxBase().multiply(ratio).setScale(4, RoundingMode.HALF_UP));
+                ts.setTaxAmount(tax.getTaxAmount().multiply(ratio).setScale(4, RoundingMode.HALF_UP));
+                ts.setAccountId(tax.getAccountId());
+                line.getTaxSnapshots().add(ts);
+            }
+            cn.getLines().add(line);
+        }
+        if (cn.getLines().isEmpty()) {
+            throw new PurchaseDomainException("Credit note has no lines");
+        }
+        return toBillResponse(vendorBillRepository.save(cn));
+    }
+
+    @Override
+    @Transactional
     public VendorBillResponse postVendorBill(UUID billId) {
         VendorBill bill = vendorBillRepository.findById(billId)
                 .orElseThrow(() -> new PurchaseDomainException("Vendor bill not found: " + billId));
@@ -688,6 +793,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         BigDecimal rate = resolveExchangeRate(
                 bill.getCompanyId(), bill.getCurrencyCode(), bill.getBillDate(), bill.getExchangeRateToCompany());
         bill.setExchangeRateToCompany(rate);
+        boolean creditNote = bill.getMoveType() == VendorBillMoveType.CREDIT_NOTE;
         List<JournalItemCommand> items = new ArrayList<>();
         BigDecimal apCreditCompany = BigDecimal.ZERO;
         BigDecimal apDocTotal = BigDecimal.ZERO;
@@ -697,34 +803,60 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             BigDecimal lineNetDoc = PurchaseOrderRules.lineNet(line.getQty(), line.getUnitPrice(), disc)
                     .setScale(4, RoundingMode.HALF_UP);
             BigDecimal netComp = PurchaseTaxEngine.convertAtRate(lineNetDoc, rate);
-            items.add(new JournalItemCommand(line.getAccountId(), line.getName(), netComp, BigDecimal.ZERO,
-                    bill.getCurrencyCode(), lineNetDoc, null));
-            apCreditCompany = apCreditCompany.add(netComp);
-            apDocTotal = apDocTotal.add(lineNetDoc);
+            if (netComp.signum() > 0) {
+                if (creditNote) {
+                    items.add(new JournalItemCommand(line.getAccountId(), line.getName(), BigDecimal.ZERO, netComp,
+                            bill.getCurrencyCode(), lineNetDoc.negate(), null));
+                } else {
+                    items.add(new JournalItemCommand(line.getAccountId(), line.getName(), netComp, BigDecimal.ZERO,
+                            bill.getCurrencyCode(), lineNetDoc, null));
+                }
+                apCreditCompany = apCreditCompany.add(netComp);
+                apDocTotal = apDocTotal.add(lineNetDoc);
+            }
             for (VendorBillLineTax ts : line.getTaxSnapshots()) {
                 BigDecimal taxDoc = ts.getTaxAmount().setScale(4, RoundingMode.HALF_UP);
                 BigDecimal taxComp = PurchaseTaxEngine.convertAtRate(taxDoc, rate);
-                items.add(new JournalItemCommand(ts.getAccountId(), ts.getTaxName(), taxComp, BigDecimal.ZERO,
-                        bill.getCurrencyCode(), taxDoc, null));
+                if (taxComp.signum() <= 0) {
+                    continue;
+                }
+                if (creditNote) {
+                    items.add(new JournalItemCommand(ts.getAccountId(), ts.getTaxName(), BigDecimal.ZERO, taxComp,
+                            bill.getCurrencyCode(), taxDoc.negate(), null));
+                } else {
+                    items.add(new JournalItemCommand(ts.getAccountId(), ts.getTaxName(), taxComp, BigDecimal.ZERO,
+                            bill.getCurrencyCode(), taxDoc, null));
+                }
                 apCreditCompany = apCreditCompany.add(taxComp);
                 apDocTotal = apDocTotal.add(taxDoc);
             }
         }
-        items.add(new JournalItemCommand(payableAccount, "Accounts payable", BigDecimal.ZERO, apCreditCompany,
-                bill.getCurrencyCode(), apDocTotal.negate(), bill.getVendorPartnerId()));
+        if (apCreditCompany.signum() > 0) {
+            if (creditNote) {
+                items.add(new JournalItemCommand(payableAccount, "Accounts payable", apCreditCompany, BigDecimal.ZERO,
+                        bill.getCurrencyCode(), apDocTotal, bill.getVendorPartnerId()));
+            } else {
+                items.add(new JournalItemCommand(payableAccount, "Accounts payable", BigDecimal.ZERO, apCreditCompany,
+                        bill.getCurrencyCode(), apDocTotal.negate(), bill.getVendorPartnerId()));
+            }
+        }
 
-        CreateJournalEntryCommand jcmd = new CreateJournalEntryCommand(
-                bill.getCompanyId(),
-                purchaseJournalId,
-                "",
-                bill.getBillDate(),
-                bill.getCurrencyCode(),
-                bill.getVendorPartnerId(),
-                items);
-        CreateJournalEntryResponse created = journalEntryApplicationService.createJournalEntry(jcmd);
-        journalEntryApplicationService.postJournalEntry(created.getJournalEntryId());
+        if (!items.isEmpty()) {
+            CreateJournalEntryCommand jcmd = new CreateJournalEntryCommand(
+                    bill.getCompanyId(),
+                    purchaseJournalId,
+                    "",
+                    bill.getBillDate(),
+                    bill.getCurrencyCode(),
+                    bill.getVendorPartnerId(),
+                    items);
+            CreateJournalEntryResponse created = journalEntryApplicationService.createJournalEntry(jcmd);
+            journalEntryApplicationService.postJournalEntry(created.getJournalEntryId());
+            bill.setJournalEntryId(created.getJournalEntryId());
+        } else {
+            bill.setJournalEntryId(null);
+        }
 
-        bill.setJournalEntryId(created.getJournalEntryId());
         bill.setState(VendorBillState.POSTED);
         bill.setUpdatedAt(Instant.now());
         vendorBillRepository.save(bill);
@@ -732,13 +864,19 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         if (bill.getPurchaseOrderId() != null) {
             PurchaseOrder po = purchaseOrderRepository.findById(bill.getPurchaseOrderId()).orElse(null);
             if (po != null) {
+                BigDecimal sign = creditNote ? BigDecimal.ONE.negate() : BigDecimal.ONE;
                 for (VendorBillLine vbl : bill.getLines()) {
                     if (vbl.getPurchaseOrderLineId() != null) {
                         po.getLines().stream()
                                 .filter(l -> l.getId().equals(vbl.getPurchaseOrderLineId()))
                                 .findFirst()
                                 .ifPresent(pol -> {
-                                    pol.setQtyInvoiced(pol.getQtyInvoiced().add(vbl.getQty()).setScale(4, RoundingMode.HALF_UP));
+                                    BigDecimal next = pol.getQtyInvoiced().add(vbl.getQty().multiply(sign))
+                                            .setScale(4, RoundingMode.HALF_UP);
+                                    if (next.signum() < 0) {
+                                        next = BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+                                    }
+                                    pol.setQtyInvoiced(next);
                                     pol.setUpdatedAt(Instant.now());
                                 });
                     }
@@ -859,7 +997,12 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 continue;
             }
             if (b.getBillDate().isBefore(from)) {
-                opening = opening.add(billTotalDocumentCurrency(b));
+                BigDecimal total = billTotalDocumentCurrency(b);
+                if (b.getMoveType() == VendorBillMoveType.CREDIT_NOTE) {
+                    opening = opening.subtract(total);
+                } else {
+                    opening = opening.add(total);
+                }
             }
         }
         for (VendorPayment p : payments) {
@@ -913,7 +1056,8 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             if (e.bill() != null) {
                 VendorBill b = e.bill();
                 BigDecimal amt = billTotalDocumentCurrency(b).setScale(4, RoundingMode.HALF_UP);
-                row.setLineType("VENDOR_BILL");
+                boolean creditNote = b.getMoveType() == VendorBillMoveType.CREDIT_NOTE;
+                row.setLineType(creditNote ? "VENDOR_CREDIT_NOTE" : "VENDOR_BILL");
                 row.setReference(b.getReference() != null && !b.getReference().isBlank()
                         ? b.getReference()
                         : b.getId().toString());
@@ -922,9 +1066,15 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 row.setVendorPaymentId(null);
                 row.setCustomerInvoiceId(null);
                 row.setCustomerPaymentId(null);
-                row.setDebit(amt);
-                row.setCredit(z);
-                running = running.add(amt);
+                if (creditNote) {
+                    row.setDebit(z);
+                    row.setCredit(amt);
+                    running = running.subtract(amt);
+                } else {
+                    row.setDebit(amt);
+                    row.setCredit(z);
+                    running = running.add(amt);
+                }
             } else {
                 VendorPayment p = e.pay();
                 BigDecimal amt = p.getAmount().setScale(4, RoundingMode.HALF_UP);
@@ -968,6 +1118,9 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         }
         if (bill.getState() != VendorBillState.POSTED || bill.getJournalEntryId() == null) {
             throw new PurchaseDomainException("Bill must be posted before payment");
+        }
+        if (bill.getMoveType() == VendorBillMoveType.CREDIT_NOTE) {
+            throw new PurchaseDomainException("Cannot register payment against a credit note");
         }
         String paymentCurrency = command.getCurrencyCode() != null ? command.getCurrencyCode() : bill.getCurrencyCode();
         BigDecimal docAmt = command.getAmount().setScale(4, RoundingMode.HALF_UP);
@@ -1203,6 +1356,8 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         r.setReference(b.getReference());
         r.setCurrencyCode(b.getCurrencyCode());
         r.setState(b.getState());
+        r.setMoveType(b.getMoveType() != null ? b.getMoveType() : VendorBillMoveType.BILL);
+        r.setReversedBillId(b.getReversedBillId());
         r.setJournalEntryId(b.getJournalEntryId());
         r.setLines(b.getLines().stream().sorted(Comparator.comparingInt(VendorBillLine::getSequence)).map(l -> {
             VendorBillLineResponse lr = new VendorBillLineResponse();

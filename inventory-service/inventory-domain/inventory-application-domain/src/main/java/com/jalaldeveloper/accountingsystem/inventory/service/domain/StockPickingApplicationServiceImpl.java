@@ -362,7 +362,9 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
         picking.markValidated(currentUserDisplay());
         StockPicking savedPicking = pickingRepository.save(picking);
 
-        if (savedPicking.getPurchaseOrderId() != null && savedPicking.getPickingType() == PickingType.INCOMING) {
+        if (savedPicking.getPurchaseOrderId() != null
+                && (savedPicking.getPickingType() == PickingType.INCOMING
+                || savedPicking.getPickingType() == PickingType.OUTGOING)) {
             UUID poId = savedPicking.getPurchaseOrderId();
             PurchaseReceiveSyncPort sync = purchaseReceiveSyncProvider.getIfAvailable();
             if (sync != null) {

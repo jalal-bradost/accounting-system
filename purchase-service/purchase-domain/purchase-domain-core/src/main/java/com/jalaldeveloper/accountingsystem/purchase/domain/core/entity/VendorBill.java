@@ -1,5 +1,6 @@
 package com.jalaldeveloper.accountingsystem.purchase.domain.core.entity;
 
+import com.jalaldeveloper.accountingsystem.purchase.domain.core.VendorBillMoveType;
 import com.jalaldeveloper.accountingsystem.purchase.domain.core.VendorBillState;
 
 import java.math.BigDecimal;
@@ -20,6 +21,8 @@ public class VendorBill {
     private String reference;
     private String currencyCode;
     private VendorBillState state;
+    private VendorBillMoveType moveType = VendorBillMoveType.BILL;
+    private UUID reversedBillId;
     private UUID journalEntryId;
     private BigDecimal exchangeRateToCompany;
     private long rowVersion;
@@ -47,6 +50,12 @@ public class VendorBill {
     public void setCurrencyCode(String currencyCode) { this.currencyCode = currencyCode; }
     public VendorBillState getState() { return state; }
     public void setState(VendorBillState state) { this.state = state; }
+    public VendorBillMoveType getMoveType() { return moveType; }
+    public void setMoveType(VendorBillMoveType moveType) {
+        this.moveType = moveType != null ? moveType : VendorBillMoveType.BILL;
+    }
+    public UUID getReversedBillId() { return reversedBillId; }
+    public void setReversedBillId(UUID reversedBillId) { this.reversedBillId = reversedBillId; }
     public UUID getJournalEntryId() { return journalEntryId; }
     public void setJournalEntryId(UUID journalEntryId) { this.journalEntryId = journalEntryId; }
     public BigDecimal getExchangeRateToCompany() { return exchangeRateToCompany; }

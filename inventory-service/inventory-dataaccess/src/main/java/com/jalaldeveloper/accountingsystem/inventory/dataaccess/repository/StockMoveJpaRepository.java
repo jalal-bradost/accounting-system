@@ -15,11 +15,14 @@ public interface StockMoveJpaRepository extends JpaRepository<StockMoveEntity, U
     @Query("""
             SELECT COALESCE(SUM(m.pickedQuantity), 0)
             FROM StockMoveEntity m
+            JOIN m.picking p
             WHERE m.purchaseOrderLineId = :lineId
               AND m.state = :doneState
+              AND p.pickingType = :pickingType
             """)
-    BigDecimal sumPickedForPurchaseOrderLine(@Param("lineId") UUID purchaseOrderLineId,
-                                             @Param("doneState") MoveState doneState);
+    BigDecimal sumPickedForPurchaseOrderLineAndType(@Param("lineId") UUID purchaseOrderLineId,
+                                                    @Param("doneState") MoveState doneState,
+                                                    @Param("pickingType") PickingType pickingType);
 
     @Query("""
             SELECT COALESCE(SUM(m.pickedQuantity), 0)

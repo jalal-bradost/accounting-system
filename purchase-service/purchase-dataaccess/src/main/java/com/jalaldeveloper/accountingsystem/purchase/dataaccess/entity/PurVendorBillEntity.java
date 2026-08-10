@@ -1,5 +1,6 @@
 package com.jalaldeveloper.accountingsystem.purchase.dataaccess.entity;
 
+import com.jalaldeveloper.accountingsystem.purchase.domain.core.VendorBillMoveType;
 import com.jalaldeveloper.accountingsystem.purchase.domain.core.VendorBillState;
 import jakarta.persistence.*;
 
@@ -44,6 +45,13 @@ public class PurVendorBillEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private VendorBillState state;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "move_type", nullable = false, length = 32)
+    private VendorBillMoveType moveType = VendorBillMoveType.BILL;
+
+    @Column(name = "reversed_bill_id")
+    private UUID reversedBillId;
 
     @Column(name = "journal_entry_id")
     private UUID journalEntryId;
@@ -91,6 +99,12 @@ public class PurVendorBillEntity {
     public void setCurrencyCode(String currencyCode) { this.currencyCode = currencyCode; }
     public VendorBillState getState() { return state; }
     public void setState(VendorBillState state) { this.state = state; }
+    public VendorBillMoveType getMoveType() { return moveType; }
+    public void setMoveType(VendorBillMoveType moveType) {
+        this.moveType = moveType != null ? moveType : VendorBillMoveType.BILL;
+    }
+    public UUID getReversedBillId() { return reversedBillId; }
+    public void setReversedBillId(UUID reversedBillId) { this.reversedBillId = reversedBillId; }
     public UUID getJournalEntryId() { return journalEntryId; }
     public void setJournalEntryId(UUID journalEntryId) { this.journalEntryId = journalEntryId; }
     public BigDecimal getExchangeRateToCompany() { return exchangeRateToCompany; }

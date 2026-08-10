@@ -3,6 +3,7 @@ package com.jalaldeveloper.accountingsystem.application.rest;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import com.jalaldeveloper.accountingsystem.platform.security.RequiresPermission;
 import com.jalaldeveloper.accountingsystem.platform.web.CurrentCompany;
+import com.jalaldeveloper.accountingsystem.purchase.service.domain.dto.CreateCreditNoteFromVendorBillCommand;
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.dto.CreateVendorBillFromPoCommand;
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.dto.VendorBillResponse;
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.dto.VendorBillSummaryResponse;
@@ -47,6 +48,15 @@ public class VendorBillController {
     @RequiresPermission("accounting.vendor-bill.read")
     public ResponseEntity<VendorBillResponse> get(@PathVariable UUID id) {
         return ResponseEntity.ok(purchaseApplicationService.getVendorBill(id));
+    }
+
+    @PostMapping("/{id}/credit-note")
+    @RequiresPermission("accounting.vendor-bill.write")
+    public ResponseEntity<VendorBillResponse> createCreditNote(@CurrentCompany CompanyId companyId,
+                                                               @PathVariable UUID id,
+                                                               @Valid @RequestBody CreateCreditNoteFromVendorBillCommand cmd) {
+        cmd.setCompanyId(companyId.getId());
+        return ResponseEntity.ok(purchaseApplicationService.createCreditNoteFromVendorBill(id, cmd));
     }
 
     @PostMapping("/{id}/post")

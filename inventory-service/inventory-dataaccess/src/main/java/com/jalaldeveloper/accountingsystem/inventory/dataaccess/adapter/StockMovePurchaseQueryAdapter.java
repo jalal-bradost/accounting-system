@@ -4,6 +4,7 @@ import com.jalaldeveloper.accountingsystem.inventory.dataaccess.entity.StockPick
 import com.jalaldeveloper.accountingsystem.inventory.dataaccess.repository.StockMoveJpaRepository;
 import com.jalaldeveloper.accountingsystem.inventory.dataaccess.repository.StockPickingJpaRepository;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.MoveState;
+import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.PickingType;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.StockMovePurchaseQueryPort;
 import org.springframework.stereotype.Component;
 
@@ -26,8 +27,13 @@ public class StockMovePurchaseQueryAdapter implements StockMovePurchaseQueryPort
 
     @Override
     public BigDecimal sumPickedQuantityForPurchaseOrderLine(UUID purchaseOrderLineId) {
-        BigDecimal v = stockMoveJpaRepository.sumPickedForPurchaseOrderLine(purchaseOrderLineId, MoveState.DONE);
-        return v != null ? v : BigDecimal.ZERO;
+        BigDecimal incoming = stockMoveJpaRepository.sumPickedForPurchaseOrderLineAndType(
+                purchaseOrderLineId, MoveState.DONE, PickingType.INCOMING);
+        BigDecimal outgoing = stockMoveJpaRepository.sumPickedForPurchaseOrderLineAndType(
+                purchaseOrderLineId, MoveState.DONE, PickingType.OUTGOING);
+        BigDecimal in = incoming != null ? incoming : BigDecimal.ZERO;
+        BigDecimal out = outgoing != null ? outgoing : BigDecimal.ZERO;
+        return in.subtract(out);
     }
 
     @Override

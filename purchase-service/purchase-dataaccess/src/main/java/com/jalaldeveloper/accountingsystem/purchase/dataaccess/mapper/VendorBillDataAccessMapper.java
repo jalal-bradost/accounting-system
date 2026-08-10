@@ -3,6 +3,7 @@ package com.jalaldeveloper.accountingsystem.purchase.dataaccess.mapper;
 import com.jalaldeveloper.accountingsystem.purchase.dataaccess.entity.PurVendorBillEntity;
 import com.jalaldeveloper.accountingsystem.purchase.dataaccess.entity.PurVendorBillLineEntity;
 import com.jalaldeveloper.accountingsystem.purchase.dataaccess.entity.PurVendorBillLineTaxEntity;
+import com.jalaldeveloper.accountingsystem.purchase.domain.core.VendorBillMoveType;
 import com.jalaldeveloper.accountingsystem.purchase.domain.core.entity.VendorBill;
 import com.jalaldeveloper.accountingsystem.purchase.domain.core.entity.VendorBillLine;
 import com.jalaldeveloper.accountingsystem.purchase.domain.core.entity.VendorBillLineTax;
@@ -28,6 +29,8 @@ public class VendorBillDataAccessMapper {
         d.setReference(e.getReference());
         d.setCurrencyCode(e.getCurrencyCode());
         d.setState(e.getState());
+        d.setMoveType(e.getMoveType() != null ? e.getMoveType() : VendorBillMoveType.BILL);
+        d.setReversedBillId(e.getReversedBillId());
         d.setJournalEntryId(e.getJournalEntryId());
         d.setExchangeRateToCompany(e.getExchangeRateToCompany());
         d.setRowVersion(e.getRowVersion());
@@ -83,6 +86,8 @@ public class VendorBillDataAccessMapper {
         e.setReference(d.getReference());
         e.setCurrencyCode(d.getCurrencyCode());
         e.setState(d.getState());
+        e.setMoveType(d.getMoveType() != null ? d.getMoveType() : VendorBillMoveType.BILL);
+        e.setReversedBillId(d.getReversedBillId());
         e.setJournalEntryId(d.getJournalEntryId());
         e.setExchangeRateToCompany(d.getExchangeRateToCompany());
         e.setRowVersion(d.getRowVersion());

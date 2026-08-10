@@ -41,6 +41,8 @@ public interface PurchaseApplicationService {
 
     VendorBillResponse createVendorBillFromPo(CreateVendorBillFromPoCommand command);
 
+    VendorBillResponse createCreditNoteFromVendorBill(UUID billId, CreateCreditNoteFromVendorBillCommand command);
+
     VendorBillResponse postVendorBill(UUID billId);
 
     VendorBillResponse getVendorBill(UUID billId);

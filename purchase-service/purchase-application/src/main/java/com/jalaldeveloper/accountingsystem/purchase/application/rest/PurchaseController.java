@@ -108,6 +108,15 @@ public class PurchaseController {
         return ResponseEntity.ok(purchaseApplicationService.getVendorBill(id));
     }
 
+    @PostMapping("/vendor-bills/{id}/credit-note")
+    @RequiresPermission("purchase.vendor-bill.write")
+    public ResponseEntity<VendorBillResponse> createCreditNote(@CurrentCompany CompanyId companyId,
+                                                               @PathVariable UUID id,
+                                                               @Valid @RequestBody CreateCreditNoteFromVendorBillCommand cmd) {
+        cmd.setCompanyId(companyId.getId());
+        return ResponseEntity.ok(purchaseApplicationService.createCreditNoteFromVendorBill(id, cmd));
+    }
+
     @PostMapping("/vendor-bills/{id}/post")
     @RequiresPermission("purchase.vendor-bill.post")
     public ResponseEntity<VendorBillResponse> postBill(@PathVariable UUID id) {
