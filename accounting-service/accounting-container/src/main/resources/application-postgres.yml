@@ -3,14 +3,19 @@ spring:
     url: jdbc:postgresql://localhost:5432/accounting_system
     username: postgres
     password: postgres
+    driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
       ddl-auto: validate
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     properties:
       hibernate:
         format_sql: true
         type:
           preferred_clob_mapping: TEXT
+  h2:
+    console:
+      enabled: false
   flyway:
     enabled: true
     baseline-on-migrate: true
