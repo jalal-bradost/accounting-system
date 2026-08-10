@@ -189,8 +189,8 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         o.setIncoterm(command.getIncoterm());
         o.setNotes(command.getNotes());
         o.setVendorReference(command.getVendorReference());
-        o.setExchangeRateToCompany(command.getExchangeRateToCompany() != null
-                ? command.getExchangeRateToCompany() : BigDecimal.ONE);
+        o.setExchangeRateToCompany(resolveExchangeRate(
+                companyId, command.getCurrencyCode(), o.getOrderDate(), command.getExchangeRateToCompany()));
         o.setCreatedAt(now);
         o.setUpdatedAt(now);
 
@@ -243,7 +243,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                                                                    String q,
                                                                    Pageable pageable) {
         UUID cid = companyIdOrDefault(companyId);
-        String qNorm = q != null && !q.isBlank() ? q.trim() : null;
+        String qNorm = q != null && !q.isBlank() ? q.trim() : "";
         return purchaseOrderRepository.search(cid, state, vendorPartnerId, qNorm, pageable).map(this::toSummary);
     }
 
@@ -370,6 +370,10 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             throw new PurchaseDomainException("Destination stock location could not be resolved");
         }
 
+        BigDecimal rateToCompany = resolveExchangeRate(
+                o.getCompanyId(), o.getCurrencyCode(), o.getOrderDate(), o.getExchangeRateToCompany());
+        o.setExchangeRateToCompany(rateToCompany);
+
         List<StockMoveCommand> moves = new ArrayList<>();
         for (PurchaseOrderLine line : o.getLines()) {
             Product product = productRepository.findById(new ProductId(line.getProductId()))
@@ -388,9 +392,11 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             BigDecimal demandStockUom = uomApplicationService.convert(line.getUomId(), stockUom, remaining);
             BigDecimal oneInStockUom = uomApplicationService.convert(line.getUomId(), stockUom, BigDecimal.ONE);
             BigDecimal lineNetOne = PurchaseOrderRules.lineNet(BigDecimal.ONE, line.getUnitPrice(), line.getDiscountPercent());
-            BigDecimal unitCost = oneInStockUom.signum() > 0
+            BigDecimal unitCostDoc = oneInStockUom.signum() > 0
                     ? lineNetOne.divide(oneInStockUom, 8, RoundingMode.HALF_UP)
                     : lineNetOne;
+            // Stock valuation / COGS are kept in company currency (same as invoice GL amounts).
+            BigDecimal unitCost = CurrencyMath.convertAtRate(unitCostDoc, rateToCompany);
 
             StockMoveCommand mc = new StockMoveCommand();
             mc.setProductId(line.getProductId());
@@ -418,7 +424,6 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
 
         o.setState(PurchaseOrderState.CONFIRMED);
         o.setConfirmedAt(Instant.now());
-        o.setExchangeRateToCompany(o.getExchangeRateToCompany() != null ? o.getExchangeRateToCompany() : BigDecimal.ONE);
         o.setUpdatedAt(Instant.now());
         return toResponse(purchaseOrderRepository.save(o));
     }
