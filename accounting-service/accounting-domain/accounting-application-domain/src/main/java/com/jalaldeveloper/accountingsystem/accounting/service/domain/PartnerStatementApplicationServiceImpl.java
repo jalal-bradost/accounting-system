@@ -8,6 +8,7 @@ import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.outpu
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository.CustomerPaymentRepository;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.dto.PartnerResponse;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.ports.input.PartnerApplicationService;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.CustomerInvoiceMoveType;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.CustomerInvoiceState;
 import com.jalaldeveloper.accountingsystem.domain.core.entity.CustomerInvoice;
 import com.jalaldeveloper.accountingsystem.domain.core.entity.CustomerInvoiceLine;
@@ -116,7 +117,12 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
                 continue;
             }
             if (inv.getInvoiceDate().isBefore(from)) {
-                opening = opening.add(customerInvoiceTotalDocumentCurrency(inv));
+                BigDecimal total = customerInvoiceTotalDocumentCurrency(inv);
+                if (inv.getMoveType() == CustomerInvoiceMoveType.CREDIT_NOTE) {
+                    opening = opening.subtract(total);
+                } else {
+                    opening = opening.add(total);
+                }
             }
         }
         for (CustomerPayment p : payments) {
@@ -157,13 +163,20 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
             if (e.inv() != null) {
                 CustomerInvoice inv = e.inv();
                 BigDecimal amount = customerInvoiceTotalDocumentCurrency(inv).setScale(4, RoundingMode.HALF_UP);
-                row.setLineType("CUSTOMER_INVOICE");
+                boolean creditNote = inv.getMoveType() == CustomerInvoiceMoveType.CREDIT_NOTE;
+                row.setLineType(creditNote ? "CUSTOMER_CREDIT_NOTE" : "CUSTOMER_INVOICE");
                 row.setReference(inv.getReference() != null && !inv.getReference().isBlank() ? inv.getReference() : inv.getId().toString());
                 row.setCurrencyCode(inv.getCurrencyCode());
                 row.setCustomerInvoiceId(inv.getId());
-                row.setDebit(amount);
-                row.setCredit(zero);
-                running = running.add(amount);
+                if (creditNote) {
+                    row.setDebit(zero);
+                    row.setCredit(amount);
+                    running = running.subtract(amount);
+                } else {
+                    row.setDebit(amount);
+                    row.setCredit(zero);
+                    running = running.add(amount);
+                }
             } else {
                 CustomerPayment payment = e.pay();
                 BigDecimal amount = payment.getAmount().setScale(4, RoundingMode.HALF_UP);

@@ -5,6 +5,7 @@ import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.Crea
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.CreateJournalEntryResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.JournalEntryResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.create.JournalItemCommand;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CreateCreditNoteFromInvoiceCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CustomerInvoiceLineTaxResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CreateCustomerInvoiceCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CustomerInvoiceLineCommand;
@@ -26,6 +27,7 @@ import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.outpu
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository.JournalRepository;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.dto.PartnerResponse;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.ports.input.PartnerApplicationService;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.CustomerInvoiceMoveType;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.CustomerInvoiceState;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalId;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalType;
@@ -110,12 +112,26 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
     @Override
     @Transactional(readOnly = true)
     public Map<UUID, BigDecimal> draftAllocatedQtyBySalesOrderLine(UUID salesOrderId) {
+        return draftAllocatedQtyBySalesOrderLine(salesOrderId, CustomerInvoiceMoveType.INVOICE);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, BigDecimal> draftCreditNoteAllocatedQtyBySalesOrderLine(UUID salesOrderId) {
+        return draftAllocatedQtyBySalesOrderLine(salesOrderId, CustomerInvoiceMoveType.CREDIT_NOTE);
+    }
+
+    private Map<UUID, BigDecimal> draftAllocatedQtyBySalesOrderLine(UUID salesOrderId, CustomerInvoiceMoveType moveType) {
         if (salesOrderId == null) {
             return Map.of();
         }
         Map<UUID, BigDecimal> allocated = new LinkedHashMap<>();
         for (CustomerInvoice inv : invoiceRepository.findBySalesOrderIdWithLines(salesOrderId)) {
             if (inv.getState() != CustomerInvoiceState.DRAFT) {
+                continue;
+            }
+            CustomerInvoiceMoveType type = inv.getMoveType() != null ? inv.getMoveType() : CustomerInvoiceMoveType.INVOICE;
+            if (type != moveType) {
                 continue;
             }
             for (CustomerInvoiceLine line : inv.getLines()) {
@@ -174,6 +190,16 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         inv.setReference(command.getReference());
         inv.setCurrencyCode(command.getCurrencyCode());
         inv.setSalesOrderId(command.getSalesOrderId());
+        inv.setReversedInvoiceId(command.getReversedInvoiceId());
+        CustomerInvoiceMoveType moveType = CustomerInvoiceMoveType.INVOICE;
+        if (command.getMoveType() != null && !command.getMoveType().isBlank()) {
+            try {
+                moveType = CustomerInvoiceMoveType.valueOf(command.getMoveType().trim().toUpperCase());
+            } catch (IllegalArgumentException ex) {
+                throw new AccountingDomainException("Invalid moveType: " + command.getMoveType());
+            }
+        }
+        inv.setMoveType(moveType);
         inv.setExchangeRateToCompany(resolveExchangeRate(
                 companyId, command.getCurrencyCode(), command.getInvoiceDate(), command.getExchangeRateToCompany()));
         inv.setState(CustomerInvoiceState.DRAFT);
@@ -215,26 +241,96 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
 
     @Override
     @Transactional
+    public CustomerInvoiceResponse createCreditNoteFromInvoice(UUID invoiceId, CreateCreditNoteFromInvoiceCommand command) {
+        CustomerInvoice source = invoiceRepository.findByIdWithLines(invoiceId)
+                .orElseThrow(() -> new AccountingDomainException("Customer invoice not found"));
+        UUID companyId = companyIdOrDefault(command.getCompanyId());
+        if (!source.getCompanyId().equals(companyId)) {
+            throw new AccountingDomainException("Invoice company mismatch");
+        }
+        if (source.getState() != CustomerInvoiceState.POSTED) {
+            throw new AccountingDomainException("Only posted invoices can be credited");
+        }
+        if (source.getMoveType() == CustomerInvoiceMoveType.CREDIT_NOTE) {
+            throw new AccountingDomainException("Cannot create a credit note from another credit note");
+        }
+
+        Map<UUID, BigDecimal> qtyByLineId = new LinkedHashMap<>();
+        if (command.getLines() == null || command.getLines().isEmpty()) {
+            for (CustomerInvoiceLine line : source.getLines()) {
+                qtyByLineId.put(line.getId(), line.getQty());
+            }
+        } else {
+            for (CreateCreditNoteFromInvoiceCommand.CreditNoteLineQtyCommand lc : command.getLines()) {
+                qtyByLineId.merge(lc.getInvoiceLineId(), lc.getQty(), BigDecimal::add);
+            }
+        }
+
+        CreateCustomerInvoiceCommand create = new CreateCustomerInvoiceCommand();
+        create.setCompanyId(companyId);
+        create.setCustomerPartnerId(source.getCustomerPartnerId());
+        create.setInvoiceDate(command.getInvoiceDate());
+        create.setDueDate(command.getDueDate());
+        create.setCurrencyCode(source.getCurrencyCode());
+        create.setReference(command.getReference() != null ? command.getReference()
+                : "CN/" + (source.getReference() != null ? source.getReference() : source.getId()));
+        create.setSalesOrderId(source.getSalesOrderId());
+        create.setExchangeRateToCompany(source.getExchangeRateToCompany());
+        create.setMoveType(CustomerInvoiceMoveType.CREDIT_NOTE.name());
+        create.setReversedInvoiceId(source.getId());
+
+        List<CustomerInvoiceLineCommand> lines = new ArrayList<>();
+        for (CustomerInvoiceLine srcLine : source.getLines()) {
+            BigDecimal qty = qtyByLineId.get(srcLine.getId());
+            if (qty == null || qty.signum() <= 0) {
+                continue;
+            }
+            if (qty.compareTo(srcLine.getQty()) > 0) {
+                throw new AccountingDomainException(
+                        "Credit qty " + qty + " exceeds invoice line qty " + srcLine.getQty() + " for " + srcLine.getName());
+            }
+            BigDecimal ratio = qty.divide(srcLine.getQty(), 8, RoundingMode.HALF_UP);
+            CustomerInvoiceLineCommand lc = new CustomerInvoiceLineCommand();
+            lc.setName(srcLine.getName());
+            lc.setQty(qty.setScale(4, RoundingMode.HALF_UP));
+            lc.setUnitPrice(srcLine.getUnitPrice());
+            lc.setDiscountPercent(srcLine.getDiscountPercent());
+            lc.setRevenueAccountId(srcLine.getRevenueAccountId());
+            lc.setSalesOrderLineId(srcLine.getSalesOrderLineId());
+            for (CustomerInvoiceLineTax tax : srcLine.getTaxSnapshots()) {
+                CustomerInvoiceLineTaxCommand ts = new CustomerInvoiceLineTaxCommand();
+                ts.setTaxId(tax.getTaxId());
+                ts.setTaxName(tax.getTaxName());
+                ts.setTaxBase(tax.getTaxBase().multiply(ratio).setScale(4, RoundingMode.HALF_UP));
+                ts.setTaxAmount(tax.getTaxAmount().multiply(ratio).setScale(4, RoundingMode.HALF_UP));
+                ts.setAccountId(tax.getAccountId());
+                lc.getTaxSnapshots().add(ts);
+            }
+            lines.add(lc);
+        }
+        if (lines.isEmpty()) {
+            throw new AccountingDomainException("Credit note has no lines");
+        }
+        create.setLines(lines);
+        return createCustomerInvoice(create);
+    }
+
+    @Override
+    @Transactional
     public CustomerInvoiceResponse postCustomerInvoice(UUID invoiceId) {
         CustomerInvoice inv = invoiceRepository.findByIdWithLines(invoiceId)
                 .orElseThrow(() -> new AccountingDomainException("Customer invoice not found"));
         if (inv.getState() != CustomerInvoiceState.DRAFT) {
             throw new AccountingDomainException("Invoice is not draft");
         }
-        PartnerResponse customer = partnerApplicationService.getPartner(inv.getCustomerPartnerId());
-        UUID receivableAccount = customer.getReceivableAccountId() != null
-                ? customer.getReceivableAccountId()
-                : accountRepository.findByCompanyIdAndCode(new CompanyId(inv.getCompanyId()), DEFAULT_AR_ACCOUNT_CODE)
-                .orElseThrow(() -> new AccountingDomainException("Default AR account not found"))
-                .getId().getId();
-
-        Journal saleJournal = journalRepository.findByCompanyIdAndCode(new CompanyId(inv.getCompanyId()), SALE_JOURNAL_CODE)
-                .orElseThrow(() -> new AccountingDomainException("Sale journal not found"));
 
         BigDecimal rate = resolveExchangeRate(
                 inv.getCompanyId(), inv.getCurrencyCode(), inv.getInvoiceDate(), inv.getExchangeRateToCompany());
         inv.setExchangeRateToCompany(rate);
 
+        // 100% discount / free invoices net to zero — ledger rejects debit=0 credit=0 lines.
+        // Credit notes reverse the invoice pattern: Dr Revenue/Tax, Cr AR.
+        boolean creditNote = inv.getMoveType() == CustomerInvoiceMoveType.CREDIT_NOTE;
         List<JournalItemCommand> items = new ArrayList<>();
         BigDecimal arTotalComp = BigDecimal.ZERO;
         BigDecimal arDoc = BigDecimal.ZERO;
@@ -244,41 +340,67 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
             BigDecimal lineNetDoc = lineNet(line.getQty(), line.getUnitPrice(), disc).setScale(4, RoundingMode.HALF_UP);
             BigDecimal lineNetComp = CurrencyMath.convertAtRate(lineNetDoc, rate);
 
-            if (line.getTaxSnapshots().isEmpty()) {
+            if (lineNetComp.signum() > 0) {
                 arTotalComp = arTotalComp.add(lineNetComp);
                 arDoc = arDoc.add(lineNetDoc);
-                items.add(new JournalItemCommand(line.getRevenueAccountId(), line.getName(), BigDecimal.ZERO, lineNetComp,
-                        inv.getCurrencyCode(), lineNetDoc.negate(), null));
-            } else {
-                arTotalComp = arTotalComp.add(lineNetComp);
-                arDoc = arDoc.add(lineNetDoc);
-                items.add(new JournalItemCommand(line.getRevenueAccountId(), line.getName(), BigDecimal.ZERO, lineNetComp,
-                        inv.getCurrencyCode(), lineNetDoc.negate(), null));
-                for (CustomerInvoiceLineTax ts : line.getTaxSnapshots()) {
-                    BigDecimal taxDoc = ts.getTaxAmount().setScale(4, RoundingMode.HALF_UP);
-                    BigDecimal taxComp = CurrencyMath.convertAtRate(taxDoc, rate);
-                    arTotalComp = arTotalComp.add(taxComp);
-                    arDoc = arDoc.add(taxDoc);
+                if (creditNote) {
+                    items.add(new JournalItemCommand(line.getRevenueAccountId(), line.getName(), lineNetComp, BigDecimal.ZERO,
+                            inv.getCurrencyCode(), lineNetDoc, null));
+                } else {
+                    items.add(new JournalItemCommand(line.getRevenueAccountId(), line.getName(), BigDecimal.ZERO, lineNetComp,
+                            inv.getCurrencyCode(), lineNetDoc.negate(), null));
+                }
+            }
+            for (CustomerInvoiceLineTax ts : line.getTaxSnapshots()) {
+                BigDecimal taxDoc = ts.getTaxAmount().setScale(4, RoundingMode.HALF_UP);
+                BigDecimal taxComp = CurrencyMath.convertAtRate(taxDoc, rate);
+                if (taxComp.signum() <= 0) {
+                    continue;
+                }
+                arTotalComp = arTotalComp.add(taxComp);
+                arDoc = arDoc.add(taxDoc);
+                if (creditNote) {
+                    items.add(new JournalItemCommand(ts.getAccountId(), ts.getTaxName(), taxComp, BigDecimal.ZERO,
+                            inv.getCurrencyCode(), taxDoc, null));
+                } else {
                     items.add(new JournalItemCommand(ts.getAccountId(), ts.getTaxName(), BigDecimal.ZERO, taxComp,
                             inv.getCurrencyCode(), taxDoc.negate(), null));
                 }
             }
         }
-        items.add(0, new JournalItemCommand(receivableAccount, "Accounts receivable", arTotalComp, BigDecimal.ZERO,
-                inv.getCurrencyCode(), arDoc, inv.getCustomerPartnerId()));
+        if (arTotalComp.signum() > 0) {
+            PartnerResponse customer = partnerApplicationService.getPartner(inv.getCustomerPartnerId());
+            UUID receivableAccount = customer.getReceivableAccountId() != null
+                    ? customer.getReceivableAccountId()
+                    : accountRepository.findByCompanyIdAndCode(new CompanyId(inv.getCompanyId()), DEFAULT_AR_ACCOUNT_CODE)
+                    .orElseThrow(() -> new AccountingDomainException("Default AR account not found"))
+                    .getId().getId();
+            if (creditNote) {
+                items.add(0, new JournalItemCommand(receivableAccount, "Accounts receivable", BigDecimal.ZERO, arTotalComp,
+                        inv.getCurrencyCode(), arDoc.negate(), inv.getCustomerPartnerId()));
+            } else {
+                items.add(0, new JournalItemCommand(receivableAccount, "Accounts receivable", arTotalComp, BigDecimal.ZERO,
+                        inv.getCurrencyCode(), arDoc, inv.getCustomerPartnerId()));
+            }
+        }
 
-        CreateJournalEntryCommand jcmd = new CreateJournalEntryCommand(
-                inv.getCompanyId(),
-                saleJournal.getId().getId(),
-                "",
-                inv.getInvoiceDate(),
-                inv.getCurrencyCode(),
-                inv.getCustomerPartnerId(),
-                items);
-        CreateJournalEntryResponse created = journalEntryApplicationService.createJournalEntry(jcmd);
-        journalEntryApplicationService.postJournalEntry(created.getJournalEntryId());
-
-        inv.setJournalEntryId(created.getJournalEntryId());
+        if (!items.isEmpty()) {
+            Journal saleJournal = journalRepository.findByCompanyIdAndCode(new CompanyId(inv.getCompanyId()), SALE_JOURNAL_CODE)
+                    .orElseThrow(() -> new AccountingDomainException("Sale journal not found"));
+            CreateJournalEntryCommand jcmd = new CreateJournalEntryCommand(
+                    inv.getCompanyId(),
+                    saleJournal.getId().getId(),
+                    "",
+                    inv.getInvoiceDate(),
+                    inv.getCurrencyCode(),
+                    inv.getCustomerPartnerId(),
+                    items);
+            CreateJournalEntryResponse created = journalEntryApplicationService.createJournalEntry(jcmd);
+            journalEntryApplicationService.postJournalEntry(created.getJournalEntryId());
+            inv.setJournalEntryId(created.getJournalEntryId());
+        } else {
+            inv.setJournalEntryId(null);
+        }
         inv.setState(CustomerInvoiceState.POSTED);
         inv.setUpdatedAt(Instant.now());
         CustomerInvoice saved = invoiceRepository.save(inv);
@@ -287,9 +409,10 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
             SalesOrderInvoiceSyncPort salesSync = salesOrderInvoiceSyncPortProvider.getIfAvailable();
             if (salesSync != null) {
                 Map<UUID, BigDecimal> qtyByLine = new LinkedHashMap<>();
+                BigDecimal sign = creditNote ? BigDecimal.ONE.negate() : BigDecimal.ONE;
                 for (CustomerInvoiceLine line : saved.getLines()) {
                     if (line.getSalesOrderLineId() != null) {
-                        qtyByLine.merge(line.getSalesOrderLineId(), line.getQty(), BigDecimal::add);
+                        qtyByLine.merge(line.getSalesOrderLineId(), line.getQty().multiply(sign), BigDecimal::add);
                     }
                 }
                 if (!qtyByLine.isEmpty()) {
@@ -344,6 +467,9 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         }
         if (inv.getState() != CustomerInvoiceState.POSTED || inv.getJournalEntryId() == null) {
             throw new AccountingDomainException("Invoice must be posted before payment");
+        }
+        if (inv.getMoveType() == CustomerInvoiceMoveType.CREDIT_NOTE) {
+            throw new AccountingDomainException("Cannot register payment against a credit note");
         }
 
         BigDecimal docAmt = command.getAmount().setScale(4, RoundingMode.HALF_UP);
@@ -512,6 +638,8 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         r.setReference(inv.getReference());
         r.setCurrencyCode(inv.getCurrencyCode());
         r.setState(inv.getState());
+        r.setMoveType(inv.getMoveType() != null ? inv.getMoveType() : CustomerInvoiceMoveType.INVOICE);
+        r.setReversedInvoiceId(inv.getReversedInvoiceId());
         r.setJournalEntryId(inv.getJournalEntryId());
         List<CustomerInvoiceLineResponse> lines = new ArrayList<>();
         for (CustomerInvoiceLine l : inv.getLines()) {

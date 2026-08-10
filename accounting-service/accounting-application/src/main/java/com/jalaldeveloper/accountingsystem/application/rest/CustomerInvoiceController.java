@@ -1,5 +1,6 @@
 package com.jalaldeveloper.accountingsystem.application.rest;
 
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CreateCreditNoteFromInvoiceCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CreateCustomerInvoiceCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CustomerInvoiceResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CustomerPaymentResponse;
@@ -54,6 +55,15 @@ public class CustomerInvoiceController {
     @RequiresPermission("accounting.customer-invoice.read")
     public ResponseEntity<CustomerInvoiceResponse> get(@PathVariable UUID id) {
         return ResponseEntity.ok(customerInvoiceApplicationService.getCustomerInvoice(id));
+    }
+
+    @PostMapping("/{id}/credit-note")
+    @RequiresPermission("accounting.customer-invoice.write")
+    public ResponseEntity<CustomerInvoiceResponse> createCreditNote(@CurrentCompany CompanyId companyId,
+                                                                    @PathVariable UUID id,
+                                                                    @Valid @RequestBody CreateCreditNoteFromInvoiceCommand cmd) {
+        cmd.setCompanyId(companyId.getId());
+        return ResponseEntity.ok(customerInvoiceApplicationService.createCreditNoteFromInvoice(id, cmd));
     }
 
     @PostMapping("/{id}/post")

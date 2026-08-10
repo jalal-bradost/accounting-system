@@ -3,6 +3,7 @@ package com.jalaldeveloper.accountingsystem.dataaccess.mapper;
 import com.jalaldeveloper.accountingsystem.dataaccess.entity.AccCustomerInvoiceEntity;
 import com.jalaldeveloper.accountingsystem.dataaccess.entity.AccCustomerInvoiceLineEntity;
 import com.jalaldeveloper.accountingsystem.dataaccess.entity.AccCustomerInvoiceLineTaxEntity;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.CustomerInvoiceMoveType;
 import com.jalaldeveloper.accountingsystem.domain.core.entity.CustomerInvoice;
 import com.jalaldeveloper.accountingsystem.domain.core.entity.CustomerInvoiceLine;
 import com.jalaldeveloper.accountingsystem.domain.core.entity.CustomerInvoiceLineTax;
@@ -25,6 +26,8 @@ public class CustomerInvoiceDataAccessMapper {
         domain.setReference(entity.getReference());
         domain.setCurrencyCode(entity.getCurrencyCode());
         domain.setState(entity.getState());
+        domain.setMoveType(entity.getMoveType() != null ? entity.getMoveType() : CustomerInvoiceMoveType.INVOICE);
+        domain.setReversedInvoiceId(entity.getReversedInvoiceId());
         domain.setJournalEntryId(entity.getJournalEntryId());
         domain.setSalesOrderId(entity.getSalesOrderId());
         domain.setExchangeRateToCompany(entity.getExchangeRateToCompany());
@@ -83,6 +86,8 @@ public class CustomerInvoiceDataAccessMapper {
         entity.setReference(domain.getReference());
         entity.setCurrencyCode(domain.getCurrencyCode());
         entity.setState(domain.getState());
+        entity.setMoveType(domain.getMoveType());
+        entity.setReversedInvoiceId(domain.getReversedInvoiceId());
         entity.setJournalEntryId(domain.getJournalEntryId());
         entity.setSalesOrderId(domain.getSalesOrderId());
         entity.setExchangeRateToCompany(domain.getExchangeRateToCompany());

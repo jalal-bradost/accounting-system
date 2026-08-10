@@ -22,6 +22,9 @@ public class CreateCustomerInvoiceCommand {
     private String reference;
     private UUID salesOrderId;
     private BigDecimal exchangeRateToCompany;
+    /** INVOICE (default) or CREDIT_NOTE */
+    private String moveType;
+    private UUID reversedInvoiceId;
     @NotEmpty
     @Valid
     private List<CustomerInvoiceLineCommand> lines;
@@ -42,6 +45,10 @@ public class CreateCustomerInvoiceCommand {
     public void setSalesOrderId(UUID salesOrderId) { this.salesOrderId = salesOrderId; }
     public BigDecimal getExchangeRateToCompany() { return exchangeRateToCompany; }
     public void setExchangeRateToCompany(BigDecimal exchangeRateToCompany) { this.exchangeRateToCompany = exchangeRateToCompany; }
+    public String getMoveType() { return moveType; }
+    public void setMoveType(String moveType) { this.moveType = moveType; }
+    public UUID getReversedInvoiceId() { return reversedInvoiceId; }
+    public void setReversedInvoiceId(UUID reversedInvoiceId) { this.reversedInvoiceId = reversedInvoiceId; }
     public List<CustomerInvoiceLineCommand> getLines() { return lines; }
     public void setLines(List<CustomerInvoiceLineCommand> lines) { this.lines = lines; }
 }

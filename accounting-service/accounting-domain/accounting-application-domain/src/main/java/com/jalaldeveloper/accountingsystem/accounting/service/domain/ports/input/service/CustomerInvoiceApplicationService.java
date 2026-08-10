@@ -1,5 +1,6 @@
 package com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service;
 
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CreateCreditNoteFromInvoiceCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CreateCustomerInvoiceCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CustomerInvoiceResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CustomerPaymentResponse;
@@ -18,7 +19,12 @@ public interface CustomerInvoiceApplicationService {
     /** Quantities reserved on draft customer invoices keyed by sales order line id. */
     Map<UUID, BigDecimal> draftAllocatedQtyBySalesOrderLine(UUID salesOrderId);
 
+    /** Quantities reserved on draft customer credit notes keyed by sales order line id. */
+    Map<UUID, BigDecimal> draftCreditNoteAllocatedQtyBySalesOrderLine(UUID salesOrderId);
+
     CustomerInvoiceResponse createCustomerInvoice(@Valid CreateCustomerInvoiceCommand command);
+
+    CustomerInvoiceResponse createCreditNoteFromInvoice(UUID invoiceId, @Valid CreateCreditNoteFromInvoiceCommand command);
 
     CustomerInvoiceResponse postCustomerInvoice(UUID invoiceId);
 

@@ -1,5 +1,6 @@
 package com.jalaldeveloper.accountingsystem.dataaccess.entity;
 
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.CustomerInvoiceMoveType;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.CustomerInvoiceState;
 import jakarta.persistence.*;
 
@@ -42,6 +43,13 @@ public class AccCustomerInvoiceEntity {
     @Column(nullable = false, length = 20)
     private CustomerInvoiceState state;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "move_type", nullable = false, length = 32)
+    private CustomerInvoiceMoveType moveType = CustomerInvoiceMoveType.INVOICE;
+
+    @Column(name = "reversed_invoice_id")
+    private UUID reversedInvoiceId;
+
     @Column(name = "journal_entry_id")
     private UUID journalEntryId;
 
@@ -83,6 +91,12 @@ public class AccCustomerInvoiceEntity {
     public void setCurrencyCode(String currencyCode) { this.currencyCode = currencyCode; }
     public CustomerInvoiceState getState() { return state; }
     public void setState(CustomerInvoiceState state) { this.state = state; }
+    public CustomerInvoiceMoveType getMoveType() { return moveType; }
+    public void setMoveType(CustomerInvoiceMoveType moveType) {
+        this.moveType = moveType != null ? moveType : CustomerInvoiceMoveType.INVOICE;
+    }
+    public UUID getReversedInvoiceId() { return reversedInvoiceId; }
+    public void setReversedInvoiceId(UUID reversedInvoiceId) { this.reversedInvoiceId = reversedInvoiceId; }
     public UUID getJournalEntryId() { return journalEntryId; }
     public void setJournalEntryId(UUID journalEntryId) { this.journalEntryId = journalEntryId; }
     public UUID getSalesOrderId() { return salesOrderId; }

@@ -1,5 +1,6 @@
 package com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice;
 
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.CustomerInvoiceMoveType;
 import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.CustomerInvoiceState;
 
 import java.math.BigDecimal;
@@ -17,6 +18,8 @@ public class CustomerInvoiceResponse {
     private String reference;
     private String currencyCode;
     private CustomerInvoiceState state;
+    private CustomerInvoiceMoveType moveType;
+    private UUID reversedInvoiceId;
     private UUID journalEntryId;
     private UUID salesOrderId;
     private BigDecimal exchangeRateToCompany;
@@ -38,6 +41,10 @@ public class CustomerInvoiceResponse {
     public void setCurrencyCode(String currencyCode) { this.currencyCode = currencyCode; }
     public CustomerInvoiceState getState() { return state; }
     public void setState(CustomerInvoiceState state) { this.state = state; }
+    public CustomerInvoiceMoveType getMoveType() { return moveType; }
+    public void setMoveType(CustomerInvoiceMoveType moveType) { this.moveType = moveType; }
+    public UUID getReversedInvoiceId() { return reversedInvoiceId; }
+    public void setReversedInvoiceId(UUID reversedInvoiceId) { this.reversedInvoiceId = reversedInvoiceId; }
     public UUID getJournalEntryId() { return journalEntryId; }
     public void setJournalEntryId(UUID journalEntryId) { this.journalEntryId = journalEntryId; }
     public UUID getSalesOrderId() { return salesOrderId; }
