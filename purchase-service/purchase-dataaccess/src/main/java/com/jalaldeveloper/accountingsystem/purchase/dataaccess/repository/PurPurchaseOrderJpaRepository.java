@@ -15,12 +15,14 @@ public interface PurPurchaseOrderJpaRepository extends JpaRepository<PurPurchase
 
     Optional<PurPurchaseOrderEntity> findByCompanyIdAndName(UUID companyId, String name);
 
+    // Pass empty string (never null) for :q — Postgres + Hibernate bind null strings as bytea,
+    // which breaks lower(concat('%', :q, '%')).
     @Query("""
             select o from PurPurchaseOrderEntity o
             where o.companyId = :companyId
             and (:state is null or o.state = :state)
             and (:vendorId is null or o.vendorPartnerId = :vendorId)
-            and (:q is null or lower(o.name) like lower(concat('%', :q, '%')))
+            and (:q = '' or lower(o.name) like concat('%', lower(:q), '%'))
             """)
     Page<PurPurchaseOrderEntity> search(@Param("companyId") UUID companyId,
                                          @Param("state") PurchaseOrderState state,

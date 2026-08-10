@@ -18,12 +18,14 @@ public interface SalSalesOrderJpaRepository extends JpaRepository<SalSalesOrderE
     @Query("select distinct o from SalSalesOrderEntity o left join fetch o.lines where o.id = :id")
     Optional<SalSalesOrderEntity> findByIdWithLines(@Param("id") UUID id);
 
+    // Pass empty string (never null) for :q — Postgres + Hibernate bind null strings as bytea,
+    // which breaks lower(concat('%', :q, '%')).
     @Query("""
             select o from SalSalesOrderEntity o
             where o.companyId = :companyId
             and (:state is null or o.state = :state)
             and (:customerId is null or o.customerPartnerId = :customerId)
-            and (:q is null or lower(o.name) like lower(concat('%', :q, '%')))
+            and (:q = '' or lower(o.name) like concat('%', lower(:q), '%'))
             """)
     Page<SalSalesOrderEntity> search(@Param("companyId") UUID companyId,
                                       @Param("state") SalesOrderState state,
