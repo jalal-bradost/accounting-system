@@ -1,5 +1,7 @@
 package com.jalaldeveloper.accountingsystem.accounting.service.domain.create;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -29,8 +31,14 @@ public class CreateJournalEntryCommand {
         this(companyId, journalId, sequenceNumber, date, currencyCode, null, items);
     }
 
-    public CreateJournalEntryCommand(UUID companyId, UUID journalId, String sequenceNumber, LocalDate date,
-                                     String currencyCode, UUID partnerId, List<JournalItemCommand> items) {
+    @JsonCreator
+    public CreateJournalEntryCommand(@JsonProperty("companyId") UUID companyId,
+                                     @JsonProperty("journalId") UUID journalId,
+                                     @JsonProperty("sequenceNumber") String sequenceNumber,
+                                     @JsonProperty("date") LocalDate date,
+                                     @JsonProperty("currencyCode") String currencyCode,
+                                     @JsonProperty("partnerId") UUID partnerId,
+                                     @JsonProperty("items") List<JournalItemCommand> items) {
         this.companyId = companyId;
         this.journalId = journalId;
         this.sequenceNumber = sequenceNumber != null ? sequenceNumber : "";

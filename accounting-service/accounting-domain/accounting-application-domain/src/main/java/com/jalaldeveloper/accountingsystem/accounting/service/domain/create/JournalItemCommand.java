@@ -1,5 +1,7 @@
 package com.jalaldeveloper.accountingsystem.accounting.service.domain.create;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -22,8 +24,14 @@ public class JournalItemCommand {
         this(accountId, label, debit, credit, currencyCode, amountCurrency, null);
     }
 
-    public JournalItemCommand(UUID accountId, String label, BigDecimal debit, BigDecimal credit,
-                              String currencyCode, BigDecimal amountCurrency, UUID partnerId) {
+    @JsonCreator
+    public JournalItemCommand(@JsonProperty("accountId") UUID accountId,
+                              @JsonProperty("label") String label,
+                              @JsonProperty("debit") BigDecimal debit,
+                              @JsonProperty("credit") BigDecimal credit,
+                              @JsonProperty("currencyCode") String currencyCode,
+                              @JsonProperty("amountCurrency") BigDecimal amountCurrency,
+                              @JsonProperty("partnerId") UUID partnerId) {
         this.accountId = accountId;
         this.label = label;
         this.debit = debit != null ? debit : BigDecimal.ZERO;
