@@ -39,6 +39,7 @@ public class SalesOrderResponse {
     private Instant invoicingCompletedAt;
     /** True when the API would allow creating a customer invoice (confirmed + invoiceable qty on a line). */
     private boolean canCreateCustomerInvoice;
+    private boolean canCreateCustomerCreditNote;
     private List<UUID> deliveryPickingIds = new ArrayList<>();
     private List<SalesOrderLineResponse> lines = new ArrayList<>();
 
@@ -92,6 +93,8 @@ public class SalesOrderResponse {
     public void setInvoicingCompletedAt(Instant invoicingCompletedAt) { this.invoicingCompletedAt = invoicingCompletedAt; }
     public boolean isCanCreateCustomerInvoice() { return canCreateCustomerInvoice; }
     public void setCanCreateCustomerInvoice(boolean canCreateCustomerInvoice) { this.canCreateCustomerInvoice = canCreateCustomerInvoice; }
+    public boolean isCanCreateCustomerCreditNote() { return canCreateCustomerCreditNote; }
+    public void setCanCreateCustomerCreditNote(boolean canCreateCustomerCreditNote) { this.canCreateCustomerCreditNote = canCreateCustomerCreditNote; }
     public List<UUID> getDeliveryPickingIds() { return deliveryPickingIds; }
     public void setDeliveryPickingIds(List<UUID> deliveryPickingIds) {
         this.deliveryPickingIds = deliveryPickingIds != null ? deliveryPickingIds : new ArrayList<>();

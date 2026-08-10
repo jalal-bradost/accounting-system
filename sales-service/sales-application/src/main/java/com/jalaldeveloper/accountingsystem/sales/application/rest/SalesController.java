@@ -89,4 +89,12 @@ public class SalesController {
         cmd.setCompanyId(companyId.getId());
         return ResponseEntity.ok(salesApplicationService.createCustomerInvoiceFromSalesOrder(cmd));
     }
+
+    @PostMapping("/customer-credit-notes/from-order")
+    @RequiresPermission("sales.invoice.write")
+    public ResponseEntity<CustomerInvoiceResponse> createCreditNoteFromOrder(@CurrentCompany CompanyId companyId,
+                                                                             @Valid @RequestBody CreateCustomerInvoiceFromSalesOrderCommand cmd) {
+        cmd.setCompanyId(companyId.getId());
+        return ResponseEntity.ok(salesApplicationService.createCustomerCreditNoteFromSalesOrder(cmd));
+    }
 }

@@ -33,4 +33,6 @@ public interface SalesApplicationService {
     void afterOutgoingPickingValidated(UUID salesOrderId);
 
     CustomerInvoiceResponse createCustomerInvoiceFromSalesOrder(@Valid CreateCustomerInvoiceFromSalesOrderCommand command);
+
+    CustomerInvoiceResponse createCustomerCreditNoteFromSalesOrder(@Valid CreateCustomerInvoiceFromSalesOrderCommand command);
 }

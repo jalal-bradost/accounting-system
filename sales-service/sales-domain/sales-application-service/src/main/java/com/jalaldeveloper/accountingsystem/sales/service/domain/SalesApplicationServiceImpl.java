@@ -4,6 +4,7 @@ import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinv
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CustomerInvoiceLineCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CustomerInvoiceLineTaxCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CustomerInvoiceResponse;
+import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.CustomerInvoiceMoveType;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.CustomerInvoiceApplicationService;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.SalesOrderInvoiceSyncPort;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.dto.CreditStatusResponse;
@@ -230,7 +231,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
                                                            String q,
                                                            Pageable pageable) {
         UUID cid = companyIdOrDefault(companyId);
-        String qNorm = q != null && !q.isBlank() ? q.trim() : null;
+        String qNorm = q != null && !q.isBlank() ? q.trim() : "";
         return salesOrderRepository.search(cid, state, customerPartnerId, qNorm, pageable).map(this::toSummary);
     }
 
@@ -268,6 +269,20 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         return false;
     }
 
+    private boolean computeCanCreateCustomerCreditNote(SalesOrder o) {
+        if (o.getState() != SalesOrderState.CONFIRMED) {
+            return false;
+        }
+        Map<UUID, BigDecimal> draftCn =
+                customerInvoiceApplicationService.draftCreditNoteAllocatedQtyBySalesOrderLine(o.getId());
+        for (SalesOrderLine sol : o.getLines()) {
+            if (creditNoteableQtyForLine(sol, draftCn).signum() > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Quantities already reserved on draft customer invoices (not yet posted to qtyInvoiced). */
     private BigDecimal effectiveQtyInvoiced(SalesOrderLine sol, Map<UUID, BigDecimal> draftAllocated) {
         BigDecimal draft = draftAllocated.getOrDefault(sol.getId(), BigDecimal.ZERO);
@@ -284,6 +299,13 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
                 ? sol.getQtyOrdered() : sol.getQtyDelivered();
         BigDecimal invoiced = effectiveQtyInvoiced(sol, draftAllocated);
         return targetQty.subtract(invoiced).max(BigDecimal.ZERO);
+    }
+
+    /** Over-invoiced qty after returns: invoiced − delivered − draft credit notes. */
+    private BigDecimal creditNoteableQtyForLine(SalesOrderLine sol, Map<UUID, BigDecimal> draftCreditNotes) {
+        BigDecimal draft = draftCreditNotes.getOrDefault(sol.getId(), BigDecimal.ZERO);
+        return sol.getQtyInvoiced().subtract(sol.getQtyDelivered()).subtract(draft).max(BigDecimal.ZERO)
+                .setScale(4, RoundingMode.HALF_UP);
     }
 
     private BigDecimal resolveUnitPrice(UUID companyId, UUID pricelistId, UUID productId, BigDecimal qty,
@@ -524,8 +546,12 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         Instant now = Instant.now();
         for (SalesOrderLine line : o.getLines()) {
             BigDecimal add = invoicedQtyBySalesLineId.get(line.getId());
-            if (add != null && add.signum() > 0) {
-                line.setQtyInvoiced(line.getQtyInvoiced().add(add).setScale(4, RoundingMode.HALF_UP));
+            if (add != null && add.signum() != 0) {
+                BigDecimal next = line.getQtyInvoiced().add(add).setScale(4, RoundingMode.HALF_UP);
+                if (next.signum() < 0) {
+                    next = BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+                }
+                line.setQtyInvoiced(next);
                 line.setUpdatedAt(now);
             }
         }
@@ -653,6 +679,58 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         return customerInvoiceApplicationService.createCustomerInvoice(ic);
     }
 
+    @Override
+    @Transactional
+    public CustomerInvoiceResponse createCustomerCreditNoteFromSalesOrder(CreateCustomerInvoiceFromSalesOrderCommand command) {
+        UUID companyId = companyIdOrDefault(command.getCompanyId());
+        SalesOrder o = loadOrder(command.getSalesOrderId());
+        if (!o.getCompanyId().equals(companyId)) {
+            throw new SalesDomainException("Sales order company mismatch");
+        }
+        if (o.getState() == SalesOrderState.CANCELLED) {
+            throw new SalesDomainException("Cannot credit a cancelled sales order");
+        }
+        if (o.getState() != SalesOrderState.CONFIRMED) {
+            throw new SalesDomainException("Sales order must be confirmed before creating a credit note");
+        }
+        Map<UUID, BigDecimal> draftCn =
+                customerInvoiceApplicationService.draftCreditNoteAllocatedQtyBySalesOrderLine(o.getId());
+        List<CustomerInvoiceLineCommand> invLines = new ArrayList<>();
+        for (SalesOrderLine sol : o.getLines()) {
+            BigDecimal qty = creditNoteableQtyForLine(sol, draftCn);
+            if (qty.signum() <= 0) {
+                continue;
+            }
+            CustomerInvoiceLineCommand lc = new CustomerInvoiceLineCommand();
+            lc.setName(sol.getName());
+            lc.setQty(qty);
+            lc.setUnitPrice(sol.getUnitPrice());
+            lc.setDiscountPercent(sol.getDiscountPercent());
+            lc.setRevenueAccountId(sol.getRevenueAccountId());
+            lc.setSalesOrderLineId(sol.getId());
+            addInvoiceTaxSnapshots(lc, sol, qty);
+            invLines.add(lc);
+        }
+        if (invLines.isEmpty()) {
+            throw new SalesDomainException(
+                    "No credit-note quantity: return delivered goods first so qty invoiced exceeds qty delivered "
+                            + "(or post/remove any draft credit note).");
+        }
+        CreateCustomerInvoiceCommand ic = new CreateCustomerInvoiceCommand();
+        ic.setCompanyId(companyId);
+        ic.setCustomerPartnerId(o.getCustomerPartnerId());
+        ic.setInvoiceDate(command.getInvoiceDate());
+        ic.setDueDate(command.getDueDate());
+        ic.setCurrencyCode(o.getCurrencyCode());
+        ic.setReference(command.getReference() != null ? command.getReference()
+                : "CN/SO/" + o.getName());
+        ic.setSalesOrderId(o.getId());
+        ic.setExchangeRateToCompany(o.getExchangeRateToCompany());
+        ic.setMoveType(CustomerInvoiceMoveType.CREDIT_NOTE.name());
+        ic.setLines(invLines);
+        return customerInvoiceApplicationService.createCustomerInvoice(ic);
+    }
+
     private void addInvoiceTaxSnapshots(CustomerInvoiceLineCommand invLine, SalesOrderLine sol, BigDecimal invoiceQty) {
         List<FiscalTaxSnapshot> snaps = sol.getTaxes().stream()
                 .map(t -> purchaseApplicationService.getFiscalTax(t.getTaxId()))
@@ -700,6 +778,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         r.setInvoicingCompletedAt(o.getInvoicingCompletedAt());
         r.setDeliveryPickingIds(stockMoveSalesQueryPort.findPickingIdsBySalesOrderId(o.getId()));
         r.setCanCreateCustomerInvoice(computeCanCreateCustomerInvoice(o));
+        r.setCanCreateCustomerCreditNote(computeCanCreateCustomerCreditNote(o));
         r.setLines(o.getLines().stream().sorted(Comparator.comparingInt(SalesOrderLine::getSequence)).map(l -> {
             SalesOrderLineResponse lr = new SalesOrderLineResponse();
             lr.setId(l.getId());
