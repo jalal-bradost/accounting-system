@@ -222,8 +222,8 @@ public class PlatformRbacSeeder implements ApplicationRunner {
         c.setName("Demo Company");
         c.setLegalName("Demo Company LLC");
         c.setEmail("contact@demo.local");
-        c.setCountry("US");
-        c.setDefaultCurrency("USD");
+        c.setCountry("IQ");
+        c.setDefaultCurrency("IQD");
         c.setLocale("en-US");
         c.setDateFormat("yyyy-MM-dd");
         c.setNumberFormat("#,##0.00");

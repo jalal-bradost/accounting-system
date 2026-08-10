@@ -39,19 +39,19 @@ accounting:
     default-company-chart: true
     # Demo partners, products, PO/SO, vendor bill, customer invoice, and payments (idempotent; disable in production)
     demo-business-data: false
-  # Company currencies: base USD + optional extras (seeded once per company when table is empty)
+  # Company currencies: IQD base (Iraqi market default) + optional extras
   currencies:
     seed: true
     base:
-      code: USD
-      symbol: "$"
-      name: United States dollar
+      code: IQD
+      symbol: "د.ع"
+      name: Iraqi dinar
     extras:
-      - code: IQD
-        symbol: "د.ع"
-        name: Iraqi dinar
-        # Units of IQD per 1 USD (adjust to market)
-        rate-per-usd: "1310.000000"
+      - code: USD
+        symbol: "$"
+        name: United States dollar
+        # Units of this currency per 1 base unit (USD per 1 IQD ≈ 1/1310)
+        rate-per-usd: "0.000763358778"
         active: true
   cors:
     # Comma-separated list of origins allowed to call /api/v1/**
