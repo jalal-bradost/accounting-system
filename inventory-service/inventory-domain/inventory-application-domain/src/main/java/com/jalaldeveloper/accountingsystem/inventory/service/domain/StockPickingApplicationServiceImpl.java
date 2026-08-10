@@ -369,7 +369,9 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
                 sync.afterIncomingPickingValidated(poId);
             }
         }
-        if (savedPicking.getSalesOrderId() != null && savedPicking.getPickingType() == PickingType.OUTGOING) {
+        if (savedPicking.getSalesOrderId() != null
+                && (savedPicking.getPickingType() == PickingType.OUTGOING
+                || savedPicking.getPickingType() == PickingType.INCOMING)) {
             UUID soId = savedPicking.getSalesOrderId();
             SalesDeliverySyncPort salesSync = salesDeliverySyncProvider.getIfAvailable();
             if (salesSync != null) {
@@ -464,6 +466,8 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
                         .sourceLocationId(m.getDestinationLocationId())
                         .destinationLocationId(m.getSourceLocationId())
                         .demandQuantity(m.getPickedQuantity())
+                        .purchaseOrderLineId(m.getPurchaseOrderLineId())
+                        .salesOrderLineId(m.getSalesOrderLineId())
                         .build())
                 .collect(Collectors.toList());
 
@@ -482,6 +486,8 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
                 .sourceLocationId(original.getDestinationLocationId())
                 .destinationLocationId(original.getSourceLocationId())
                 .partnerId(original.getPartnerId())
+                .purchaseOrderId(original.getPurchaseOrderId())
+                .salesOrderId(original.getSalesOrderId())
                 .origin("RETURN OF " + original.getId().getId())
                 .moves(reversed)
                 .backorderOf(original.getId())
