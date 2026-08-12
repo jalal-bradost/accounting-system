@@ -361,6 +361,93 @@ class PurchaseApiIntegrationTest {
                 .isEqualByComparingTo(new BigDecimal("4"));
     }
 
+    @Test
+    void vendor_return_auto_creates_and_posts_credit_note() throws Exception {
+        UUID apAccountId = accountIdByCode("430004");
+        UUID vendorId = createVendor(apAccountId);
+        UUID warehouse = lookupWarehouseByCode("WH");
+        UUID categoryId = lookupCategoryByName("All");
+        UUID uomId = lookupUomByName("Unit");
+        UUID productId = createProduct("PUR-RET-" + UUID.randomUUID().toString().substring(0, 8),
+                "Vendor return CN", categoryId, uomId, "5.00", "12.00");
+
+        String poBody = "{\"vendorPartnerId\":\"" + vendorId + "\",\"currencyCode\":\"USD\",\"warehouseId\":\""
+                + warehouse + "\",\"lines\":[{\"productId\":\"" + productId + "\",\"name\":\"Line1\",\"uomId\":\""
+                + uomId + "\",\"qtyOrdered\":2,\"unitPrice\":100,\"discountPercent\":0,\"taxIds\":[]}]}";
+        JsonNode po = json.readTree(mockMvc.perform(post("/api/v1/purchase/orders")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(poBody))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID poId = UUID.fromString(po.get("id").asText());
+
+        mockMvc.perform(post("/api/v1/purchase/orders/" + poId + "/confirm")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk());
+
+        JsonNode poJson = json.readTree(mockMvc.perform(get("/api/v1/purchase/orders/" + poId)
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID receiptPickingId = UUID.fromString(poJson.get("receiptPickingIds").get(0).asText());
+        mockMvc.perform(post("/api/v1/purchase/receipts/" + receiptPickingId + "/validate")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
+
+        String billBody = "{\"purchaseOrderId\":\"" + poId + "\",\"billDate\":\"2026-05-04\"}";
+        JsonNode bill = json.readTree(mockMvc.perform(post("/api/v1/purchase/vendor-bills/from-po")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(billBody))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID billId = UUID.fromString(bill.get("id").asText());
+        mockMvc.perform(post("/api/v1/purchase/vendor-bills/" + billId + "/post")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk());
+
+        JsonNode returnPicking = json.readTree(mockMvc.perform(
+                        post("/api/v1/inventory/pickings/" + receiptPickingId + "/return")
+                                .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID returnPickingId = UUID.fromString(returnPicking.get("id").asText());
+        UUID returnMoveId = firstMoveId(returnPickingId);
+        validatePickingWithPicks(returnPickingId, returnMoveId, "1", false);
+
+        JsonNode creditNotes = json.readTree(mockMvc.perform(
+                        get("/api/v1/accounting/vendor-bills/" + billId + "/credit-notes")
+                                .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertThat(creditNotes).hasSize(1);
+        assertThat(creditNotes.get(0).get("state").asText()).isEqualTo("POSTED");
+        assertThat(creditNotes.get(0).get("moveType").asText()).isEqualTo("CREDIT_NOTE");
+        assertThat(creditNotes.get(0).get("reversedBillId").asText()).isEqualTo(billId.toString());
+    }
+
+    private void validatePickingWithPicks(UUID id, UUID moveId, String picked, boolean createBackorder) throws Exception {
+        String body = "{\"createBackorder\":" + createBackorder + ",\"picks\":[{\"moveId\":\"" + moveId
+                + "\",\"pickedQuantity\":" + picked + "}]}";
+        mockMvc.perform(post("/api/v1/inventory/pickings/" + id + "/validate")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk());
+    }
+
+    private UUID firstMoveId(UUID pickingId) throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/v1/inventory/pickings/" + pickingId)
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn();
+        return UUID.fromString(json.readTree(result.getResponse().getContentAsString())
+                .get("moves").get(0).get("id").asText());
+    }
+
     private UUID createVendor(UUID payableAccountId) throws Exception {
         String body = "{\"kind\":\"COMPANY\",\"displayName\":\"Vendor " + UUID.randomUUID().toString().substring(0, 6)
                 + "\",\"customer\":false,\"vendor\":true,\"payableAccountId\":\"" + payableAccountId

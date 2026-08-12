@@ -14,4 +14,6 @@ public interface PurVendorBillJpaRepository extends JpaRepository<PurVendorBillE
 
     List<PurVendorBillEntity> findByCompanyIdAndVendorPartnerIdOrderByBillDateAscCreatedAtAsc(UUID companyId,
                                                                                              UUID vendorPartnerId);
+
+    List<PurVendorBillEntity> findByReversedBillIdOrderByBillDateDescCreatedAtDesc(UUID reversedBillId);
 }

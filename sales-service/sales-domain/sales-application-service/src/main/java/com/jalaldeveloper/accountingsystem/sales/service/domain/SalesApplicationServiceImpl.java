@@ -1,10 +1,10 @@
 package com.jalaldeveloper.accountingsystem.sales.service.domain;
 
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CreateCreditNoteFromInvoiceCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CreateCustomerInvoiceCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CustomerInvoiceLineCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CustomerInvoiceLineTaxCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CustomerInvoiceResponse;
-import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.CustomerInvoiceMoveType;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.CustomerInvoiceApplicationService;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.SalesOrderInvoiceSyncPort;
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.dto.CreditStatusResponse;
@@ -533,6 +533,29 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         refreshOrderStatuses(o);
         o.setUpdatedAt(now);
         salesOrderRepository.save(o);
+        tryAutoCreateAndPostCreditNoteFromReturn(o);
+    }
+
+    private void tryAutoCreateAndPostCreditNoteFromReturn(SalesOrder o) {
+        Map<UUID, BigDecimal> draftCn =
+                customerInvoiceApplicationService.draftCreditNoteAllocatedQtyBySalesOrderLine(o.getId());
+        boolean hasCreditable = o.getLines().stream()
+                .anyMatch(sol -> creditNoteableQtyForLine(sol, draftCn).signum() > 0);
+        if (!hasCreditable) {
+            return;
+        }
+        List<CustomerInvoiceResponse> postedInvoices =
+                customerInvoiceApplicationService.listPostedInvoicesForSalesOrder(o.getId());
+        if (postedInvoices.size() != 1) {
+            return;
+        }
+        CreateCustomerInvoiceFromSalesOrderCommand cmd = new CreateCustomerInvoiceFromSalesOrderCommand();
+        cmd.setCompanyId(o.getCompanyId());
+        cmd.setSalesOrderId(o.getId());
+        cmd.setSourceInvoiceId(postedInvoices.get(0).getId());
+        cmd.setInvoiceDate(LocalDate.now());
+        CustomerInvoiceResponse cn = createCustomerCreditNoteFromSalesOrder(cmd);
+        customerInvoiceApplicationService.postCustomerInvoice(cn.getId());
     }
 
     @Override
@@ -693,42 +716,66 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         if (o.getState() != SalesOrderState.CONFIRMED) {
             throw new SalesDomainException("Sales order must be confirmed before creating a credit note");
         }
+
+        List<CustomerInvoiceResponse> postedInvoices =
+                customerInvoiceApplicationService.listPostedInvoicesForSalesOrder(o.getId());
+        if (postedInvoices.isEmpty()) {
+            throw new SalesDomainException(
+                    "No posted invoice on this order; open the customer invoice and create a credit note from there");
+        }
+
+        UUID resolvedSourceInvoiceId = command.getSourceInvoiceId();
+        if (resolvedSourceInvoiceId == null) {
+            if (postedInvoices.size() == 1) {
+                resolvedSourceInvoiceId = postedInvoices.get(0).getId();
+            } else {
+                throw new SalesDomainException(
+                        "Multiple posted invoices on this order; open the source invoice and create the credit note there");
+            }
+        } else {
+            UUID sourceInvoiceId = resolvedSourceInvoiceId;
+            boolean onOrder = postedInvoices.stream().anyMatch(inv -> inv.getId().equals(sourceInvoiceId));
+            if (!onOrder) {
+                throw new SalesDomainException("Source invoice does not belong to this sales order");
+            }
+        }
+
+        CustomerInvoiceResponse sourceInvoice =
+                customerInvoiceApplicationService.getCustomerInvoice(resolvedSourceInvoiceId);
         Map<UUID, BigDecimal> draftCn =
                 customerInvoiceApplicationService.draftCreditNoteAllocatedQtyBySalesOrderLine(o.getId());
-        List<CustomerInvoiceLineCommand> invLines = new ArrayList<>();
+
+        CreateCreditNoteFromInvoiceCommand cnCmd = new CreateCreditNoteFromInvoiceCommand();
+        cnCmd.setCompanyId(companyId);
+        cnCmd.setInvoiceDate(command.getInvoiceDate());
+        cnCmd.setDueDate(command.getDueDate());
+        cnCmd.setReference(command.getReference() != null ? command.getReference()
+                : "CN/SO/" + o.getName());
+
+        List<CreateCreditNoteFromInvoiceCommand.CreditNoteLineQtyCommand> cnLines = new ArrayList<>();
         for (SalesOrderLine sol : o.getLines()) {
             BigDecimal qty = creditNoteableQtyForLine(sol, draftCn);
             if (qty.signum() <= 0) {
                 continue;
             }
-            CustomerInvoiceLineCommand lc = new CustomerInvoiceLineCommand();
-            lc.setName(sol.getName());
-            lc.setQty(qty);
-            lc.setUnitPrice(sol.getUnitPrice());
-            lc.setDiscountPercent(sol.getDiscountPercent());
-            lc.setRevenueAccountId(sol.getRevenueAccountId());
-            lc.setSalesOrderLineId(sol.getId());
-            addInvoiceTaxSnapshots(lc, sol, qty);
-            invLines.add(lc);
+            for (var invLine : sourceInvoice.getLines()) {
+                if (sol.getId().equals(invLine.getSalesOrderLineId())) {
+                    CreateCreditNoteFromInvoiceCommand.CreditNoteLineQtyCommand lc =
+                            new CreateCreditNoteFromInvoiceCommand.CreditNoteLineQtyCommand();
+                    lc.setInvoiceLineId(invLine.getId());
+                    lc.setQty(qty);
+                    cnLines.add(lc);
+                    break;
+                }
+            }
         }
-        if (invLines.isEmpty()) {
+        if (cnLines.isEmpty()) {
             throw new SalesDomainException(
                     "No credit-note quantity: return delivered goods first so qty invoiced exceeds qty delivered "
                             + "(or post/remove any draft credit note).");
         }
-        CreateCustomerInvoiceCommand ic = new CreateCustomerInvoiceCommand();
-        ic.setCompanyId(companyId);
-        ic.setCustomerPartnerId(o.getCustomerPartnerId());
-        ic.setInvoiceDate(command.getInvoiceDate());
-        ic.setDueDate(command.getDueDate());
-        ic.setCurrencyCode(o.getCurrencyCode());
-        ic.setReference(command.getReference() != null ? command.getReference()
-                : "CN/SO/" + o.getName());
-        ic.setSalesOrderId(o.getId());
-        ic.setExchangeRateToCompany(o.getExchangeRateToCompany());
-        ic.setMoveType(CustomerInvoiceMoveType.CREDIT_NOTE.name());
-        ic.setLines(invLines);
-        return customerInvoiceApplicationService.createCustomerInvoice(ic);
+        cnCmd.setLines(cnLines);
+        return customerInvoiceApplicationService.createCreditNoteFromInvoice(resolvedSourceInvoiceId, cnCmd);
     }
 
     private void addInvoiceTaxSnapshots(CustomerInvoiceLineCommand invLine, SalesOrderLine sol, BigDecimal invoiceQty) {

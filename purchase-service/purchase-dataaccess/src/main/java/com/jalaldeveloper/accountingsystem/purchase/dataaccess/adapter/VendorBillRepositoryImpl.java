@@ -51,4 +51,10 @@ public class VendorBillRepositoryImpl implements VendorBillRepository {
         return jpa.findByCompanyIdAndVendorPartnerIdOrderByBillDateAscCreatedAtAsc(companyId, vendorPartnerId).stream()
                 .map(mapper::entityToDomain).toList();
     }
+
+    @Override
+    public List<VendorBill> findByReversedBillId(UUID reversedBillId) {
+        return jpa.findByReversedBillIdOrderByBillDateDescCreatedAtDesc(reversedBillId).stream()
+                .map(mapper::entityToDomain).toList();
+    }
 }

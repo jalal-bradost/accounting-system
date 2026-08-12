@@ -23,4 +23,6 @@ public interface CustomerInvoiceRepository {
 
     List<CustomerInvoice> findByCompanyIdAndCustomerPartnerIdOrderByInvoiceDateAscCreatedAtAsc(
             UUID companyId, UUID customerPartnerId);
+
+    List<CustomerInvoice> findByReversedInvoiceIdWithLines(UUID reversedInvoiceId);
 }

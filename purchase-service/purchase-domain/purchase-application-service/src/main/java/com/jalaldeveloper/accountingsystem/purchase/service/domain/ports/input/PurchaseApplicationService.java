@@ -43,6 +43,8 @@ public interface PurchaseApplicationService {
 
     VendorBillResponse createCreditNoteFromVendorBill(UUID billId, CreateCreditNoteFromVendorBillCommand command);
 
+    List<VendorBillResponse> listCreditNotesForBill(UUID billId);
+
     VendorBillResponse postVendorBill(UUID billId);
 
     VendorBillResponse getVendorBill(UUID billId);

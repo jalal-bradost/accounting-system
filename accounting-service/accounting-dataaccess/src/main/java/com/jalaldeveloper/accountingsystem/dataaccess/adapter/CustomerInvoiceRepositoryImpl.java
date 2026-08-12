@@ -70,4 +70,11 @@ public class CustomerInvoiceRepositoryImpl implements CustomerInvoiceRepository 
                 .map(mapper::entityToDomain)
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public List<CustomerInvoice> findByReversedInvoiceIdWithLines(UUID reversedInvoiceId) {
+        return jpaRepository.findByReversedInvoiceIdWithLines(reversedInvoiceId).stream()
+                .map(mapper::entityToDomain)
+                .collect(Collectors.toList());
+    }
 }

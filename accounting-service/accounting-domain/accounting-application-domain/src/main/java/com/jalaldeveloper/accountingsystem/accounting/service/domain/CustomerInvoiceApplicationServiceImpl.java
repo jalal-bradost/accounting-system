@@ -266,6 +266,22 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
             }
         }
 
+        Map<UUID, BigDecimal> alreadyCredited = creditedQtyBySourceInvoiceLine(source);
+        for (CustomerInvoiceLine srcLine : source.getLines()) {
+            BigDecimal qty = qtyByLineId.get(srcLine.getId());
+            if (qty == null || qty.signum() <= 0) {
+                continue;
+            }
+            BigDecimal prior = alreadyCredited.getOrDefault(srcLine.getId(), BigDecimal.ZERO);
+            BigDecimal remaining = srcLine.getQty().subtract(prior).setScale(4, RoundingMode.HALF_UP);
+            if (qty.compareTo(remaining) > 0) {
+                throw new AccountingDomainException(
+                        "Credit qty " + qty + " exceeds remaining creditable qty " + remaining
+                                + " on invoice line " + srcLine.getName()
+                                + " (already credited " + prior + " of " + srcLine.getQty() + ")");
+            }
+        }
+
         CreateCustomerInvoiceCommand create = new CreateCustomerInvoiceCommand();
         create.setCompanyId(companyId);
         create.setCustomerPartnerId(source.getCustomerPartnerId());
@@ -284,10 +300,6 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
             BigDecimal qty = qtyByLineId.get(srcLine.getId());
             if (qty == null || qty.signum() <= 0) {
                 continue;
-            }
-            if (qty.compareTo(srcLine.getQty()) > 0) {
-                throw new AccountingDomainException(
-                        "Credit qty " + qty + " exceeds invoice line qty " + srcLine.getQty() + " for " + srcLine.getName());
             }
             BigDecimal ratio = qty.divide(srcLine.getQty(), 8, RoundingMode.HALF_UP);
             CustomerInvoiceLineCommand lc = new CustomerInvoiceLineCommand();
@@ -428,6 +440,29 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
                 saved.getCustomerPartnerId()));
 
         return toResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CustomerInvoiceResponse> listCreditNotesForInvoice(UUID invoiceId) {
+        invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new AccountingDomainException("Customer invoice not found"));
+        return invoiceRepository.findByReversedInvoiceIdWithLines(invoiceId).stream()
+                .map(this::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CustomerInvoiceResponse> listPostedInvoicesForSalesOrder(UUID salesOrderId) {
+        if (salesOrderId == null) {
+            return List.of();
+        }
+        return invoiceRepository.findBySalesOrderIdWithLines(salesOrderId).stream()
+                .filter(inv -> inv.getState() == CustomerInvoiceState.POSTED)
+                .filter(inv -> inv.getMoveType() == null || inv.getMoveType() == CustomerInvoiceMoveType.INVOICE)
+                .map(this::toResponse)
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -593,13 +628,24 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
                 .setScale(4, RoundingMode.HALF_UP);
     }
 
+    private BigDecimal sumPostedCreditNotesForInvoice(UUID sourceInvoiceId, String invoiceCurrency) {
+        return invoiceRepository.findByReversedInvoiceIdWithLines(sourceInvoiceId).stream()
+                .filter(cn -> cn.getState() == CustomerInvoiceState.POSTED)
+                .filter(cn -> cn.getMoveType() == CustomerInvoiceMoveType.CREDIT_NOTE)
+                .filter(cn -> invoiceCurrency.equalsIgnoreCase(cn.getCurrencyCode()))
+                .map(this::invoiceTotalDocumentCurrency)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(4, RoundingMode.HALF_UP);
+    }
+
     private void ensurePaymentWithinOutstanding(CustomerInvoice inv, BigDecimal docAmt, String paymentCurrency) {
         CustomerInvoice loaded = invoiceRepository.findByIdWithLines(inv.getId())
                 .orElseThrow(() -> new AccountingDomainException("Customer invoice not found"));
         String invoiceCurrency = loaded.getCurrencyCode();
         BigDecimal invoiceTotal = invoiceTotalDocumentCurrency(loaded);
         BigDecimal paid = sumPaymentsForInvoice(loaded.getId(), invoiceCurrency);
-        BigDecimal outstanding = invoiceTotal.subtract(paid).setScale(4, RoundingMode.HALF_UP);
+        BigDecimal credited = sumPostedCreditNotesForInvoice(loaded.getId(), invoiceCurrency);
+        BigDecimal outstanding = invoiceTotal.subtract(paid).subtract(credited).setScale(4, RoundingMode.HALF_UP);
         if (outstanding.signum() <= 0) {
             throw new AccountingDomainException("Customer invoice is already fully paid");
         }
@@ -667,6 +713,30 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         r.setSalesOrderId(inv.getSalesOrderId());
         r.setExchangeRateToCompany(inv.getExchangeRateToCompany());
         return r;
+    }
+
+    private Map<UUID, BigDecimal> creditedQtyBySourceInvoiceLine(CustomerInvoice source) {
+        Map<UUID, BigDecimal> credited = new LinkedHashMap<>();
+        for (CustomerInvoice cn : invoiceRepository.findByReversedInvoiceIdWithLines(source.getId())) {
+            for (CustomerInvoiceLine cnLine : cn.getLines()) {
+                UUID sourceLineId = matchSourceInvoiceLineId(source, cnLine);
+                if (sourceLineId != null) {
+                    credited.merge(sourceLineId, cnLine.getQty(), BigDecimal::add);
+                }
+            }
+        }
+        return credited;
+    }
+
+    private UUID matchSourceInvoiceLineId(CustomerInvoice source, CustomerInvoiceLine cnLine) {
+        for (CustomerInvoiceLine src : source.getLines()) {
+            if (java.util.Objects.equals(src.getSalesOrderLineId(), cnLine.getSalesOrderLineId())
+                    && java.util.Objects.equals(src.getName(), cnLine.getName())
+                    && src.getUnitPrice().compareTo(cnLine.getUnitPrice()) == 0) {
+                return src.getId();
+            }
+        }
+        return null;
     }
 
     private BigDecimal resolveExchangeRate(

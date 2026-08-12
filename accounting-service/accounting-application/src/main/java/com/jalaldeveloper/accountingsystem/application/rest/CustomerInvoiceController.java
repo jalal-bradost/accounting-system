@@ -57,6 +57,12 @@ public class CustomerInvoiceController {
         return ResponseEntity.ok(customerInvoiceApplicationService.getCustomerInvoice(id));
     }
 
+    @GetMapping("/{id}/credit-notes")
+    @RequiresPermission("accounting.customer-invoice.read")
+    public ResponseEntity<List<CustomerInvoiceResponse>> listCreditNotes(@PathVariable UUID id) {
+        return ResponseEntity.ok(customerInvoiceApplicationService.listCreditNotesForInvoice(id));
+    }
+
     @PostMapping("/{id}/credit-note")
     @RequiresPermission("accounting.customer-invoice.write")
     public ResponseEntity<CustomerInvoiceResponse> createCreditNote(@CurrentCompany CompanyId companyId,

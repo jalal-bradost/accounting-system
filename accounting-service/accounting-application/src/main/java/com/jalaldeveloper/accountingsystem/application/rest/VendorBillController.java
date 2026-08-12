@@ -50,6 +50,12 @@ public class VendorBillController {
         return ResponseEntity.ok(purchaseApplicationService.getVendorBill(id));
     }
 
+    @GetMapping("/{id}/credit-notes")
+    @RequiresPermission("accounting.vendor-bill.read")
+    public ResponseEntity<List<VendorBillResponse>> listCreditNotes(@PathVariable UUID id) {
+        return ResponseEntity.ok(purchaseApplicationService.listCreditNotesForBill(id));
+    }
+
     @PostMapping("/{id}/credit-note")
     @RequiresPermission("accounting.vendor-bill.write")
     public ResponseEntity<VendorBillResponse> createCreditNote(@CurrentCompany CompanyId companyId,

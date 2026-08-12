@@ -18,4 +18,6 @@ public interface VendorBillRepository {
 
     List<VendorBill> findByCompanyIdAndVendorPartnerIdOrderByBillDateAscCreatedAtAsc(UUID companyId,
                                                                                      UUID vendorPartnerId);
+
+    List<VendorBill> findByReversedBillId(UUID reversedBillId);
 }

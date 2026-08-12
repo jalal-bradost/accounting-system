@@ -26,4 +26,7 @@ public interface AccCustomerInvoiceJpaRepository extends JpaRepository<AccCustom
 
     List<AccCustomerInvoiceEntity> findByCompanyIdAndCustomerPartnerIdOrderByInvoiceDateAscCreatedAtAsc(
             UUID companyId, UUID customerPartnerId);
+
+    @Query("select distinct i from AccCustomerInvoiceEntity i left join fetch i.lines l where i.reversedInvoiceId = :reversedInvoiceId order by i.invoiceDate desc, i.createdAt desc")
+    List<AccCustomerInvoiceEntity> findByReversedInvoiceIdWithLines(@Param("reversedInvoiceId") UUID reversedInvoiceId);
 }

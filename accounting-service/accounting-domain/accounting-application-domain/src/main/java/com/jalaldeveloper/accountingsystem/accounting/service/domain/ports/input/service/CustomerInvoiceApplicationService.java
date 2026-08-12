@@ -26,6 +26,10 @@ public interface CustomerInvoiceApplicationService {
 
     CustomerInvoiceResponse createCreditNoteFromInvoice(UUID invoiceId, @Valid CreateCreditNoteFromInvoiceCommand command);
 
+    List<CustomerInvoiceResponse> listCreditNotesForInvoice(UUID invoiceId);
+
+    List<CustomerInvoiceResponse> listPostedInvoicesForSalesOrder(UUID salesOrderId);
+
     CustomerInvoiceResponse postCustomerInvoice(UUID invoiceId);
 
     CustomerInvoiceResponse getCustomerInvoice(UUID invoiceId);
