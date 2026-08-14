@@ -7,6 +7,7 @@ import com.jalaldeveloper.accountingsystem.purchase.domain.core.PurchaseOrderSta
 import com.jalaldeveloper.accountingsystem.purchase.domain.core.entity.PurchaseOrder;
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.ports.output.repository.PurchaseOrderRepository;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import jakarta.persistence.PersistenceContext;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -31,14 +32,58 @@ public class PurchaseOrderRepositoryImpl implements PurchaseOrderRepository {
 
     @Override
     public PurchaseOrder save(PurchaseOrder order) {
-        PurPurchaseOrderEntity existing = jpa.findById(order.getId()).orElse(null);
+        PurPurchaseOrderEntity existing = null;
+        if (order.getId() != null) {
+            existing = entityManager.find(PurPurchaseOrderEntity.class, order.getId());
+            if (existing != null) {
+                entityManager.detach(existing);
+                existing = entityManager.find(
+                        PurPurchaseOrderEntity.class, order.getId(), LockModeType.PESSIMISTIC_WRITE);
+            }
+        }
         PurPurchaseOrderEntity toSave = mapper.domainToEntity(order, existing);
         return mapper.entityToDomain(jpa.save(toSave));
     }
 
     @Override
     public Optional<PurchaseOrder> findById(UUID id) {
-        return jpa.findById(id).map(mapper::entityToDomain);
+        PurPurchaseOrderEntity cached = entityManager.find(PurPurchaseOrderEntity.class, id);
+        if (cached != null) {
+            entityManager.detach(cached);
+        }
+        PurPurchaseOrderEntity entity = entityManager.find(PurPurchaseOrderEntity.class, id);
+        if (entity == null) {
+            return Optional.empty();
+        }
+        if (entity.getLines() != null) {
+            for (var line : entity.getLines()) {
+                if (line.getTaxes() != null) {
+                    line.getTaxes().size();
+                }
+            }
+        }
+        return Optional.of(mapper.entityToDomain(entity));
+    }
+
+    @Override
+    public Optional<PurchaseOrder> findByIdForUpdate(UUID id) {
+        PurPurchaseOrderEntity cached = entityManager.find(PurPurchaseOrderEntity.class, id);
+        if (cached != null) {
+            entityManager.detach(cached);
+        }
+        PurPurchaseOrderEntity entity = entityManager.find(
+                PurPurchaseOrderEntity.class, id, LockModeType.PESSIMISTIC_WRITE);
+        if (entity == null) {
+            return Optional.empty();
+        }
+        if (entity.getLines() != null) {
+            for (var line : entity.getLines()) {
+                if (line.getTaxes() != null) {
+                    line.getTaxes().size();
+                }
+            }
+        }
+        return Optional.of(mapper.entityToDomain(entity));
     }
 
     @Override

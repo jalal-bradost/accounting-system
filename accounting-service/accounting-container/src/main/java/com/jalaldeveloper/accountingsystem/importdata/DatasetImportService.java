@@ -423,9 +423,20 @@ public class DatasetImportService {
             try {
                 PurchaseOrderResponse po = purchaseApplicationService.createPurchaseOrder(cmd);
                 po = purchaseApplicationService.confirmPurchaseOrder(po.getId());
-                if (parseBool(CsvTable.get(row, "receive"), true)
-                        && po.getReceiptPickingIds() != null && !po.getReceiptPickingIds().isEmpty()) {
-                    purchaseApplicationService.validateReceiptPicking(po.getReceiptPickingIds().get(0), new ValidatePickingCommand());
+                po = purchaseApplicationService.getPurchaseOrder(po.getId());
+                boolean receive = parseBool(CsvTable.get(row, "receive"), true);
+                if (receive) {
+                    List<UUID> pickingIds = po.getReceiptPickingIds() != null
+                            ? po.getReceiptPickingIds() : List.of();
+                    if (pickingIds.isEmpty()) {
+                        throw new IllegalStateException(
+                                "Confirmed PO has no incoming receipt to validate (stockable lines need a receipt picking)");
+                    }
+                    for (UUID pickingId : pickingIds) {
+                        purchaseApplicationService.validateReceiptPicking(pickingId, new ValidatePickingCommand());
+                    }
+                    purchaseApplicationService.syncPurchaseOrderLineQtyReceivedFromStockMoves(po.getId());
+                    po = purchaseApplicationService.getPurchaseOrder(po.getId());
                 }
                 if (parseBool(CsvTable.get(row, "create_bill"), true)) {
                     CreateVendorBillFromPoCommand billCmd = new CreateVendorBillFromPoCommand();

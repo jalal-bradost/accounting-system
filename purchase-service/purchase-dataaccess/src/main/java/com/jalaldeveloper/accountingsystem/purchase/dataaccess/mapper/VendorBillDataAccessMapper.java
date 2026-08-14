@@ -90,7 +90,9 @@ public class VendorBillDataAccessMapper {
         e.setReversedBillId(d.getReversedBillId());
         e.setJournalEntryId(d.getJournalEntryId());
         e.setExchangeRateToCompany(d.getExchangeRateToCompany());
-        e.setRowVersion(d.getRowVersion());
+        if (existingOrNull == null) {
+            e.setRowVersion(d.getRowVersion());
+        }
         e.setCreatedAt(d.getCreatedAt());
         e.setUpdatedAt(d.getUpdatedAt());
         e.setCreatedBy(d.getCreatedBy());

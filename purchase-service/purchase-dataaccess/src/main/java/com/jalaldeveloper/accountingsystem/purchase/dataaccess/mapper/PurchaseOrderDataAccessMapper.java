@@ -110,7 +110,9 @@ public class PurchaseOrderDataAccessMapper {
         e.setAmountTax(d.getAmountTax());
         e.setAmountTotal(d.getAmountTotal());
         e.setExchangeRateToCompany(d.getExchangeRateToCompany());
-        e.setRowVersion(d.getRowVersion());
+        if (existingOrNull == null) {
+            e.setRowVersion(d.getRowVersion());
+        }
         e.setCreatedAt(d.getCreatedAt());
         e.setUpdatedAt(d.getUpdatedAt());
         e.setCreatedBy(d.getCreatedBy());

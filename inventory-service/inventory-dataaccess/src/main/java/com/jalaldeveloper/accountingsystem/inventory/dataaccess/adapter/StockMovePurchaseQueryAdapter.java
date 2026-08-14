@@ -39,6 +39,7 @@ public class StockMovePurchaseQueryAdapter implements StockMovePurchaseQueryPort
     @Override
     public List<UUID> findPickingIdsByPurchaseOrderId(UUID purchaseOrderId) {
         return stockPickingJpaRepository.findByPurchaseOrderId(purchaseOrderId).stream()
+                .filter(p -> p.getPickingType() == PickingType.INCOMING)
                 .map(StockPickingEntity::getId)
                 .collect(Collectors.toList());
     }

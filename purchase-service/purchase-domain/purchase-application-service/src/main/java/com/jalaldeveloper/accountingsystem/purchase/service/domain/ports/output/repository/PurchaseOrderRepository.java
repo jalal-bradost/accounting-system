@@ -14,6 +14,9 @@ public interface PurchaseOrderRepository {
 
     Optional<PurchaseOrder> findById(UUID id);
 
+    /** Loads the PO from the database with a row lock so concurrent receive/bill updates cannot use a stale version. */
+    Optional<PurchaseOrder> findByIdForUpdate(UUID id);
+
     Optional<PurchaseOrder> findByCompanyIdAndName(UUID companyId, String name);
 
     Page<PurchaseOrder> search(UUID companyId,

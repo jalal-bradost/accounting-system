@@ -106,6 +106,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     private final ObjectProvider<CompanyContext> companyContextProvider;
     private final PurchaseEventPublisher purchaseEventPublisher;
     private final CurrencyConversionPort currencyConversionPort;
+    private final PurchaseOrderQtyWriter purchaseOrderQtyWriter;
 
     public PurchaseApplicationServiceImpl(PurchaseOrderRepository purchaseOrderRepository,
                                           FiscalTaxRepository fiscalTaxRepository,
@@ -124,7 +125,8 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                                           ReconciliationApplicationService reconciliationApplicationService,
                                           ObjectProvider<CompanyContext> companyContextProvider,
                                           PurchaseEventPublisher purchaseEventPublisher,
-                                          CurrencyConversionPort currencyConversionPort) {
+                                          CurrencyConversionPort currencyConversionPort,
+                                          PurchaseOrderQtyWriter purchaseOrderQtyWriter) {
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.fiscalTaxRepository = fiscalTaxRepository;
         this.vendorBillRepository = vendorBillRepository;
@@ -143,6 +145,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         this.companyContextProvider = companyContextProvider;
         this.purchaseEventPublisher = purchaseEventPublisher;
         this.currencyConversionPort = currencyConversionPort;
+        this.purchaseOrderQtyWriter = purchaseOrderQtyWriter;
     }
 
     private UUID companyIdOrDefault(UUID fromCommand) {
@@ -433,12 +436,15 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             cmd.setPurchaseOrderId(o.getId());
             cmd.setMoves(moves);
             stockPickingApplicationService.createPicking(cmd);
+            purchaseOrderRepository.flush();
         }
 
         o.setState(PurchaseOrderState.CONFIRMED);
         o.setConfirmedAt(Instant.now());
         o.setUpdatedAt(Instant.now());
-        return toResponse(purchaseOrderRepository.save(o));
+        PurchaseOrder saved = purchaseOrderRepository.save(o);
+        purchaseOrderRepository.flush();
+        return toResponse(saved);
     }
 
     @Override
@@ -464,41 +470,17 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     @Override
     @Transactional
     public StockPickingResponse validateReceiptPicking(UUID pickingId, ValidatePickingCommand command) {
-        // validatePicking() triggers PurchaseReceiveSyncPort when the picking is linked to a PO.
+        // validatePicking() already refreshes qty_received via PurchaseReceiveSyncPort.
         return stockPickingApplicationService.validatePicking(pickingId,
                 command != null ? command : new ValidatePickingCommand());
     }
 
     @Override
-    @Transactional
     public void syncPurchaseOrderLineQtyReceivedFromStockMoves(UUID purchaseOrderId) {
-        purchaseOrderRepository.flush();
-        PurchaseOrder o = purchaseOrderRepository.findById(purchaseOrderId).orElse(null);
-        if (o == null) {
-            return;
+        PurchaseOrder o = purchaseOrderQtyWriter.updateQtyReceived(purchaseOrderId);
+        if (o != null) {
+            tryAutoCreateAndPostCreditNoteFromReturn(o);
         }
-        Instant now = Instant.now();
-        for (PurchaseOrderLine line : o.getLines()) {
-            BigDecimal sum = stockMovePurchaseQueryPort.sumPickedQuantityForPurchaseOrderLine(line.getId());
-            line.setQtyReceived(sum.setScale(4, RoundingMode.HALF_UP));
-            line.setUpdatedAt(now);
-        }
-        boolean allReceived = o.getLines().stream().allMatch(l -> {
-            Optional<Product> p = productRepository.findById(new ProductId(l.getProductId()));
-            if (p.isEmpty()) {
-                return true;
-            }
-            if (p.get().getProductType() == ProductType.SERVICE) {
-                return true;
-            }
-            return l.getQtyReceived().compareTo(l.getQtyOrdered()) >= 0;
-        });
-        if (allReceived) {
-            o.setReceivedCompletedAt(Instant.now());
-        }
-        o.setUpdatedAt(now);
-        purchaseOrderRepository.save(o);
-        tryAutoCreateAndPostCreditNoteFromReturn(o);
     }
 
     private BigDecimal creditNoteableQtyForPoLine(PurchaseOrderLine pol, Map<UUID, BigDecimal> draftCreditNotes) {
@@ -574,6 +556,10 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         }
         if (po.getState() != PurchaseOrderState.CONFIRMED) {
             throw new PurchaseDomainException("Purchase order must be confirmed before billing");
+        }
+        PurchaseOrder synced = purchaseOrderQtyWriter.updateQtyReceived(po.getId());
+        if (synced != null) {
+            po = synced;
         }
         Instant now = Instant.now();
         VendorBill bill = new VendorBill();
@@ -946,33 +932,10 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         vendorBillRepository.save(bill);
 
         if (bill.getPurchaseOrderId() != null) {
-            PurchaseOrder po = purchaseOrderRepository.findById(bill.getPurchaseOrderId()).orElse(null);
-            if (po != null) {
-                BigDecimal sign = creditNote ? BigDecimal.ONE.negate() : BigDecimal.ONE;
-                for (VendorBillLine vbl : bill.getLines()) {
-                    if (vbl.getPurchaseOrderLineId() != null) {
-                        po.getLines().stream()
-                                .filter(l -> l.getId().equals(vbl.getPurchaseOrderLineId()))
-                                .findFirst()
-                                .ifPresent(pol -> {
-                                    BigDecimal next = pol.getQtyInvoiced().add(vbl.getQty().multiply(sign))
-                                            .setScale(4, RoundingMode.HALF_UP);
-                                    if (next.signum() < 0) {
-                                        next = BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
-                                    }
-                                    pol.setQtyInvoiced(next);
-                                    pol.setUpdatedAt(Instant.now());
-                                });
-                    }
-                }
-                boolean allBilled = po.getLines().stream().allMatch(l ->
-                        l.getQtyInvoiced().compareTo(l.getQtyOrdered()) >= 0);
-                if (allBilled) {
-                    po.setBilledCompletedAt(Instant.now());
-                }
-                po.setUpdatedAt(Instant.now());
-                purchaseOrderRepository.save(po);
-            }
+            List<PurchaseOrderQtyWriter.PostedBillLineQty> qtyLines = bill.getLines().stream()
+                    .map(l -> new PurchaseOrderQtyWriter.PostedBillLineQty(l.getPurchaseOrderLineId(), l.getQty()))
+                    .toList();
+            purchaseOrderQtyWriter.applyPostedBillQuantities(bill.getPurchaseOrderId(), creditNote, qtyLines);
         }
         purchaseEventPublisher.publishVendorBillPosted(new VendorBillPostedEvent(
                 UUID.randomUUID(),
