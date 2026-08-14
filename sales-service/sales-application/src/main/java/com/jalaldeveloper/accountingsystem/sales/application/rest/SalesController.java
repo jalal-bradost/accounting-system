@@ -2,6 +2,8 @@ package com.jalaldeveloper.accountingsystem.sales.application.rest;
 
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CustomerInvoiceResponse;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.StockPickingResponse;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ValidatePickingCommand;
 import com.jalaldeveloper.accountingsystem.platform.application.dto.PageResponse;
 import com.jalaldeveloper.accountingsystem.platform.security.RequiresPermission;
 import com.jalaldeveloper.accountingsystem.platform.web.CurrentCompany;
@@ -80,6 +82,13 @@ public class SalesController {
     @RequiresPermission("sales.order.write")
     public ResponseEntity<SalesOrderResponse> cancel(@PathVariable UUID id) {
         return ResponseEntity.ok(salesApplicationService.cancelSalesOrder(id));
+    }
+
+    @PostMapping("/deliveries/{pickingId}/validate")
+    @RequiresPermission("sales.order.confirm")
+    public ResponseEntity<StockPickingResponse> validateDelivery(@PathVariable UUID pickingId,
+                                                                 @RequestBody(required = false) ValidatePickingCommand body) {
+        return ResponseEntity.ok(salesApplicationService.validateDeliveryPicking(pickingId, body));
     }
 
     @PostMapping("/customer-invoices/from-order")

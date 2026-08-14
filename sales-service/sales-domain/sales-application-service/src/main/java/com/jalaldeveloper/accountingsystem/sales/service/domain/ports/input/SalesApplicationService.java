@@ -1,6 +1,8 @@
 package com.jalaldeveloper.accountingsystem.sales.service.domain.ports.input;
 
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CustomerInvoiceResponse;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.StockPickingResponse;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ValidatePickingCommand;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.CreateCustomerInvoiceFromSalesOrderCommand;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.CreateSalesOrderCommand;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.SalesOrderResponse;
@@ -29,6 +31,16 @@ public interface SalesApplicationService {
     SalesOrderResponse confirmSalesOrder(UUID id);
 
     SalesOrderResponse cancelSalesOrder(UUID id);
+
+    StockPickingResponse validateDeliveryPicking(UUID pickingId, ValidatePickingCommand command);
+
+    /**
+     * Recomputes each line's {@code qty_delivered} from done stock moves (same rules as after delivery validate).
+     */
+    void syncSalesOrderLineQtyDeliveredFromStockMoves(UUID salesOrderId);
+
+    /** Updates qty_delivered in the current transaction (use from POS checkout before invoicing). */
+    void refreshSalesOrderQtyDeliveredInCurrentTransaction(UUID salesOrderId);
 
     void afterOutgoingPickingValidated(UUID salesOrderId);
 

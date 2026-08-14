@@ -7,6 +7,7 @@ import com.jalaldeveloper.accountingsystem.sales.domain.core.SalesOrderState;
 import com.jalaldeveloper.accountingsystem.sales.domain.core.entity.SalesOrder;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.ports.output.repository.SalesOrderRepository;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import jakarta.persistence.PersistenceContext;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -31,9 +32,15 @@ public class SalesOrderRepositoryImpl implements SalesOrderRepository {
 
     @Override
     public SalesOrder save(SalesOrder order) {
-        SalSalesOrderEntity existing = order.getId() != null
-                ? jpa.findByIdWithLines(order.getId()).orElse(null)
-                : null;
+        SalSalesOrderEntity existing = null;
+        if (order.getId() != null) {
+            existing = entityManager.find(SalSalesOrderEntity.class, order.getId());
+            if (existing != null) {
+                entityManager.detach(existing);
+                existing = entityManager.find(
+                        SalSalesOrderEntity.class, order.getId(), LockModeType.PESSIMISTIC_WRITE);
+            }
+        }
         SalSalesOrderEntity toSave = mapper.domainToEntity(order, existing);
         return mapper.entityToDomain(jpa.save(toSave));
     }
@@ -41,6 +48,27 @@ public class SalesOrderRepositoryImpl implements SalesOrderRepository {
     @Override
     public Optional<SalesOrder> findByIdWithLines(UUID id) {
         return jpa.findByIdWithLines(id).map(mapper::entityToDomain);
+    }
+
+    @Override
+    public Optional<SalesOrder> findByIdForUpdate(UUID id) {
+        SalSalesOrderEntity cached = entityManager.find(SalSalesOrderEntity.class, id);
+        if (cached != null) {
+            entityManager.detach(cached);
+        }
+        SalSalesOrderEntity entity = entityManager.find(
+                SalSalesOrderEntity.class, id, LockModeType.PESSIMISTIC_WRITE);
+        if (entity == null) {
+            return Optional.empty();
+        }
+        if (entity.getLines() != null) {
+            for (var line : entity.getLines()) {
+                if (line.getTaxes() != null) {
+                    line.getTaxes().size();
+                }
+            }
+        }
+        return Optional.of(mapper.entityToDomain(entity));
     }
 
     @Override

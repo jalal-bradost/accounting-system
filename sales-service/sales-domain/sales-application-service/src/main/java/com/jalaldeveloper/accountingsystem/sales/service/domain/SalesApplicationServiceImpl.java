@@ -21,6 +21,8 @@ import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.Pro
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.WarehouseId;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.CreateStockPickingCommand;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.StockMoveCommand;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.StockPickingResponse;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ValidatePickingCommand;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.StockPickingApplicationService;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.UomApplicationService;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.StockMoveSalesQueryPort;
@@ -92,6 +94,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
     private final CustomerInvoiceApplicationService customerInvoiceApplicationService;
     private final ObjectProvider<CompanyContext> companyContextProvider;
     private final SalesEventPublisher salesEventPublisher;
+    private final SalesOrderQtyWriter salesOrderQtyWriter;
 
     public SalesApplicationServiceImpl(SalesOrderRepository salesOrderRepository,
                                        PricelistRepository pricelistRepository,
@@ -105,7 +108,8 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
                                        PurchaseApplicationService purchaseApplicationService,
                                        @Lazy CustomerInvoiceApplicationService customerInvoiceApplicationService,
                                        ObjectProvider<CompanyContext> companyContextProvider,
-                                       SalesEventPublisher salesEventPublisher) {
+                                       SalesEventPublisher salesEventPublisher,
+                                       SalesOrderQtyWriter salesOrderQtyWriter) {
         this.salesOrderRepository = salesOrderRepository;
         this.pricelistRepository = pricelistRepository;
         this.partnerApplicationService = partnerApplicationService;
@@ -119,6 +123,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         this.customerInvoiceApplicationService = customerInvoiceApplicationService;
         this.companyContextProvider = companyContextProvider;
         this.salesEventPublisher = salesEventPublisher;
+        this.salesOrderQtyWriter = salesOrderQtyWriter;
     }
 
     private UUID companyIdOrDefault(UUID fromCommand) {
@@ -458,6 +463,9 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
             cmd.setOrigin(o.getName());
             cmd.setReference(o.getName());
             cmd.setSalesOrderId(o.getId());
+            if (o.getOrderDate() != null) {
+                cmd.setScheduledAt(o.getOrderDate().atStartOfDay(java.time.ZoneOffset.UTC).toInstant());
+            }
             cmd.setMoves(moves);
             stockPickingApplicationService.createPicking(cmd);
         }
@@ -505,35 +513,32 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
 
     @Override
     @Transactional
+    public StockPickingResponse validateDeliveryPicking(UUID pickingId, ValidatePickingCommand command) {
+        return stockPickingApplicationService.validatePicking(pickingId,
+                command != null ? command : new ValidatePickingCommand());
+    }
+
+    @Override
+    public void syncSalesOrderLineQtyDeliveredFromStockMoves(UUID salesOrderId) {
+        SalesOrder o = salesOrderQtyWriter.updateQtyDelivered(salesOrderId);
+        if (o != null) {
+            tryAutoCreateAndPostCreditNoteFromReturn(o);
+        }
+    }
+
+    @Override
+    public void refreshSalesOrderQtyDeliveredInCurrentTransaction(UUID salesOrderId) {
+        salesOrderQtyWriter.updateQtyDeliveredJoiningCurrentTransaction(salesOrderId);
+    }
+
+    @Override
     public void afterOutgoingPickingValidated(UUID salesOrderId) {
-        salesOrderRepository.flush();
-        SalesOrder o = salesOrderRepository.findByIdWithLines(salesOrderId).orElse(null);
-        if (o == null) {
-            return;
-        }
-        Instant now = Instant.now();
-        for (SalesOrderLine line : o.getLines()) {
-            BigDecimal sum = stockMoveSalesQueryPort.sumPickedQuantityForSalesOrderLine(line.getId());
-            line.setQtyDelivered(sum.setScale(4, RoundingMode.HALF_UP));
-            line.setUpdatedAt(now);
-        }
-        boolean allDelivered = o.getLines().stream().allMatch(l -> {
-            Optional<Product> p = productRepository.findById(new ProductId(l.getProductId()));
-            if (p.isEmpty()) {
-                return true;
-            }
-            if (p.get().getProductType() == ProductType.SERVICE) {
-                return true;
-            }
-            return l.getQtyDelivered().compareTo(l.getQtyOrdered()) >= 0;
-        });
-        if (allDelivered) {
-            o.setDeliveryCompletedAt(Instant.now());
-        }
-        refreshOrderStatuses(o);
-        o.setUpdatedAt(now);
-        salesOrderRepository.save(o);
-        tryAutoCreateAndPostCreditNoteFromReturn(o);
+        syncSalesOrderLineQtyDeliveredFromStockMoves(salesOrderId);
+    }
+
+    @Override
+    public void applyPostedInvoiceQuantities(UUID salesOrderId, Map<UUID, BigDecimal> invoicedQtyBySalesLineId) {
+        salesOrderQtyWriter.applyPostedInvoiceQuantities(salesOrderId, invoicedQtyBySalesLineId);
     }
 
     private void tryAutoCreateAndPostCreditNoteFromReturn(SalesOrder o) {
@@ -556,46 +561,6 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         cmd.setInvoiceDate(LocalDate.now());
         CustomerInvoiceResponse cn = createCustomerCreditNoteFromSalesOrder(cmd);
         customerInvoiceApplicationService.postCustomerInvoice(cn.getId());
-    }
-
-    @Override
-    @Transactional
-    public void applyPostedInvoiceQuantities(UUID salesOrderId, Map<UUID, BigDecimal> invoicedQtyBySalesLineId) {
-        salesOrderRepository.flush();
-        SalesOrder o = salesOrderRepository.findByIdWithLines(salesOrderId).orElse(null);
-        if (o == null) {
-            return;
-        }
-        Instant now = Instant.now();
-        for (SalesOrderLine line : o.getLines()) {
-            BigDecimal add = invoicedQtyBySalesLineId.get(line.getId());
-            if (add != null && add.signum() != 0) {
-                BigDecimal next = line.getQtyInvoiced().add(add).setScale(4, RoundingMode.HALF_UP);
-                if (next.signum() < 0) {
-                    next = BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
-                }
-                line.setQtyInvoiced(next);
-                line.setUpdatedAt(now);
-            }
-        }
-        boolean allInvoiced = true;
-        for (SalesOrderLine l : o.getLines()) {
-            Product p = productRepository.findById(new ProductId(l.getProductId())).orElse(null);
-            SalInvoicePolicy pol = l.getInvoicePolicy() != null ? l.getInvoicePolicy()
-                    : (p != null && p.getProductType() == ProductType.SERVICE
-                    ? SalInvoicePolicy.ORDERED : SalInvoicePolicy.DELIVERED);
-            BigDecimal target = pol == SalInvoicePolicy.ORDERED ? l.getQtyOrdered() : l.getQtyDelivered();
-            if (l.getQtyInvoiced().compareTo(target) < 0) {
-                allInvoiced = false;
-                break;
-            }
-        }
-        if (allInvoiced) {
-            o.setInvoicingCompletedAt(Instant.now());
-        }
-        refreshOrderStatuses(o);
-        o.setUpdatedAt(now);
-        salesOrderRepository.save(o);
     }
 
     private void refreshOrderStatuses(SalesOrder o) {
