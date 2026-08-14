@@ -183,24 +183,55 @@ public class DefaultInventorySeeder implements ApplicationRunner {
     }
 
     private void seedDefaultProductCategory() {
-        boolean exists = productCategoryRepository.findByCompany(COMPANY_ID, true).stream()
-                .anyMatch(c -> "All".equalsIgnoreCase(c.getName()));
-        if (exists) return;
         Map<String, UUID> accountIdsByCode = new HashMap<>();
         for (AccountEntity a : accountRepository.findByCompanyId(COMPANY_ID)) {
             accountIdsByCode.put(a.getCode(), a.getId());
         }
-        ProductCategoryEntity c = new ProductCategoryEntity();
-        c.setId(UUID.randomUUID());
-        c.setCompanyId(COMPANY_ID);
-        c.setName("All");
-        c.setValuationMethod(ValuationMethod.AVCO);
-        // 430010=Inventory, 430011=Stock Input, 430012=Stock Output, 430009=COGS
-        c.setStockValuationAccountId(accountIdsByCode.get("430010"));
-        c.setStockInputAccountId(accountIdsByCode.get("430011"));
-        c.setStockOutputAccountId(accountIdsByCode.get("430012"));
-        c.setCogsAccountId(accountIdsByCode.get("430009"));
-        c.setActive(true);
-        productCategoryRepository.save(c);
+        UUID valuation = accountIdsByCode.get("430010");
+        UUID input = accountIdsByCode.get("430011");
+        UUID output = accountIdsByCode.get("430012");
+        UUID cogs = accountIdsByCode.get("430009");
+
+        ProductCategoryEntity all = productCategoryRepository.findByCompany(COMPANY_ID, true).stream()
+                .filter(c -> "All".equalsIgnoreCase(c.getName()))
+                .findFirst()
+                .orElseGet(() -> {
+                    ProductCategoryEntity c = new ProductCategoryEntity();
+                    c.setId(UUID.randomUUID());
+                    c.setCompanyId(COMPANY_ID);
+                    c.setName("All");
+                    c.setValuationMethod(ValuationMethod.AVCO);
+                    c.setActive(true);
+                    return c;
+                });
+        applyInventoryAccounts(all, valuation, input, output, cogs);
+        productCategoryRepository.save(all);
+
+        for (ProductCategoryEntity c : productCategoryRepository.findByCompany(COMPANY_ID, true)) {
+            if (c.getStockValuationAccountId() != null
+                    && c.getStockInputAccountId() != null
+                    && c.getStockOutputAccountId() != null
+                    && c.getCogsAccountId() != null) {
+                continue;
+            }
+            applyInventoryAccounts(c, valuation, input, output, cogs);
+            productCategoryRepository.save(c);
+        }
+    }
+
+    private static void applyInventoryAccounts(ProductCategoryEntity c,
+                                               UUID valuation, UUID input, UUID output, UUID cogs) {
+        if (c.getStockValuationAccountId() == null) {
+            c.setStockValuationAccountId(valuation);
+        }
+        if (c.getStockInputAccountId() == null) {
+            c.setStockInputAccountId(input);
+        }
+        if (c.getStockOutputAccountId() == null) {
+            c.setStockOutputAccountId(output);
+        }
+        if (c.getCogsAccountId() == null) {
+            c.setCogsAccountId(cogs);
+        }
     }
 }
