@@ -26,9 +26,21 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ErrorDTO handleException(Exception exception) {
         log.error(exception.getMessage(), exception);
+        String detail = exception.getMessage();
+        if (detail == null || detail.isBlank()) {
+            detail = exception.getClass().getSimpleName();
+        }
+        Throwable root = exception;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        String rootDetail = root.getMessage();
+        if (rootDetail != null && !rootDetail.isBlank() && !rootDetail.equals(detail)) {
+            detail = detail + " (" + rootDetail + ")";
+        }
         return ErrorDTO.builder()
                 .code(HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase())
-                .message("Unexpected error!")
+                .message(detail)
                 .build();
     }
 
