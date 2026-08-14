@@ -9,7 +9,7 @@ accounting:
       name: United States dollar
     extras:
       - code: IQD
-        symbol: "د.ع"
+        symbol: "IQD"
         name: Iraqi dinar
         rate-per-usd: "1310.000000"
         active: true

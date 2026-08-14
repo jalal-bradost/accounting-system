@@ -44,7 +44,7 @@ accounting:
     seed: true
     base:
       code: IQD
-      symbol: "د.ع"
+      symbol: "IQD"
       name: Iraqi dinar
     extras:
       - code: USD

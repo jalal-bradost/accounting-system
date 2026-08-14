@@ -6,6 +6,6 @@ public record Currency(String code, String symbol, int decimalPlaces) {
     }
 
     public static Currency IQD() {
-        return new Currency("IQD", "د.ع", 3);
+        return new Currency("IQD", "IQD", 3);
     }
 }
