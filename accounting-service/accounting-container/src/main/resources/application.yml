@@ -35,7 +35,7 @@ app:
 
 accounting:
   seed:
-    # Idempotent seed for DEFAULT_COMPANY_ID accounts & journals (set false to skip)
+    # Always seed DEFAULT_COMPANY_ID chart of accounts and journals (idempotent)
     default-company-chart: true
     # Demo partners, products, PO/SO, vendor bill, customer invoice, and payments (idempotent; disable in production)
     demo-business-data: false
@@ -58,10 +58,15 @@ accounting:
     # The Next.js dev server runs on http://localhost:3000 by default.
     allowed-origins: http://localhost:3000
 
+inventory:
+  seed:
+    # Always seed UoMs, warehouse WH, and product category "All"
+    default-company: true
+
 hr:
   seed:
     # Demo departments and employees (idempotent; disable in production)
-    demo-data: true
+    demo-data: false
 
 spring:
   application:
@@ -99,6 +104,10 @@ spring:
           max-attempts: 4
           max-interval: 10s
           multiplier: 2.0
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 40MB
   flyway:
     enabled: true
     baseline-on-migrate: true

@@ -1,0 +1,21 @@
+so_number,customer_code,order_date,currency,warehouse_code,confirm,deliver,invoice,pay,payment_date,notes
+SO-2026-0001,C-CAFE,2026-01-06,IQD,WH,true,true,true,true,2026-01-13,Weekly cafe order beverages and snacks
+SO-2026-0002,C-HOTEL,2026-01-08,IQD,WH,true,true,true,false,,Hotel kitchen staple restock
+SO-2026-0003,C-RESD,2026-01-05,IQD,WH,true,true,true,true,2026-01-10,Restaurant dairy and produce supply
+SO-2026-0004,C-SCHOOL,2026-01-07,IQD,WH,true,true,true,true,2026-01-14,School cafeteria snacks and juices
+SO-2026-0005,C-GYM,2026-01-09,IQD,WH,true,true,true,true,2026-01-16,Gym bar energy drinks and water
+SO-2026-0006,C-BAKE,2026-01-06,IQD,WH,true,true,true,true,2026-01-12,Bakery supplies and flour
+SO-2026-0007,C-TEA,2026-01-05,IQD,WH,true,true,true,true,2026-01-11,Tea house sugar and beverage stock
+SO-2026-0008,C-OFFICE,2026-01-10,IQD,WH,true,true,true,false,,Office pantry coffee and snacks
+SO-2026-0009,C-MART,2026-01-11,IQD,WH,true,true,true,false,,Mini market wholesale top-up
+SO-2026-0010,C-CLINIC,2026-01-12,IQD,WH,true,true,true,true,2026-01-19,Clinic cleaning and paper supplies
+SO-2026-0011,C-MARKET2,2026-01-13,IQD,WH,true,true,true,false,,Grocery store dry goods order
+SO-2026-0012,C-LUNCH,2026-01-08,IQD,WH,true,true,true,true,2026-01-15,Snack bar beverage restock
+SO-2026-0013,C-CLUB,2026-01-14,IQD,WH,true,true,true,false,,Youth club canteen bulk order
+SO-2026-0014,C-STORE3,2026-01-15,IQD,WH,true,true,true,false,,Variety store general items
+SO-2026-0015,C-GARDEN,2026-01-16,IQD,WH,true,true,true,true,2026-01-23,Park kiosk weekend drinks
+SO-2026-0016,C-STATION,2026-01-17,IQD,WH,true,true,true,false,,Fuel station mart snacks order
+SO-2026-0017,C-CAFE,2026-01-20,IQD,WH,true,true,true,false,,Second weekly cafe order
+SO-2026-0018,C-HOTEL,2026-01-22,IQD,WH,true,true,true,false,,Hotel mid-month cleaning and food
+SO-2026-0019,C-RESD,2026-01-19,IQD,WH,true,true,true,true,2026-01-26,Restaurant grocery restock
+SO-2026-0020,C-SCHOOL,2026-01-21,IQD,WH,true,true,true,false,,School cafeteria second order

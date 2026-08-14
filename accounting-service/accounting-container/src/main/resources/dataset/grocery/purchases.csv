@@ -1,0 +1,29 @@
+po_number,vendor_code,order_date,currency,warehouse_code,receive,create_bill,pay_bill,payment_date,notes
+PO-2026-0001,V-DAIRY,2026-01-02,IQD,WH,true,true,true,2026-01-09,Opening stock dairy
+PO-2026-0002,V-BEV,2026-01-02,IQD,WH,true,true,false,,Opening stock beverages
+PO-2026-0003,V-DRY,2026-01-03,IQD,WH,true,true,true,2026-01-16,Opening staples and food
+PO-2026-0004,V-BAKE,2026-01-02,IQD,WH,true,true,true,2026-01-05,Opening bakery
+PO-2026-0005,V-PROD,2026-01-02,IQD,WH,true,true,true,2026-01-06,Opening fresh produce
+PO-2026-0006,V-SNACK,2026-01-03,IQD,WH,true,true,false,,Opening snacks and sweets
+PO-2026-0007,V-FROZEN,2026-01-03,IQD,WH,true,true,true,2026-01-15,Opening frozen goods
+PO-2026-0008,V-CLEAN,2026-01-04,IQD,WH,true,true,true,2026-01-18,Opening cleaning supplies
+PO-2026-0009,V-PERS,2026-01-04,IQD,WH,true,true,false,,Opening personal care
+PO-2026-0010,V-BABY,2026-01-04,IQD,WH,true,true,true,2026-01-20,Opening baby care
+PO-2026-0011,V-HOUSE,2026-01-04,IQD,WH,true,true,false,,Opening household items
+PO-2026-0012,V-CIG,2026-01-04,IQD,WH,true,true,true,2026-01-12,Opening tobacco stock
+PO-2026-0013,V-DAIRY,2026-01-10,IQD,WH,true,true,true,2026-01-17,Weekly replenishment dairy
+PO-2026-0014,V-BEV,2026-01-10,IQD,WH,true,true,false,,Weekly replenishment beverages
+PO-2026-0015,V-BAKE,2026-01-09,IQD,WH,true,true,true,2026-01-12,Weekly replenishment bakery
+PO-2026-0016,V-PROD,2026-01-09,IQD,WH,true,true,true,2026-01-13,Weekly replenishment produce
+PO-2026-0017,V-SNACK,2026-01-12,IQD,WH,true,true,false,,Weekly replenishment snacks
+PO-2026-0018,V-DRY,2026-01-15,IQD,WH,true,true,true,2026-01-22,Mid-month dry goods restock
+PO-2026-0019,V-DAIRY,2026-01-17,IQD,WH,true,true,true,2026-01-24,Weekly replenishment dairy
+PO-2026-0020,V-BEV,2026-01-17,IQD,WH,true,true,false,,Weekly replenishment beverages
+PO-2026-0021,V-PROD,2026-01-16,IQD,WH,true,true,true,2026-01-20,Weekly replenishment produce
+PO-2026-0022,V-BAKE,2026-01-16,IQD,WH,true,true,true,2026-01-19,Weekly replenishment bakery
+PO-2026-0023,V-CLEAN,2026-01-20,IQD,WH,true,true,true,2026-01-27,Monthly restock cleaning
+PO-2026-0024,V-SNACK,2026-01-19,IQD,WH,true,true,false,,Weekly replenishment snacks
+PO-2026-0025,V-DAIRY,2026-01-24,IQD,WH,true,true,true,2026-01-31,Late-month replenishment dairy
+PO-2026-0026,V-BEV,2026-01-24,IQD,WH,true,true,false,,Late-month replenishment beverages
+PO-2026-0027,V-PROD,2026-01-23,IQD,WH,true,true,true,2026-01-27,Late-month replenishment produce
+PO-2026-0028,V-BAKE,2026-01-23,IQD,WH,true,true,true,2026-01-26,Late-month replenishment bakery

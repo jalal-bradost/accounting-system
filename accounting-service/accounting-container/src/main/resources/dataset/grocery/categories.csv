@@ -1,0 +1,15 @@
+category_code,name,parent_code
+GROCERY,Grocery,
+DAIRY,Dairy,GROCERY
+BEVERAGE,Beverages,GROCERY
+BAKERY,Bakery,GROCERY
+PRODUCE,Fresh produce,GROCERY
+DRY,Dry food & staples,GROCERY
+SNACKS,Snacks & sweets,GROCERY
+FROZEN,Frozen,GROCERY
+CLEANING,Cleaning,
+PERSONAL,Personal care,
+BABY,Baby,
+HOUSEHOLD,Household,
+CIG,Tobacco,
+SERVICE,Services,
