@@ -164,7 +164,7 @@ public class PayrollController {
     }
 
     @GetMapping("/payslips/{id}")
-    @RequiresPermission("payroll.read")
+    @RequiresPermission(value = {"payroll.read", "payroll.payslip.self.read"}, op = RequiresPermission.LogicalOp.OR)
     public ResponseEntity<PayslipResponse> getPayslip(@PathVariable UUID id) {
         return ResponseEntity.ok(payRunService.getPayslip(id));
     }

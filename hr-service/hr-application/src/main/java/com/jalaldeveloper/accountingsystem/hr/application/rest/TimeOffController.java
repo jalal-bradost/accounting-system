@@ -23,7 +23,7 @@ public class TimeOffController {
     }
 
     @GetMapping("/types")
-    @RequiresPermission("hr.time-off.read")
+    @RequiresPermission(value = {"hr.time-off.read", "hr.time-off.self.read"}, op = RequiresPermission.LogicalOp.OR)
     public ResponseEntity<List<TimeOffTypeResponse>> listTypes(@CurrentCompany CompanyId companyId) {
         return ResponseEntity.ok(service.listTypes(companyId));
     }
@@ -35,7 +35,7 @@ public class TimeOffController {
     }
 
     @GetMapping("/allocations")
-    @RequiresPermission("hr.time-off.read")
+    @RequiresPermission(value = {"hr.time-off.read", "hr.time-off.self.read"}, op = RequiresPermission.LogicalOp.OR)
     public ResponseEntity<List<AllocationResponse>> listAllocations(
             @CurrentCompany CompanyId companyId,
             @RequestParam(required = false) UUID employeeId) {
@@ -61,7 +61,7 @@ public class TimeOffController {
     }
 
     @GetMapping("/requests")
-    @RequiresPermission("hr.time-off.read")
+    @RequiresPermission(value = {"hr.time-off.read", "hr.time-off.self.read"}, op = RequiresPermission.LogicalOp.OR)
     public ResponseEntity<List<LeaveRequestResponse>> listRequests(
             @CurrentCompany CompanyId companyId,
             @RequestParam(required = false) UUID employeeId,
@@ -71,7 +71,7 @@ public class TimeOffController {
     }
 
     @PostMapping("/requests")
-    @RequiresPermission("hr.time-off.write")
+    @RequiresPermission(value = {"hr.time-off.write", "hr.time-off.self.write"}, op = RequiresPermission.LogicalOp.OR)
     public ResponseEntity<LeaveRequestResponse> createRequest(@Valid @RequestBody SaveLeaveRequestCommand cmd) {
         return ResponseEntity.ok(service.createRequest(cmd));
     }
@@ -89,7 +89,7 @@ public class TimeOffController {
     }
 
     @GetMapping("/dashboard")
-    @RequiresPermission("hr.time-off.read")
+    @RequiresPermission(value = {"hr.time-off.read", "hr.time-off.self.read"}, op = RequiresPermission.LogicalOp.OR)
     public ResponseEntity<DashboardResponse> dashboard(
             @CurrentCompany CompanyId companyId,
             @RequestParam(required = false) UUID employeeId,
