@@ -64,8 +64,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -192,13 +190,15 @@ public class DatasetImportService {
         }
 
         if (!salesTable.isEmpty() && saleLineTable.isEmpty()) {
-            report.warn("Sales orders file has headers but no sale_lines.csv — sales were not created.");
+            report.warn("Sales orders file has headers but no sale_lines.csv — sales were not created. "
+                    + "Deliveries, invoices, and payments need line items.");
         } else {
             importSales(company, salesTable, saleLineTable, report);
         }
 
         if (!sessionTable.isEmpty() && posLineTable.isEmpty()) {
-            report.warn("POS sessions/tickets are present but pos_lines.csv is missing — POS tickets were not created.");
+            report.warn("POS sessions/tickets are present but pos_lines.csv is missing — POS tickets were not created. "
+                    + "Checkout, stock delivery, and invoices need line items.");
         } else {
             importPos(company, sessionTable, ticketTable, posLineTable, report);
         }
@@ -491,12 +491,13 @@ public class DatasetImportService {
                 continue;
             }
             List<SalesOrderLineCommand> cmds = new ArrayList<>();
-            boolean ok = true;
+            boolean lineOk = true;
             for (Map<String, String> line : soLines) {
-                ProductResponse product = product(company, CsvTable.get(line, "sku"));
+                String sku = CsvTable.get(line, "sku");
+                ProductResponse product = product(company, sku);
                 if (product == null) {
-                    report.error("SO " + soNumber + ": unknown sku " + CsvTable.get(line, "sku"));
-                    ok = false;
+                    report.error("SO " + soNumber + ": unknown sku " + sku);
+                    lineOk = false;
                     break;
                 }
                 SalesOrderLineCommand lc = new SalesOrderLineCommand();
@@ -506,12 +507,13 @@ public class DatasetImportService {
                 lc.setQtyOrdered(parseDecimal(CsvTable.get(line, "qty"), BigDecimal.ONE));
                 lc.setUnitPrice(parseDecimal(CsvTable.get(line, "unit_price"), product.getListPrice()));
                 lc.setDiscountPercent(parseDecimal(CsvTable.get(line, "discount_percent"), BigDecimal.ZERO));
-                if (!CsvTable.get(line, "tax_code").isBlank() && vat != null) {
+                String taxCode = CsvTable.get(line, "tax_code");
+                if (!taxCode.isBlank() && vat != null) {
                     lc.setTaxIds(List.of(vat));
                 }
                 cmds.add(lc);
             }
-            if (!ok) {
+            if (!lineOk) {
                 continue;
             }
             CreateSalesOrderCommand cmd = new CreateSalesOrderCommand();
@@ -525,14 +527,20 @@ public class DatasetImportService {
             cmd.setLines(cmds);
             try {
                 SalesOrderResponse so = salesApplicationService.createSalesOrder(cmd);
-                if (parseBool(CsvTable.get(row, "confirm"), true)) {
-                    so = salesApplicationService.confirmSalesOrder(so.getId());
-                }
-                if (parseBool(CsvTable.get(row, "deliver"), true)
-                        && so.getDeliveryPickingIds() != null) {
-                    for (UUID pickingId : so.getDeliveryPickingIds()) {
-                        stockPickingApplicationService.validatePicking(pickingId, new ValidatePickingCommand());
+                so = salesApplicationService.confirmSalesOrder(so.getId());
+                so = salesApplicationService.getSalesOrder(so.getId());
+                boolean deliver = parseBool(CsvTable.get(row, "deliver"), true);
+                if (deliver) {
+                    List<UUID> pickingIds = so.getDeliveryPickingIds() != null
+                            ? so.getDeliveryPickingIds() : List.of();
+                    if (pickingIds.isEmpty()) {
+                        throw new IllegalStateException(
+                                "Confirmed SO has no outgoing delivery to validate (stockable lines need a delivery picking)");
                     }
+                    for (UUID pickingId : pickingIds) {
+                        salesApplicationService.validateDeliveryPicking(pickingId, new ValidatePickingCommand());
+                    }
+                    salesApplicationService.syncSalesOrderLineQtyDeliveredFromStockMoves(so.getId());
                     so = salesApplicationService.getSalesOrder(so.getId());
                 }
                 if (parseBool(CsvTable.get(row, "invoice"), true)) {
@@ -656,12 +664,15 @@ public class DatasetImportService {
                 RegisterPosPaymentCommand pay = new RegisterPosPaymentCommand();
                 String method = CsvTable.get(ticket, "payment_method").toUpperCase(Locale.ROOT);
                 pay.setMethod("CARD".equals(method) ? PosPaymentMethod.CARD : PosPaymentMethod.CASH);
-                pay.setAmount(parseDecimal(CsvTable.get(ticket, "payment_amount"), BigDecimal.ONE));
+                BigDecimal csvPay = parseDecimal(CsvTable.get(ticket, "payment_amount"), BigDecimal.ONE);
+                BigDecimal due = posTicketDue(orderLines);
+                pay.setAmount(csvPay.max(due));
                 pay.setReference(ticketCode);
                 if (pay.getMethod() == PosPaymentMethod.CARD) {
                     pay.setJournalId(bankJournal);
                 }
                 checkout.setPayments(List.of(pay));
+                checkout.setBusinessDate(parseDate(CsvTable.get(ticket, "ticket_time")));
                 try {
                     posApplicationService.checkout(checkout);
                     if (pay.getMethod() == PosPaymentMethod.CASH) {
@@ -979,10 +990,27 @@ public class DatasetImportService {
             return LocalDate.now();
         }
         String v = raw.trim();
-        if (v.length() > 10) {
-            return LocalDateTime.parse(v.replace(' ', 'T'), DateTimeFormatter.ISO_LOCAL_DATE_TIME).toLocalDate();
+        if (v.length() >= 10) {
+            return LocalDate.parse(v.substring(0, 10));
         }
         return LocalDate.parse(v);
+    }
+
+    private static BigDecimal posTicketDue(List<PosOrderLineCommand> lines) {
+        BigDecimal due = BigDecimal.ZERO;
+        for (PosOrderLineCommand line : lines) {
+            BigDecimal qty = line.getQuantity() != null ? line.getQuantity() : BigDecimal.ZERO;
+            BigDecimal price = line.getUnitPrice() != null ? line.getUnitPrice() : BigDecimal.ZERO;
+            BigDecimal disc = line.getDiscountPercent() != null ? line.getDiscountPercent() : BigDecimal.ZERO;
+            BigDecimal net = qty.multiply(price)
+                    .multiply(BigDecimal.ONE.subtract(disc.divide(new BigDecimal("100"), 8, java.math.RoundingMode.HALF_UP)))
+                    .setScale(4, java.math.RoundingMode.HALF_UP);
+            due = due.add(net);
+            if (line.getTaxIds() != null && !line.getTaxIds().isEmpty()) {
+                due = due.add(net.multiply(new BigDecimal("0.10")).setScale(4, java.math.RoundingMode.HALF_UP));
+            }
+        }
+        return due;
     }
 
     private static String defaultIq(String currency) {

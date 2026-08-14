@@ -434,6 +434,9 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             cmd.setOrigin(o.getName());
             cmd.setReference(o.getName());
             cmd.setPurchaseOrderId(o.getId());
+            if (o.getOrderDate() != null) {
+                cmd.setScheduledAt(o.getOrderDate().atStartOfDay(java.time.ZoneOffset.UTC).toInstant());
+            }
             cmd.setMoves(moves);
             stockPickingApplicationService.createPicking(cmd);
             purchaseOrderRepository.flush();

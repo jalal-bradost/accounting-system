@@ -343,8 +343,8 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
         if (!journalLines.isEmpty()) {
             JournalEntryPostingPort posting = journalPostingProvider.getIfAvailable();
             if (posting != null) {
-                LocalDate entryDate = picking.getValidatedAt() != null
-                        ? picking.getValidatedAt().atZone(ZoneOffset.UTC).toLocalDate()
+                LocalDate entryDate = picking.getScheduledAt() != null
+                        ? picking.getScheduledAt().atZone(ZoneOffset.UTC).toLocalDate()
                         : LocalDate.now();
                 journalEntryId = posting.postValuationEntry(
                         picking.getCompanyId(), entryDate,

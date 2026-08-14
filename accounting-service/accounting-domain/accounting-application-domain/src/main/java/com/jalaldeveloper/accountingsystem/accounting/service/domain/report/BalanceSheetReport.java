@@ -19,5 +19,9 @@ public record BalanceSheetReport(
         BigDecimal totalLiabilities,
         BigDecimal totalEquity
 ) {
-    public record AccountLine(UUID accountId, BigDecimal amount) {}
+    public record AccountLine(UUID accountId, BigDecimal amount, String name) {
+        public AccountLine(UUID accountId, BigDecimal amount) {
+            this(accountId, amount, null);
+        }
+    }
 }

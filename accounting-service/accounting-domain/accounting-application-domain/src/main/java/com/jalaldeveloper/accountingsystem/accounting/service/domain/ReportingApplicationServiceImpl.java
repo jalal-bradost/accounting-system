@@ -71,8 +71,13 @@ public class ReportingApplicationServiceImpl implements ReportingApplicationServ
         List<BalanceSheetReport.AccountLine> assets = buildBalanceSheetSection(raw, accountMap, AccountType.Category.ASSET, b -> b);
         List<BalanceSheetReport.AccountLine> liabilities = buildBalanceSheetSection(
                 raw, accountMap, AccountType.Category.LIABILITY, BigDecimal::negate);
-        List<BalanceSheetReport.AccountLine> equity = buildBalanceSheetSection(
-                raw, accountMap, AccountType.Category.EQUITY, BigDecimal::negate);
+        List<BalanceSheetReport.AccountLine> equity = new ArrayList<>(buildBalanceSheetSection(
+                raw, accountMap, AccountType.Category.EQUITY, BigDecimal::negate));
+        ProfitAndLossReport yearToDate = getProfitAndLoss(companyId, asOf.withDayOfYear(1), asOf);
+        if (yearToDate.netIncome().signum() != 0) {
+            equity.add(new BalanceSheetReport.AccountLine(
+                    null, yearToDate.netIncome(), "Current Year Earnings"));
+        }
         BigDecimal totalAssets = sumAmounts(assets);
         BigDecimal totalLiabilities = sumAmounts(liabilities);
         BigDecimal totalEquity = sumAmounts(equity);

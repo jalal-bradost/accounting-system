@@ -44,6 +44,10 @@ import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.PosSessionResp
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.RegisterPosPaymentCommand;
 import com.jalaldeveloper.accountingsystem.pos.service.domain.dto.UpdatePosOrderLineCommand;
 import com.jalaldeveloper.accountingsystem.pos.service.domain.ports.input.PosApplicationService;
+import com.jalaldeveloper.accountingsystem.purchase.service.domain.FiscalTaxSnapshot;
+import com.jalaldeveloper.accountingsystem.purchase.service.domain.PurchaseTaxEngine;
+import com.jalaldeveloper.accountingsystem.purchase.service.domain.dto.FiscalTaxResponse;
+import com.jalaldeveloper.accountingsystem.purchase.service.domain.ports.input.PurchaseApplicationService;
 import com.jalaldeveloper.accountingsystem.sales.domain.core.SalInvoicePolicy;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.CreateCustomerInvoiceFromSalesOrderCommand;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.CreateSalesOrderCommand;
@@ -66,6 +70,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class PosApplicationServiceImpl implements PosApplicationService {
@@ -80,6 +85,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     private final StockPickingApplicationService stockPickingApplicationService;
     private final StockValuationApplicationService stockValuationApplicationService;
     private final CustomerInvoiceApplicationService customerInvoiceApplicationService;
+    private final PurchaseApplicationService purchaseApplicationService;
 
     public PosApplicationServiceImpl(PosConfigRepository configRepository,
                                      PosSessionRepository sessionRepository,
@@ -89,7 +95,8 @@ public class PosApplicationServiceImpl implements PosApplicationService {
                                      SalesApplicationService salesApplicationService,
                                      StockPickingApplicationService stockPickingApplicationService,
                                      StockValuationApplicationService stockValuationApplicationService,
-                                     CustomerInvoiceApplicationService customerInvoiceApplicationService) {
+                                     CustomerInvoiceApplicationService customerInvoiceApplicationService,
+                                     PurchaseApplicationService purchaseApplicationService) {
         this.configRepository = configRepository;
         this.sessionRepository = sessionRepository;
         this.orderRepository = orderRepository;
@@ -99,6 +106,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         this.stockPickingApplicationService = stockPickingApplicationService;
         this.stockValuationApplicationService = stockValuationApplicationService;
         this.customerInvoiceApplicationService = customerInvoiceApplicationService;
+        this.purchaseApplicationService = purchaseApplicationService;
     }
 
     @Override
@@ -309,14 +317,18 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     @Override
     @Transactional
     public PosOrderResponse finalizeOrder(UUID orderId) {
+        return finalizeOrder(orderId, LocalDate.now());
+    }
+
+    private PosOrderResponse finalizeOrder(UUID orderId, LocalDate businessDate) {
         PosOrder order = loadOrder(orderId);
         PosSession session = loadSession(order.getSessionId());
         PosRules.ensureSessionOpen(session.getState());
         PosRules.ensureCanFinalize(order.getState(), order.getAmountTotal(), order.getAmountPaid());
 
-        SalesOrderResponse salesOrder = createAndDeliverSalesOrder(order, session);
-        CustomerInvoiceResponse invoice = createAndPostInvoice(order, salesOrder);
-        registerAccountingPayments(order, invoice);
+        SalesOrderResponse salesOrder = createAndDeliverSalesOrder(order, session, businessDate);
+        CustomerInvoiceResponse invoice = createAndPostInvoice(order, salesOrder, businessDate);
+        registerAccountingPayments(order, invoice, businessDate);
 
         order.setSalesOrderId(salesOrder.getId());
         order.setCustomerInvoiceId(invoice.getId());
@@ -343,7 +355,8 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         for (RegisterPosPaymentCommand payment : command.getPayments()) {
             paid = registerPayment(created.getId(), payment);
         }
-        return finalizeOrder(paid.getId());
+        LocalDate businessDate = command.getBusinessDate() != null ? command.getBusinessDate() : LocalDate.now();
+        return finalizeOrder(paid.getId(), businessDate);
     }
 
     @Override
@@ -359,14 +372,14 @@ public class PosApplicationServiceImpl implements PosApplicationService {
                 .orElseThrow(() -> new PosDomainException("POS receipt not found: " + receiptId)));
     }
 
-    private SalesOrderResponse createAndDeliverSalesOrder(PosOrder order, PosSession session) {
+    private SalesOrderResponse createAndDeliverSalesOrder(PosOrder order, PosSession session, LocalDate businessDate) {
         CreateSalesOrderCommand command = new CreateSalesOrderCommand();
         command.setCompanyId(order.getCompanyId());
         command.setCustomerPartnerId(order.getCustomerPartnerId());
         command.setCurrencyCode(order.getCurrencyCode());
         command.setWarehouseId(session.getWarehouseId());
         command.setPricelistId(session.getPricelistId());
-        command.setOrderDate(LocalDate.now());
+        command.setOrderDate(businessDate);
         command.setNotes("POS " + order.getName());
         List<SalesOrderLineCommand> salesLines = new ArrayList<>();
         for (PosOrderLine line : order.getLines()) {
@@ -385,28 +398,31 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         command.setLines(salesLines);
         SalesOrderResponse created = salesApplicationService.createSalesOrder(command);
         SalesOrderResponse confirmed = salesApplicationService.confirmSalesOrder(created.getId());
-        for (UUID pickingId : confirmed.getDeliveryPickingIds()) {
+        List<UUID> pickingIds = confirmed.getDeliveryPickingIds() != null
+                ? confirmed.getDeliveryPickingIds() : List.of();
+        for (UUID pickingId : pickingIds) {
             stockPickingApplicationService.confirmPicking(pickingId);
             stockPickingApplicationService.assignPicking(pickingId);
             ValidatePickingCommand validate = new ValidatePickingCommand();
             validate.setCreateBackorder(false);
-            stockPickingApplicationService.validatePicking(pickingId, validate);
+            salesApplicationService.validateDeliveryPicking(pickingId, validate);
         }
+        salesApplicationService.refreshSalesOrderQtyDeliveredInCurrentTransaction(created.getId());
         return salesApplicationService.getSalesOrder(created.getId());
     }
 
-    private CustomerInvoiceResponse createAndPostInvoice(PosOrder order, SalesOrderResponse salesOrder) {
+    private CustomerInvoiceResponse createAndPostInvoice(PosOrder order, SalesOrderResponse salesOrder, LocalDate businessDate) {
         CreateCustomerInvoiceFromSalesOrderCommand command = new CreateCustomerInvoiceFromSalesOrderCommand();
         command.setCompanyId(order.getCompanyId());
         command.setSalesOrderId(salesOrder.getId());
-        command.setInvoiceDate(LocalDate.now());
-        command.setDueDate(LocalDate.now());
+        command.setInvoiceDate(businessDate);
+        command.setDueDate(businessDate);
         command.setReference(order.getName());
         CustomerInvoiceResponse draftInvoice = salesApplicationService.createCustomerInvoiceFromSalesOrder(command);
         return customerInvoiceApplicationService.postCustomerInvoice(draftInvoice.getId());
     }
 
-    private void registerAccountingPayments(PosOrder order, CustomerInvoiceResponse invoice) {
+    private void registerAccountingPayments(PosOrder order, CustomerInvoiceResponse invoice, LocalDate businessDate) {
         BigDecimal remaining = order.getAmountTotal();
         for (PosPayment payment : order.getPayments().stream().sorted(Comparator.comparing(PosPayment::getPaidAt)).toList()) {
             if (payment.getMethod() == PosPaymentMethod.CUSTOMER_ACCOUNT) {
@@ -420,7 +436,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
             command.setCompanyId(order.getCompanyId());
             command.setCustomerInvoiceId(invoice.getId());
             command.setPaymentJournalId(payment.getJournalId());
-            command.setPaymentDate(LocalDate.now());
+            command.setPaymentDate(businessDate);
             command.setAmount(amount);
             command.setCurrencyCode(order.getCurrencyCode());
             command.setReference(order.getName() + " " + payment.getMethod());
@@ -482,8 +498,29 @@ public class PosApplicationServiceImpl implements PosApplicationService {
                 .divide(HUNDRED, 8, RoundingMode.HALF_UP));
         BigDecimal subtotal = line.getQuantity().multiply(line.getUnitPrice()).multiply(discountMultiplier);
         line.setSubtotal(scale(subtotal));
-        line.setTaxAmount(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
+        BigDecimal tax = BigDecimal.ZERO;
+        if (line.getTaxIds() != null && !line.getTaxIds().isEmpty() && line.getOrder() != null) {
+            List<FiscalTaxSnapshot> snaps = fiscalSnapshots(line.getOrder().getCompanyId(), line.getTaxIds());
+            if (!snaps.isEmpty()) {
+                tax = PurchaseTaxEngine.computeLineTaxes(
+                        line.getQuantity(), line.getUnitPrice(), line.getDiscountPercent(), snaps).taxTotal();
+            }
+        }
+        line.setTaxAmount(scale(tax));
         line.setTotal(line.getSubtotal().add(line.getTaxAmount()));
+    }
+
+    private List<FiscalTaxSnapshot> fiscalSnapshots(UUID companyId, List<UUID> taxIds) {
+        Map<UUID, FiscalTaxResponse> byId = purchaseApplicationService.listFiscalTaxes(companyId).stream()
+                .collect(Collectors.toMap(FiscalTaxResponse::getId, t -> t, (a, b) -> a));
+        List<FiscalTaxSnapshot> snaps = new ArrayList<>();
+        for (UUID taxId : taxIds) {
+            FiscalTaxResponse t = byId.get(taxId);
+            if (t != null) {
+                snaps.add(new FiscalTaxSnapshot(t.getId(), t.getAmountType(), t.getAmount(), t.isPriceInclude()));
+            }
+        }
+        return snaps;
     }
 
     private UUID resolveJournalId(PosSession session, RegisterPosPaymentCommand command) {

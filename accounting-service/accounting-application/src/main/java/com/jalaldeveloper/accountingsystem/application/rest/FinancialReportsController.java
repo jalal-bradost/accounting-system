@@ -82,7 +82,7 @@ public class FinancialReportsController {
         }
 
         private static List<Line> mapLines(List<BalanceSheetReport.AccountLine> lines) {
-            return lines.stream().map(l -> new Line(l.accountId(), l.amount())).collect(Collectors.toList());
+            return lines.stream().map(l -> new Line(l.accountId(), l.amount(), l.name())).collect(Collectors.toList());
         }
 
         public BalanceSheetResponse(UUID companyId, LocalDate asOf, List<Line> assets, List<Line> liabilities,
@@ -110,12 +110,18 @@ public class FinancialReportsController {
         public static class Line {
             private final UUID accountId;
             private final java.math.BigDecimal amount;
+            private final String name;
             public Line(UUID accountId, java.math.BigDecimal amount) {
+                this(accountId, amount, null);
+            }
+            public Line(UUID accountId, java.math.BigDecimal amount, String name) {
                 this.accountId = accountId;
                 this.amount = amount;
+                this.name = name;
             }
             public UUID getAccountId() { return accountId; }
             public java.math.BigDecimal getAmount() { return amount; }
+            public String getName() { return name; }
         }
     }
 
