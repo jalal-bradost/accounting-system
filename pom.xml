@@ -7,6 +7,7 @@
     <module>accounting-service</module>
     <module>contacts-service</module>
     <module>hr-service</module>
+    <module>expense-service</module>
     <module>inventory-service</module>
     <module>purchase-service</module>
     <module>sales-service</module>
@@ -97,6 +98,26 @@
       <dependency>
         <groupId>com.jalaldeveloper.accountingsystem</groupId>
         <artifactId>hr-dataaccess</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>expense-domain-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>expense-application-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>expense-application</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.jalaldeveloper.accountingsystem</groupId>
+        <artifactId>expense-dataaccess</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

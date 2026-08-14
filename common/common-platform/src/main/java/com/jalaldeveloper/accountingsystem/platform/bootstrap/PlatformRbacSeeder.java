@@ -40,6 +40,7 @@ public class PlatformRbacSeeder implements ApplicationRunner {
             "platform.role.read", "platform.role.write",
             "platform.permission.read",
             "platform.company.read", "platform.company.write",
+            "dataset.import",
             // Contacts
             "contacts.partner.read", "contacts.partner.write", "contacts.partner.archive",
             "contacts.payment-terms.read", "contacts.payment-terms.write",
@@ -52,6 +53,8 @@ public class PlatformRbacSeeder implements ApplicationRunner {
             "hr.time-off.self.read", "hr.time-off.self.write",
             "payroll.read", "payroll.write", "payroll.post", "payroll.pay",
             "payroll.payslip.self.read",
+            // Expenses
+            "expense.read", "expense.write", "expense.approve", "expense.post",
             // Inventory (registered up-front so role assignment doesn't need to know about future modules)
             "inventory.product.read", "inventory.product.write",
             "inventory.product-category.read", "inventory.product-category.write",
@@ -99,6 +102,7 @@ public class PlatformRbacSeeder implements ApplicationRunner {
                     "hr.attendance.read", "hr.attendance.write",
             "hr.time-off.read", "hr.time-off.write", "hr.time-off.approve",
             "payroll.read", "payroll.write",
+                    "expense.read", "expense.write", "expense.approve", "expense.post",
                     "purchase.order.read", "purchase.vendor-bill.read", "purchase.vendor-bill.post",
                     "purchase.payment.register", "purchase.fiscal-tax.read",
                     "sales.order.read", "sales.invoice.read", "sales.invoice.write",
@@ -166,6 +170,7 @@ public class PlatformRbacSeeder implements ApplicationRunner {
                     "hr.attendance.read",
                     "hr.time-off.read",
                     "payroll.read",
+                    "expense.read",
                     "inventory.product.read", "inventory.warehouse.read",
                     "inventory.picking.read", "inventory.quant.read", "inventory.valuation.read",
                     "purchase.order.read", "purchase.vendor-bill.read", "purchase.fiscal-tax.read",
@@ -182,13 +187,15 @@ public class PlatformRbacSeeder implements ApplicationRunner {
                     "hr.attendance.self.read",
                     "hr.time-off.self.read",
                     "hr.time-off.self.write",
-                    "payroll.payslip.self.read"),
+                    "payroll.payslip.self.read",
+                    "expense.read", "expense.write"),
             "HR_MANAGER", Set.of(
                     "hr.employee.read", "hr.employee.write", "hr.employee.archive",
                     "hr.department.read", "hr.department.write",
                     "hr.attendance.read", "hr.attendance.write",
                     "hr.time-off.read", "hr.time-off.write", "hr.time-off.approve",
-                    "payroll.read", "payroll.write", "payroll.post", "payroll.pay")
+                    "payroll.read", "payroll.write", "payroll.post", "payroll.pay",
+                    "expense.read", "expense.write", "expense.approve", "expense.post")
     );
 
     private final PermissionJpaRepository permissionRepository;
