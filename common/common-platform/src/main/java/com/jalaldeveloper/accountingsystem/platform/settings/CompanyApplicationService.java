@@ -25,17 +25,20 @@ public class CompanyApplicationService {
     private final UserRoleJpaRepository userRoleRepository;
     private final RoleJpaRepository roleRepository;
     private final AppUserJpaRepository appUserRepository;
+    private final CompanyRoleProvisioner companyRoleProvisioner;
     private final ObjectProvider<BaseCurrencyChangeHandler> baseCurrencyChangeHandler;
 
     public CompanyApplicationService(CompanyJpaRepository companyRepository,
                                      UserRoleJpaRepository userRoleRepository,
                                      RoleJpaRepository roleRepository,
                                      AppUserJpaRepository appUserRepository,
+                                     CompanyRoleProvisioner companyRoleProvisioner,
                                      ObjectProvider<BaseCurrencyChangeHandler> baseCurrencyChangeHandler) {
         this.companyRepository = companyRepository;
         this.userRoleRepository = userRoleRepository;
         this.roleRepository = roleRepository;
         this.appUserRepository = appUserRepository;
+        this.companyRoleProvisioner = companyRoleProvisioner;
         this.baseCurrencyChangeHandler = baseCurrencyChangeHandler;
     }
 
@@ -80,11 +83,13 @@ public class CompanyApplicationService {
     }
 
     @Transactional
-    public CompanyResponse create(CompanyWriteRequest req) {
+    public CompanyResponse create(CompanyWriteRequest req, UUID creatorUserId) {
         CompanyEntity c = new CompanyEntity();
         c.setId(UUID.randomUUID());
         applyWrite(c, req);
         companyRepository.save(c);
+        companyRoleProvisioner.provisionRoles(c.getId());
+        companyRoleProvisioner.grantAdminToUser(c.getId(), creatorUserId);
         return CompanyResponse.from(c);
     }
 

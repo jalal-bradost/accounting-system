@@ -76,7 +76,7 @@ class SettingsApiIntegrationTest {
         JsonNode body = json.readTree(res.getResponse().getContentAsString());
         assertThat(UUID.fromString(body.get("id").asText())).isEqualTo(COMPANY_ID);
         assertThat(body.get("name").asText()).isEqualTo("Demo Company");
-        assertThat(body.get("defaultCurrency").asText()).isEqualTo("USD");
+        assertThat(body.get("defaultCurrency").asText()).isEqualTo("IQD");
     }
 
     @Test
@@ -261,6 +261,54 @@ class SettingsApiIntegrationTest {
         mockMvc.perform(delete("/api/v1/platform/roles/" + roleId)
                         .header("X-Company-Id", COMPANY_ID.toString()))
                 .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void createCompany_appearsInListForCreator() throws Exception {
+        String name = "Acme " + UUID.randomUUID().toString().substring(0, 8);
+        String body = "{\"name\":\"" + name + "\",\"legalName\":\"Acme LLC\","
+                + "\"country\":\"US\",\"defaultCurrency\":\"USD\",\"locale\":\"en-US\","
+                + "\"dateFormat\":\"yyyy-MM-dd\",\"numberFormat\":\"#,##0.00\",\"fiscalYearStartMonth\":1}";
+        MvcResult createdRes = mockMvc.perform(post("/api/v1/platform/companies")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .header("X-User-Id", ADMIN_USER_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andReturn();
+        JsonNode created = json.readTree(createdRes.getResponse().getContentAsString());
+        UUID newId = UUID.fromString(created.get("id").asText());
+        assertThat(created.get("name").asText()).isEqualTo(name);
+
+        MvcResult listRes = mockMvc.perform(get("/api/v1/platform/companies")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .header("X-User-Id", ADMIN_USER_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode list = json.readTree(listRes.getResponse().getContentAsString());
+        boolean found = false;
+        for (JsonNode c : list) {
+            if (newId.toString().equals(c.get("id").asText())) {
+                found = true;
+                break;
+            }
+        }
+        assertThat(found).as("new company visible to creator").isTrue();
+
+        MvcResult rolesRes = mockMvc.perform(get("/api/v1/platform/roles")
+                        .header("X-Company-Id", newId.toString())
+                        .header("X-User-Id", ADMIN_USER_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode roles = json.readTree(rolesRes.getResponse().getContentAsString());
+        boolean hasAdmin = false;
+        for (JsonNode r : roles) {
+            if ("ADMIN".equals(r.get("code").asText())) {
+                hasAdmin = true;
+                break;
+            }
+        }
+        assertThat(hasAdmin).as("ADMIN role provisioned on new company").isTrue();
     }
 
     @Test

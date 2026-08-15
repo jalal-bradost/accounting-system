@@ -48,7 +48,8 @@ public class CompanyController {
     @PostMapping
     @RequiresPermission("platform.company.write")
     public ResponseEntity<CompanyResponse> create(@Valid @RequestBody CompanyWriteRequest body) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(body));
+        UUID creatorUserId = companyContext.currentUser().map(u -> u.getId()).orElse(null);
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(body, creatorUserId));
     }
 
     @PutMapping("/{id}")
