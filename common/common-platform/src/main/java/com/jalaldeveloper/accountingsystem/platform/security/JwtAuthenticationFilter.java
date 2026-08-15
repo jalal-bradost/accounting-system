@@ -3,6 +3,7 @@ package com.jalaldeveloper.accountingsystem.platform.security;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.UserId;
 import com.jalaldeveloper.accountingsystem.platform.web.CompanyContext;
+import com.jalaldeveloper.accountingsystem.platform.web.CompanyContextFilter;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -23,6 +24,8 @@ import java.util.UUID;
 
 /**
  * Validates Bearer JWTs and binds {@link CompanyContext} + Spring {@link SecurityContextHolder}.
+ * The token always identifies the user. {@code X-Company-Id} selects the active tenant when
+ * present; otherwise the company claim on the token is used.
  */
 @Component
 @ConditionalOnProperty(name = "app.security.enabled", havingValue = "true")
@@ -55,11 +58,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             Claims claims = jwtService.parseAndValidate(raw);
             UUID userId = UUID.fromString(claims.getSubject());
             String cid = claims.get(JwtService.CLAIM_COMPANY_ID, String.class);
-            if (cid == null || cid.isBlank()) {
+            String headerCid = request.getHeader(CompanyContextFilter.HEADER_COMPANY_ID);
+            UUID companyUuid = parseUuid(headerCid).orElseGet(() -> parseUuid(cid).orElse(null));
+            if (companyUuid == null) {
                 filterChain.doFilter(request, response);
                 return;
             }
-            UUID companyUuid = UUID.fromString(cid);
             UserId uid = new UserId(userId);
             CompanyId companyId = new CompanyId(companyUuid);
             companyContext.applyFromIncomingRequest(request, Optional.of(companyId), Optional.of(uid));
@@ -76,5 +80,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
         filterChain.doFilter(request, response);
+    }
+
+    private static Optional<UUID> parseUuid(String value) {
+        if (value == null || value.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(UUID.fromString(value.trim()));
+        } catch (IllegalArgumentException ex) {
+            return Optional.empty();
+        }
     }
 }
