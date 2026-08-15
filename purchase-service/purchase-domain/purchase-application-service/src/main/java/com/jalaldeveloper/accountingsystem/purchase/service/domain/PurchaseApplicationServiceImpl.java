@@ -60,7 +60,12 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
@@ -107,6 +112,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     private final PurchaseEventPublisher purchaseEventPublisher;
     private final CurrencyConversionPort currencyConversionPort;
     private final PurchaseOrderQtyWriter purchaseOrderQtyWriter;
+    private final TransactionTemplate afterCommitTx;
 
     public PurchaseApplicationServiceImpl(PurchaseOrderRepository purchaseOrderRepository,
                                           FiscalTaxRepository fiscalTaxRepository,
@@ -126,7 +132,8 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                                           ObjectProvider<CompanyContext> companyContextProvider,
                                           PurchaseEventPublisher purchaseEventPublisher,
                                           CurrencyConversionPort currencyConversionPort,
-                                          PurchaseOrderQtyWriter purchaseOrderQtyWriter) {
+                                          PurchaseOrderQtyWriter purchaseOrderQtyWriter,
+                                          PlatformTransactionManager transactionManager) {
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.fiscalTaxRepository = fiscalTaxRepository;
         this.vendorBillRepository = vendorBillRepository;
@@ -146,11 +153,26 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         this.purchaseEventPublisher = purchaseEventPublisher;
         this.currencyConversionPort = currencyConversionPort;
         this.purchaseOrderQtyWriter = purchaseOrderQtyWriter;
+        this.afterCommitTx = new TransactionTemplate(transactionManager);
+        this.afterCommitTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     private UUID companyIdOrDefault(UUID fromCommand) {
         if (fromCommand != null) return fromCommand;
         return companyContextProvider.getObject().requireCompany().getId();
+    }
+
+    private void runAfterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    afterCommitTx.executeWithoutResult(status -> action.run());
+                }
+            });
+        } else {
+            action.run();
+        }
     }
 
     private UUID resolveLiquidityAccountForPaymentJournal(UUID companyId, UUID journalId) {
@@ -482,7 +504,13 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     public void syncPurchaseOrderLineQtyReceivedFromStockMoves(UUID purchaseOrderId) {
         PurchaseOrder o = purchaseOrderQtyWriter.updateQtyReceived(purchaseOrderId);
         if (o != null) {
-            tryAutoCreateAndPostCreditNoteFromReturn(o);
+            UUID id = o.getId();
+            runAfterCommit(() -> {
+                PurchaseOrder fresh = purchaseOrderRepository.findById(id).orElse(null);
+                if (fresh != null) {
+                    tryAutoCreateAndPostCreditNoteFromReturn(fresh);
+                }
+            });
         }
     }
 

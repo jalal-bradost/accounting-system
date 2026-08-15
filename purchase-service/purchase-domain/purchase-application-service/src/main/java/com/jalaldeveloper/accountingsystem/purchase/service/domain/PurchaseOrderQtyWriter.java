@@ -47,7 +47,7 @@ public class PurchaseOrderQtyWriter {
     }
 
     public PurchaseOrder updateQtyReceived(UUID purchaseOrderId) {
-        return retry(() -> requiresNew.execute(status -> doUpdateQtyReceived(purchaseOrderId)));
+        return retry(() -> doUpdateQtyReceived(purchaseOrderId));
     }
 
     public void applyPostedBillQuantities(UUID purchaseOrderId,

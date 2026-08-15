@@ -62,7 +62,12 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
@@ -95,6 +100,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
     private final ObjectProvider<CompanyContext> companyContextProvider;
     private final SalesEventPublisher salesEventPublisher;
     private final SalesOrderQtyWriter salesOrderQtyWriter;
+    private final TransactionTemplate afterCommitTx;
 
     public SalesApplicationServiceImpl(SalesOrderRepository salesOrderRepository,
                                        PricelistRepository pricelistRepository,
@@ -109,7 +115,8 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
                                        @Lazy CustomerInvoiceApplicationService customerInvoiceApplicationService,
                                        ObjectProvider<CompanyContext> companyContextProvider,
                                        SalesEventPublisher salesEventPublisher,
-                                       SalesOrderQtyWriter salesOrderQtyWriter) {
+                                       SalesOrderQtyWriter salesOrderQtyWriter,
+                                       PlatformTransactionManager transactionManager) {
         this.salesOrderRepository = salesOrderRepository;
         this.pricelistRepository = pricelistRepository;
         this.partnerApplicationService = partnerApplicationService;
@@ -124,6 +131,8 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         this.companyContextProvider = companyContextProvider;
         this.salesEventPublisher = salesEventPublisher;
         this.salesOrderQtyWriter = salesOrderQtyWriter;
+        this.afterCommitTx = new TransactionTemplate(transactionManager);
+        this.afterCommitTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     private UUID companyIdOrDefault(UUID fromCommand) {
@@ -131,6 +140,19 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
             return fromCommand;
         }
         return companyContextProvider.getObject().requireCompany().getId();
+    }
+
+    private void runAfterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    afterCommitTx.executeWithoutResult(status -> action.run());
+                }
+            });
+        } else {
+            action.run();
+        }
     }
 
     @Override
@@ -522,7 +544,13 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
     public void syncSalesOrderLineQtyDeliveredFromStockMoves(UUID salesOrderId) {
         SalesOrder o = salesOrderQtyWriter.updateQtyDelivered(salesOrderId);
         if (o != null) {
-            tryAutoCreateAndPostCreditNoteFromReturn(o);
+            UUID id = o.getId();
+            runAfterCommit(() -> {
+                SalesOrder fresh = salesOrderRepository.findByIdWithLines(id).orElse(null);
+                if (fresh != null) {
+                    tryAutoCreateAndPostCreditNoteFromReturn(fresh);
+                }
+            });
         }
     }
 

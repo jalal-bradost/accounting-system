@@ -50,7 +50,7 @@ public class SalesOrderQtyWriter {
     }
 
     public SalesOrder updateQtyDelivered(UUID salesOrderId) {
-        return retry(() -> requiresNew.execute(status -> doUpdateQtyDelivered(salesOrderId)));
+        return retry(() -> doUpdateQtyDelivered(salesOrderId));
     }
 
     /** Same as {@link #updateQtyDelivered} but joins the caller transaction (POS checkout). */
