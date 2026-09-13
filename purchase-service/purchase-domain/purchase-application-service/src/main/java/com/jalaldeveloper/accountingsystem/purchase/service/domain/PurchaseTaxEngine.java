@@ -34,13 +34,13 @@ public final class PurchaseTaxEngine {
         for (FiscalTaxSnapshot t : taxesInOrder) {
             FiscalTaxSnapshot tax = byId.get(t.id());
             if (tax == null) {
-                throw new PurchaseDomainException("Unknown tax id on line: " + t.id());
+                throw new PurchaseDomainException("error.purchase.unknownTaxOnLine", new Object[] { t.id() }, "Unknown tax id on line: " + t.id());
             }
             if (tax.amountType() != TaxAmountType.PERCENT) {
-                throw new PurchaseDomainException("Unsupported tax amount type: " + tax.amountType());
+                throw new PurchaseDomainException("error.purchase.unsupportedTaxAmountType", new Object[] { tax.amountType() }, "Unsupported tax amount type: " + tax.amountType());
             }
             if (tax.priceInclude()) {
-                throw new PurchaseDomainException("Tax-inclusive pricing is not implemented yet");
+                throw new PurchaseDomainException("error.purchase.taxInclusiveNotImplemented", null, "Tax-inclusive pricing is not implemented yet");
             }
             BigDecimal rate = tax.amount().divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP);
             BigDecimal amt = runningNet.multiply(rate).setScale(4, RoundingMode.HALF_UP);

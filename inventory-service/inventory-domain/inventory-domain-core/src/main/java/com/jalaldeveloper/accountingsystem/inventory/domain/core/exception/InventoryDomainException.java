@@ -15,4 +15,8 @@ public class InventoryDomainException extends DomainException {
     public InventoryDomainException(String message, Throwable cause) {
         super(message, cause);
     }
+
+    public InventoryDomainException(String messageKey, Object[] messageArgs, String defaultMessage) {
+        super(messageKey, messageArgs, defaultMessage);
+    }
 }

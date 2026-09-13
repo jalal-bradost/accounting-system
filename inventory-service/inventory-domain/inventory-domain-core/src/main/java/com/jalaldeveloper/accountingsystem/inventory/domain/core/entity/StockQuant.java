@@ -41,9 +41,9 @@ public class StockQuant extends AggregateRoot<StockQuantId> {
     }
 
     public void validate() {
-        if (companyId == null) throw new InventoryDomainException("companyId required");
-        if (productId == null) throw new InventoryDomainException("productId required");
-        if (locationId == null) throw new InventoryDomainException("locationId required");
+        if (companyId == null) throw new InventoryDomainException("error.inventory.companyIdRequired", null, "companyId required");
+        if (productId == null) throw new InventoryDomainException("error.inventory.productIdRequired", null, "productId required");
+        if (locationId == null) throw new InventoryDomainException("error.inventory.locationIdRequired", null, "locationId required");
     }
 
     public BigDecimal getAvailable() {
@@ -75,7 +75,7 @@ public class StockQuant extends AggregateRoot<StockQuantId> {
     /** Reserve {@code qty} for an outgoing move. Throws if insufficient available. */
     public void reserve(BigDecimal qty) {
         if (qty == null || qty.signum() <= 0) {
-            throw new InventoryDomainException("reserve quantity must be > 0");
+            throw new InventoryDomainException("error.inventory.reserveQtyPositive", null, "reserve quantity must be > 0");
         }
         if (qty.compareTo(getAvailable()) > 0) {
             throw new InventoryDomainException(

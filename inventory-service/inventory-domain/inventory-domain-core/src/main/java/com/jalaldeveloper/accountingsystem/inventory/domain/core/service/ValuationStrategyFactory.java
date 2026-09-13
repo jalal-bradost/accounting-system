@@ -23,7 +23,7 @@ public class ValuationStrategyFactory {
     public ValuationStrategy forMethod(ValuationMethod method) {
         ValuationStrategy s = strategies.get(method);
         if (s == null) {
-            throw new InventoryDomainException("No valuation strategy registered for " + method);
+            throw new InventoryDomainException("error.inventory.noValuationStrategy", new Object[] { method }, "No valuation strategy registered for " + method);
         }
         return s;
     }

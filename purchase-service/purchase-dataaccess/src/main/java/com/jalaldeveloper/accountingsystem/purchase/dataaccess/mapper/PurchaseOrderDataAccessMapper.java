@@ -64,6 +64,9 @@ public class PurchaseOrderDataAccessMapper {
         d.setName(e.getName());
         d.setUomId(e.getUomId());
         d.setWarehouseId(e.getWarehouseId());
+        d.setPackagingId(e.getPackagingId());
+        d.setPackagingName(e.getPackagingName());
+        d.setQtyPerPackage(e.getQtyPerPackage());
         d.setQtyOrdered(e.getQtyOrdered());
         d.setQtyReceived(e.getQtyReceived());
         d.setQtyInvoiced(e.getQtyInvoiced());
@@ -132,6 +135,9 @@ public class PurchaseOrderDataAccessMapper {
             lineEntity.setName(lineDomain.getName());
             lineEntity.setUomId(lineDomain.getUomId());
             lineEntity.setWarehouseId(lineDomain.getWarehouseId());
+            lineEntity.setPackagingId(lineDomain.getPackagingId());
+            lineEntity.setPackagingName(lineDomain.getPackagingName());
+            lineEntity.setQtyPerPackage(lineDomain.getQtyPerPackage());
             lineEntity.setQtyOrdered(lineDomain.getQtyOrdered());
             lineEntity.setQtyReceived(lineDomain.getQtyReceived());
             lineEntity.setQtyInvoiced(lineDomain.getQtyInvoiced());

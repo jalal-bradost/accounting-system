@@ -53,15 +53,15 @@ public class StockMove extends BaseEntity<StockMoveId> {
     }
 
     public void validateInvariants() {
-        if (productId == null) throw new InventoryDomainException("move.productId required");
-        if (uomId == null) throw new InventoryDomainException("move.uomId required");
-        if (sourceLocationId == null) throw new InventoryDomainException("move.sourceLocationId required");
-        if (destinationLocationId == null) throw new InventoryDomainException("move.destinationLocationId required");
+        if (productId == null) throw new InventoryDomainException("error.inventory.moveProductIdRequired", null, "move.productId required");
+        if (uomId == null) throw new InventoryDomainException("error.inventory.moveUomIdRequired", null, "move.uomId required");
+        if (sourceLocationId == null) throw new InventoryDomainException("error.inventory.moveSourceLocationIdRequired", null, "move.sourceLocationId required");
+        if (destinationLocationId == null) throw new InventoryDomainException("error.inventory.moveDestinationLocationIdRequired", null, "move.destinationLocationId required");
         if (sourceLocationId.equals(destinationLocationId)) {
-            throw new InventoryDomainException("move source and destination must differ");
+            throw new InventoryDomainException("error.inventory.moveSourceDestMustDiffer", null, "move source and destination must differ");
         }
         if (demandQuantity == null || demandQuantity.signum() <= 0) {
-            throw new InventoryDomainException("move.demandQuantity must be > 0");
+            throw new InventoryDomainException("error.inventory.moveDemandQtyPositive", null, "move.demandQuantity must be > 0");
         }
     }
 
@@ -87,7 +87,7 @@ public class StockMove extends BaseEntity<StockMoveId> {
     public void markDone(BigDecimal picked, Money unitCost) {
         ensureState("markDone", MoveState.ASSIGNED, MoveState.PARTIALLY_ASSIGNED, MoveState.CONFIRMED);
         if (picked == null || picked.signum() <= 0) {
-            throw new InventoryDomainException("picked qty must be > 0 to mark a move done");
+            throw new InventoryDomainException("error.inventory.pickedQtyPositive", null, "picked qty must be > 0 to mark a move done");
         }
         if (picked.compareTo(demandQuantity) > 0) {
             throw new InventoryDomainException(
@@ -100,7 +100,7 @@ public class StockMove extends BaseEntity<StockMoveId> {
 
     public void cancel() {
         if (state == MoveState.DONE) {
-            throw new InventoryDomainException("cannot cancel a DONE move");
+            throw new InventoryDomainException("error.inventory.cannotCancelDoneMove", null, "cannot cancel a DONE move");
         }
         this.reservedQuantity = BigDecimal.ZERO;
         this.state = MoveState.CANCELLED;
@@ -124,7 +124,7 @@ public class StockMove extends BaseEntity<StockMoveId> {
 
     public void attachToPicking(StockPickingId pickingId) {
         if (this.pickingId != null && !this.pickingId.equals(pickingId)) {
-            throw new InventoryDomainException("move already attached to picking " + this.pickingId.getId());
+            throw new InventoryDomainException("error.inventory.moveAlreadyAttachedToPicking", new Object[] { this.pickingId.getId() }, "move already attached to picking " + this.pickingId.getId());
         }
         this.pickingId = pickingId;
     }

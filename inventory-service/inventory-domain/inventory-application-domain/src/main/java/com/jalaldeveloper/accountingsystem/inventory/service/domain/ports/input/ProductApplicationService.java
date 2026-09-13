@@ -12,6 +12,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ProductApplicationService {
@@ -37,6 +38,9 @@ public interface ProductApplicationService {
                                          String query,
                                          boolean includeArchived,
                                          Pageable pageable);
+
+    /** Exact barcode (preferred) or SKU match for POS scanning. */
+    Optional<ProductResponse> findSaleableByBarcodeOrSku(CompanyId companyId, String code);
 
     ProductCategoryResponse createCategory(@Valid ProductCategoryCommand command);
 

@@ -11,19 +11,19 @@ public final class PurchaseOrderRules {
 
     public static void ensureCanSend(PurchaseOrderState state) {
         if (state != PurchaseOrderState.DRAFT) {
-            throw new PurchaseDomainException("Can only send RFQ in DRAFT state, was " + state);
+            throw new PurchaseDomainException("error.purchase.sendRfqDraftOnly", new Object[] { state }, "Can only send RFQ in DRAFT state, was " + state);
         }
     }
 
     public static void ensureCanConfirm(PurchaseOrderState state) {
         if (state != PurchaseOrderState.DRAFT && state != PurchaseOrderState.SENT) {
-            throw new PurchaseDomainException("Can only confirm from DRAFT or SENT, was " + state);
+            throw new PurchaseDomainException("error.purchase.confirmFromDraftOrSent", new Object[] { state }, "Can only confirm from DRAFT or SENT, was " + state);
         }
     }
 
     public static void ensureCanCancel(PurchaseOrderState state) {
         if (state == PurchaseOrderState.CANCELLED) {
-            throw new PurchaseDomainException("Order already cancelled");
+            throw new PurchaseDomainException("error.purchase.orderAlreadyCancelled", null, "Order already cancelled");
         }
     }
 

@@ -4,12 +4,15 @@ import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinv
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.RegisterCustomerPaymentCommand;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.CustomerInvoiceApplicationService;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
+import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.ProductPackaging;
+import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductType;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductCategoryResponse;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductPackagingResponse;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductResponse;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.StockPickingResponse;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ValidatePickingCommand;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.ProductApplicationService;
-import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductType;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.ProductPackagingApplicationService;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.StockPickingApplicationService;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.StockValuationApplicationService;
 import com.jalaldeveloper.accountingsystem.pos.domain.core.entity.PosConfig;
@@ -81,6 +84,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     private final PosOrderRepository orderRepository;
     private final PosReceiptRepository receiptRepository;
     private final ProductApplicationService productApplicationService;
+    private final ProductPackagingApplicationService productPackagingApplicationService;
     private final SalesApplicationService salesApplicationService;
     private final StockPickingApplicationService stockPickingApplicationService;
     private final StockValuationApplicationService stockValuationApplicationService;
@@ -92,6 +96,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
                                      PosOrderRepository orderRepository,
                                      PosReceiptRepository receiptRepository,
                                      ProductApplicationService productApplicationService,
+                                     ProductPackagingApplicationService productPackagingApplicationService,
                                      SalesApplicationService salesApplicationService,
                                      StockPickingApplicationService stockPickingApplicationService,
                                      StockValuationApplicationService stockValuationApplicationService,
@@ -102,6 +107,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         this.orderRepository = orderRepository;
         this.receiptRepository = receiptRepository;
         this.productApplicationService = productApplicationService;
+        this.productPackagingApplicationService = productPackagingApplicationService;
         this.salesApplicationService = salesApplicationService;
         this.stockPickingApplicationService = stockPickingApplicationService;
         this.stockValuationApplicationService = stockValuationApplicationService;
@@ -114,7 +120,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     public PosConfigResponse createConfig(PosConfigCommand command) {
         configRepository.findByCompanyIdAndName(command.getCompanyId(), command.getName())
                 .ifPresent(existing -> {
-                    throw new PosDomainException("POS config already exists: " + existing.getName());
+                    throw new PosDomainException("error.pos.configAlreadyExists", new Object[] { existing.getName() }, "POS config already exists: " + existing.getName());
                 });
         Instant now = Instant.now();
         PosConfig entity = new PosConfig();
@@ -172,7 +178,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         ensureCompany(config.getCompanyId(), command.getCompanyId());
         sessionRepository.findFirstByConfigIdAndStateOrderByOpenedAtDesc(config.getId(), PosSessionState.OPEN)
                 .ifPresent(open -> {
-                    throw new PosDomainException("POS config already has an open session");
+                    throw new PosDomainException("error.pos.configHasOpenSession", null, "POS config already has an open session");
                 });
         PosSession session = new PosSession();
         session.setId(UUID.randomUUID());
@@ -216,6 +222,58 @@ public class PosApplicationServiceImpl implements PosApplicationService {
                 .map(p -> toCatalogItemResponse(p, categoryNames, companyId, session.getWarehouseId()))
                 .toList();
         return new PageImpl<>(saleable, pageable, saleable.size());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PosCatalogItemResponse findCatalogByBarcode(CompanyId companyId, UUID sessionId, String barcode) {
+        PosSession session = loadSession(sessionId);
+        ensureCompany(session.getCompanyId(), companyId.getId());
+        PosRules.ensureSessionOpen(session.getState());
+        if (barcode == null || barcode.isBlank()) {
+            throw new PosDomainException(
+                    "error.pos.productNotFoundByBarcode",
+                    new Object[]{""},
+                    "No saleable product found for barcode");
+        }
+        String trimmed = barcode.trim();
+        Map<UUID, String> categoryNames = categoryNameMap(companyId);
+        var packagingOpt = productPackagingApplicationService.findActiveByBarcode(companyId, trimmed);
+        if (packagingOpt.isPresent()) {
+            ProductPackaging packaging = packagingOpt.get();
+            ProductResponse product = productApplicationService.getProduct(packaging.getProductId().getId());
+            if (!product.isSaleOk()) {
+                throw new PosDomainException(
+                        "error.pos.productNotFoundByBarcode",
+                        new Object[]{trimmed},
+                        "No saleable product found for barcode: " + trimmed);
+            }
+            PosCatalogItemResponse item = toCatalogItemResponse(product, categoryNames, companyId, session.getWarehouseId());
+            item.setPackagingId(packaging.getId().getId());
+            item.setPackagingName(packaging.getName());
+            item.setQtyPerPackage(packaging.getQty());
+            if (packaging.getListPrice() != null) {
+                item.setListPrice(packaging.getListPrice().getAmount());
+            }
+            if (packaging.getPurchasePrice() != null) {
+                item.setPurchasePrice(packaging.getPurchasePrice().getAmount());
+            }
+            if (packaging.getBarcode() != null) {
+                item.setBarcode(packaging.getBarcode());
+            }
+            if (packaging.getSku() != null) {
+                item.setSku(packaging.getSku());
+            }
+            return item;
+        }
+        ProductResponse product = productApplicationService.findSaleableByBarcodeOrSku(companyId, trimmed)
+                .orElseThrow(() -> new PosDomainException(
+                        "error.pos.productNotFoundByBarcode",
+                        new Object[]{trimmed},
+                        "No saleable product found for barcode: " + trimmed));
+        PosCatalogItemResponse item = toCatalogItemResponse(product, categoryNames, companyId, session.getWarehouseId());
+        item.setQtyPerPackage(BigDecimal.ONE);
+        return item;
     }
 
     @Override
@@ -387,6 +445,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
             salesLine.setProductId(line.getProductId());
             salesLine.setName(line.getName());
             salesLine.setUomId(line.getUomId());
+            salesLine.setPackagingId(line.getPackagingId());
             salesLine.setQtyOrdered(line.getQuantity());
             salesLine.setUnitPrice(line.getUnitPrice());
             salesLine.setDiscountPercent(line.getDiscountPercent());
@@ -450,8 +509,9 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         receipt.setId(UUID.randomUUID());
         receipt.setCompanyId(order.getCompanyId());
         receipt.setOrderId(order.getId());
-        receipt.setReceiptNumber(nextReceiptNumber(order.getCompanyId()));
-        receipt.setPayloadJson(receiptJson(order));
+        String receiptNumber = nextReceiptNumber(order.getCompanyId());
+        receipt.setReceiptNumber(receiptNumber);
+        receipt.setPayloadJson(receiptJson(order, receiptNumber));
         receipt.setCreatedAt(Instant.now());
         return receiptRepository.save(receipt);
     }
@@ -459,7 +519,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     private PosOrderLine toLineEntity(PosOrder order, PosOrderLineCommand command, int sequence) {
         ProductResponse product = productApplicationService.getProduct(command.getProductId());
         if (!product.isSaleOk()) {
-            throw new PosDomainException("Product is not saleable: " + product.getName());
+            throw new PosDomainException("error.pos.productNotSaleable", new Object[] { product.getName() }, "Product is not saleable: " + product.getName());
         }
         PosOrderLine line = new PosOrderLine();
         line.setId(UUID.randomUUID());
@@ -468,13 +528,43 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         line.setProductId(product.getId());
         line.setName(command.getName() != null && !command.getName().isBlank() ? command.getName() : product.getName());
         line.setUomId(command.getUomId() != null ? command.getUomId() : product.getUomId());
+        ProductPackagingResponse packaging = applyPackagingSnapshot(line, command.getPackagingId(), product);
+        BigDecimal defaultPrice = packaging != null && packaging.getListPrice() != null
+                ? packaging.getListPrice()
+                : defaultZero(product.getListPrice());
         line.setQuantity(command.getQuantity());
-        line.setUnitPrice(command.getUnitPrice() != null ? command.getUnitPrice() : defaultZero(product.getListPrice()));
+        line.setUnitPrice(command.getUnitPrice() != null ? command.getUnitPrice() : defaultPrice);
         line.setDiscountPercent(defaultZero(command.getDiscountPercent()));
         line.setTaxIds(command.getTaxIds());
         line.setRevenueAccountId(command.getRevenueAccountId());
         recalcLine(line);
         return line;
+    }
+
+    private ProductPackagingResponse applyPackagingSnapshot(PosOrderLine line, UUID packagingId, ProductResponse product) {
+        if (packagingId == null) {
+            line.setPackagingId(null);
+            line.setPackagingName(null);
+            line.setQtyPerPackage(null);
+            return null;
+        }
+        ProductPackagingResponse packaging = productPackagingApplicationService.get(packagingId);
+        if (!product.getId().equals(packaging.getProductId())) {
+            throw new PosDomainException(
+                    "error.inventory.packagingProductMismatch",
+                    null,
+                    "Packaging does not belong to this product");
+        }
+        if (!packaging.isActive()) {
+            throw new PosDomainException(
+                    "error.inventory.packagingInactive",
+                    new Object[]{packaging.getName()},
+                    "Packaging is inactive: " + packaging.getName());
+        }
+        line.setPackagingId(packaging.getId());
+        line.setPackagingName(packaging.getName());
+        line.setQtyPerPackage(packaging.getQty());
+        return packaging;
     }
 
     private void recalc(PosOrder order) {
@@ -536,7 +626,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         if (session.getBankJournalId() != null) {
             return session.getBankJournalId();
         }
-        throw new PosDomainException("A bank/card journal is required for this POS payment");
+        throw new PosDomainException("error.pos.bankJournalRequiredForPayment", null, "A bank/card journal is required for this POS payment");
     }
 
     private PosConfig loadConfig(UUID id) {
@@ -556,7 +646,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
 
     private void ensureCompany(UUID actual, UUID expected) {
         if (!actual.equals(expected)) {
-            throw new PosDomainException("POS company mismatch");
+            throw new PosDomainException("error.pos.companyMismatch", null, "POS company mismatch");
         }
     }
 
@@ -704,6 +794,9 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         response.setProductId(entity.getProductId());
         response.setName(entity.getName());
         response.setUomId(entity.getUomId());
+        response.setPackagingId(entity.getPackagingId());
+        response.setPackagingName(entity.getPackagingName());
+        response.setQtyPerPackage(entity.getQtyPerPackage());
         response.setQuantity(entity.getQuantity());
         response.setUnitPrice(entity.getUnitPrice());
         response.setDiscountPercent(entity.getDiscountPercent());
@@ -736,11 +829,91 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         return response;
     }
 
-    private String receiptJson(PosOrder order) {
-        return """
-                {"orderId":"%s","name":"%s","currencyCode":"%s","amountTotal":%s,"amountPaid":%s,"salesOrderId":"%s","customerInvoiceId":"%s"}
-                """.formatted(order.getId(), escape(order.getName()), order.getCurrencyCode(), order.getAmountTotal(), order.getAmountPaid(),
-                order.getSalesOrderId(), order.getCustomerInvoiceId()).trim();
+    private String receiptJson(PosOrder order, String receiptNumber) {
+        PosSession session = null;
+        try {
+            session = loadSession(order.getSessionId());
+        } catch (RuntimeException ignored) {
+            // Session may be missing for legacy rows; payload still includes order fields.
+        }
+
+        StringBuilder linesJson = new StringBuilder("[");
+        boolean firstLine = true;
+        for (PosOrderLine line : order.getLines().stream()
+                .sorted(Comparator.comparing(PosOrderLine::getSequence))
+                .toList()) {
+            if (!firstLine) {
+                linesJson.append(',');
+            }
+            firstLine = false;
+            String sku = "";
+            String barcode = "";
+            try {
+                ProductResponse product = productApplicationService.getProduct(line.getProductId());
+                sku = product.getSku() != null ? product.getSku() : "";
+                barcode = product.getBarcode() != null ? product.getBarcode() : "";
+            } catch (RuntimeException ignored) {
+                // Keep line even if product lookup fails.
+            }
+            linesJson.append('{')
+                    .append("\"productId\":\"").append(line.getProductId()).append("\",")
+                    .append("\"name\":\"").append(escape(line.getName())).append("\",")
+                    .append("\"sku\":\"").append(escape(sku)).append("\",")
+                    .append("\"barcode\":\"").append(escape(barcode)).append("\",")
+                    .append("\"quantity\":").append(line.getQuantity()).append(',')
+                    .append("\"unitPrice\":").append(line.getUnitPrice()).append(',')
+                    .append("\"discountPercent\":").append(defaultZero(line.getDiscountPercent())).append(',')
+                    .append("\"subtotal\":").append(line.getSubtotal()).append(',')
+                    .append("\"taxAmount\":").append(line.getTaxAmount()).append(',')
+                    .append("\"total\":").append(line.getTotal())
+                    .append('}');
+        }
+        linesJson.append(']');
+
+        StringBuilder paymentsJson = new StringBuilder("[");
+        boolean firstPayment = true;
+        BigDecimal paid = BigDecimal.ZERO;
+        for (PosPayment payment : order.getPayments()) {
+            if (!firstPayment) {
+                paymentsJson.append(',');
+            }
+            firstPayment = false;
+            paid = paid.add(defaultZero(payment.getAmount()));
+            paymentsJson.append('{')
+                    .append("\"method\":\"").append(escape(payment.getMethod() != null ? payment.getMethod().name() : "")).append("\",")
+                    .append("\"amount\":").append(payment.getAmount()).append(',')
+                    .append("\"reference\":\"").append(escape(payment.getReference())).append("\",")
+                    .append("\"paidAt\":\"").append(payment.getPaidAt() != null ? payment.getPaidAt() : "").append("\"")
+                    .append('}');
+        }
+        paymentsJson.append(']');
+
+        BigDecimal change = paid.subtract(defaultZero(order.getAmountTotal())).max(BigDecimal.ZERO);
+
+        return new StringBuilder(512)
+                .append('{')
+                .append("\"companyId\":\"").append(order.getCompanyId()).append("\",")
+                .append("\"orderId\":\"").append(order.getId()).append("\",")
+                .append("\"orderName\":\"").append(escape(order.getName())).append("\",")
+                .append("\"name\":\"").append(escape(order.getName())).append("\",")
+                .append("\"receiptNumber\":\"").append(escape(receiptNumber)).append("\",")
+                .append("\"datetime\":\"").append(order.getFinalizedAt() != null ? order.getFinalizedAt() : Instant.now()).append("\",")
+                .append("\"sessionId\":\"").append(order.getSessionId() != null ? order.getSessionId() : "").append("\",")
+                .append("\"configId\":\"").append(session != null && session.getConfigId() != null ? session.getConfigId() : "").append("\",")
+                .append("\"customerPartnerId\":\"").append(order.getCustomerPartnerId() != null ? order.getCustomerPartnerId() : "").append("\",")
+                .append("\"currencyCode\":\"").append(escape(order.getCurrencyCode())).append("\",")
+                .append("\"note\":\"").append(escape(order.getNote())).append("\",")
+                .append("\"amountUntaxed\":").append(defaultZero(order.getAmountUntaxed())).append(',')
+                .append("\"amountTax\":").append(defaultZero(order.getAmountTax())).append(',')
+                .append("\"amountTotal\":").append(defaultZero(order.getAmountTotal())).append(',')
+                .append("\"amountPaid\":").append(defaultZero(order.getAmountPaid())).append(',')
+                .append("\"change\":").append(change).append(',')
+                .append("\"salesOrderId\":\"").append(order.getSalesOrderId() != null ? order.getSalesOrderId() : "").append("\",")
+                .append("\"customerInvoiceId\":\"").append(order.getCustomerInvoiceId() != null ? order.getCustomerInvoiceId() : "").append("\",")
+                .append("\"lines\":").append(linesJson).append(',')
+                .append("\"payments\":").append(paymentsJson)
+                .append('}')
+                .toString();
     }
 
     private String escape(String value) {

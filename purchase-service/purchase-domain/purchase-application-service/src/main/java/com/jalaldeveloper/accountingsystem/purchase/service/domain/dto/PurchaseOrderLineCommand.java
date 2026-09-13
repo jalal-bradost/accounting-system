@@ -14,6 +14,7 @@ public class PurchaseOrderLineCommand {
     @NotNull private String name;
     @NotNull private UUID uomId;
     private UUID warehouseId;
+    private UUID packagingId;
     @NotNull @Positive private BigDecimal qtyOrdered;
     @NotNull @Positive private BigDecimal unitPrice;
     private BigDecimal discountPercent;
@@ -28,6 +29,8 @@ public class PurchaseOrderLineCommand {
     public void setUomId(UUID uomId) { this.uomId = uomId; }
     public UUID getWarehouseId() { return warehouseId; }
     public void setWarehouseId(UUID warehouseId) { this.warehouseId = warehouseId; }
+    public UUID getPackagingId() { return packagingId; }
+    public void setPackagingId(UUID packagingId) { this.packagingId = packagingId; }
     public BigDecimal getQtyOrdered() { return qtyOrdered; }
     public void setQtyOrdered(BigDecimal qtyOrdered) { this.qtyOrdered = qtyOrdered; }
     public BigDecimal getUnitPrice() { return unitPrice; }

@@ -37,4 +37,10 @@ public interface ProductRepository {
      * valuation layer, or stock quant referencing it.
      */
     boolean hasStockActivity(ProductId id);
+
+    Optional<Product> findActiveByCompanyIdAndBarcode(CompanyId companyId, String barcode);
+
+    Optional<Product> findActiveByCompanyIdAndSku(CompanyId companyId, String sku);
+
+    boolean existsByCompanyIdAndBarcodeExcludingId(CompanyId companyId, String barcode, UUID excludeProductId);
 }

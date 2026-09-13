@@ -14,6 +14,7 @@ public class PosOrderLineCommand {
     private UUID productId;
     private String name;
     private UUID uomId;
+    private UUID packagingId;
     @NotNull
     @Positive
     private BigDecimal quantity;
@@ -29,6 +30,8 @@ public class PosOrderLineCommand {
     public void setName(String name) { this.name = name; }
     public UUID getUomId() { return uomId; }
     public void setUomId(UUID uomId) { this.uomId = uomId; }
+    public UUID getPackagingId() { return packagingId; }
+    public void setPackagingId(UUID packagingId) { this.packagingId = packagingId; }
     public BigDecimal getQuantity() { return quantity; }
     public void setQuantity(BigDecimal quantity) { this.quantity = quantity; }
     public BigDecimal getUnitPrice() { return unitPrice; }

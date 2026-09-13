@@ -71,17 +71,17 @@ public class Product extends ArchivableAggregateRoot<ProductId> {
     }
 
     public void validate() {
-        if (companyId == null) throw new InventoryDomainException("companyId required");
-        if (sku == null || sku.isBlank()) throw new InventoryDomainException("sku required");
-        if (name == null || name.isBlank()) throw new InventoryDomainException("name required");
-        if (productType == null) throw new InventoryDomainException("productType required");
-        if (uomId == null) throw new InventoryDomainException("uomId required");
-        if (categoryId == null) throw new InventoryDomainException("categoryId required");
+        if (companyId == null) throw new InventoryDomainException("error.inventory.companyIdRequired", null, "companyId required");
+        if (sku == null || sku.isBlank()) throw new InventoryDomainException("error.inventory.skuRequired", null, "sku required");
+        if (name == null || name.isBlank()) throw new InventoryDomainException("error.inventory.nameRequired", null, "name required");
+        if (productType == null) throw new InventoryDomainException("error.inventory.productTypeRequired", null, "productType required");
+        if (uomId == null) throw new InventoryDomainException("error.inventory.uomIdRequired", null, "uomId required");
+        if (categoryId == null) throw new InventoryDomainException("error.inventory.categoryIdRequired", null, "categoryId required");
         if (standardCost != null && standardCost.getAmount().signum() < 0) {
-            throw new InventoryDomainException("standardCost must be >= 0");
+            throw new InventoryDomainException("error.inventory.standardCostNonNegative", null, "standardCost must be >= 0");
         }
         if (listPrice != null && listPrice.getAmount().signum() < 0) {
-            throw new InventoryDomainException("listPrice must be >= 0");
+            throw new InventoryDomainException("error.inventory.listPriceNonNegative", null, "listPrice must be >= 0");
         }
     }
 
@@ -129,39 +129,48 @@ public class Product extends ArchivableAggregateRoot<ProductId> {
     }
 
     public void rename(String name) {
-        if (name == null || name.isBlank()) throw new InventoryDomainException("name required");
+        if (name == null || name.isBlank()) throw new InventoryDomainException("error.inventory.nameRequired", null, "name required");
         this.name = name;
     }
 
     public void changeSku(String sku) {
-        if (sku == null || sku.isBlank()) throw new InventoryDomainException("sku required");
+        if (sku == null || sku.isBlank()) throw new InventoryDomainException("error.inventory.skuRequired", null, "sku required");
         this.sku = sku;
     }
 
     public void changeDescription(String description) { this.description = description; }
-    public void changeBarcode(String barcode) { this.barcode = barcode; }
+    public void changeBarcode(String barcode) {
+        this.barcode = normalizeBarcode(barcode);
+    }
+
+    /** Blank barcodes are stored as null so unique indexes allow multiple empty values. */
+    public static String normalizeBarcode(String barcode) {
+        if (barcode == null) return null;
+        String trimmed = barcode.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
     public void changeCategory(ProductCategoryId categoryId) {
-        if (categoryId == null) throw new InventoryDomainException("categoryId required");
+        if (categoryId == null) throw new InventoryDomainException("error.inventory.categoryIdRequired", null, "categoryId required");
         this.categoryId = categoryId;
     }
     public void changeProductType(ProductType type) {
-        if (type == null) throw new InventoryDomainException("productType required");
+        if (type == null) throw new InventoryDomainException("error.inventory.productTypeRequired", null, "productType required");
         this.productType = type;
     }
     public void changeUom(UomId uomId) {
-        if (uomId == null) throw new InventoryDomainException("uomId required");
+        if (uomId == null) throw new InventoryDomainException("error.inventory.uomIdRequired", null, "uomId required");
         this.uomId = uomId;
     }
     public void changePurchaseUom(UomId purchaseUomId) { this.purchaseUomId = purchaseUomId; }
     public void changeStandardCost(Money cost) {
         if (cost == null || cost.getAmount().signum() < 0) {
-            throw new InventoryDomainException("standardCost must be >= 0");
+            throw new InventoryDomainException("error.inventory.standardCostNonNegative", null, "standardCost must be >= 0");
         }
         this.standardCost = cost;
     }
     public void changeListPrice(Money price) {
         if (price == null || price.getAmount().signum() < 0) {
-            throw new InventoryDomainException("listPrice must be >= 0");
+            throw new InventoryDomainException("error.inventory.listPriceNonNegative", null, "listPrice must be >= 0");
         }
         this.listPrice = price;
     }

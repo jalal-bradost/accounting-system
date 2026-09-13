@@ -72,6 +72,9 @@ public class SalesOrderDataAccessMapper {
         line.setProductId(e.getProductId());
         line.setName(e.getName());
         line.setUomId(e.getUomId());
+        line.setPackagingId(e.getPackagingId());
+        line.setPackagingName(e.getPackagingName());
+        line.setQtyPerPackage(e.getQtyPerPackage());
         line.setQtyOrdered(e.getQtyOrdered());
         line.setQtyDelivered(e.getQtyDelivered());
         line.setQtyInvoiced(e.getQtyInvoiced());
@@ -150,6 +153,9 @@ public class SalesOrderDataAccessMapper {
             lineEntity.setProductId(line.getProductId());
             lineEntity.setName(line.getName());
             lineEntity.setUomId(line.getUomId());
+            lineEntity.setPackagingId(line.getPackagingId());
+            lineEntity.setPackagingName(line.getPackagingName());
+            lineEntity.setQtyPerPackage(line.getQtyPerPackage());
             lineEntity.setQtyOrdered(line.getQtyOrdered());
             lineEntity.setQtyDelivered(line.getQtyDelivered());
             lineEntity.setQtyInvoiced(line.getQtyInvoiced());

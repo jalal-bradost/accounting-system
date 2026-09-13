@@ -18,6 +18,8 @@ public class SalesOrderLineCommand {
     private String name;
     @NotNull
     private UUID uomId;
+    /** Optional packaging; when set, qty is in packages and snapshot is stored on the line. */
+    private UUID packagingId;
     @NotNull
     @Positive
     private BigDecimal qtyOrdered;
@@ -34,6 +36,8 @@ public class SalesOrderLineCommand {
     public void setName(String name) { this.name = name; }
     public UUID getUomId() { return uomId; }
     public void setUomId(UUID uomId) { this.uomId = uomId; }
+    public UUID getPackagingId() { return packagingId; }
+    public void setPackagingId(UUID packagingId) { this.packagingId = packagingId; }
     public BigDecimal getQtyOrdered() { return qtyOrdered; }
     public void setQtyOrdered(BigDecimal qtyOrdered) { this.qtyOrdered = qtyOrdered; }
     public BigDecimal getUnitPrice() { return unitPrice; }

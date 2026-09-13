@@ -1,8 +1,10 @@
 package com.jalaldeveloper.accountingsystem.sales.service.domain;
 
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.Product;
+import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.ProductPackaging;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductId;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductType;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.UomApplicationService;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.StockMoveSalesQueryPort;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.ProductRepository;
 import com.jalaldeveloper.accountingsystem.sales.domain.core.SalInvoicePolicy;
@@ -36,15 +38,18 @@ public class SalesOrderQtyWriter {
     private final SalesOrderRepository salesOrderRepository;
     private final StockMoveSalesQueryPort stockMoveSalesQueryPort;
     private final ProductRepository productRepository;
+    private final UomApplicationService uomApplicationService;
     private final TransactionTemplate requiresNew;
 
     public SalesOrderQtyWriter(SalesOrderRepository salesOrderRepository,
                                StockMoveSalesQueryPort stockMoveSalesQueryPort,
                                ProductRepository productRepository,
+                               UomApplicationService uomApplicationService,
                                PlatformTransactionManager transactionManager) {
         this.salesOrderRepository = salesOrderRepository;
         this.stockMoveSalesQueryPort = stockMoveSalesQueryPort;
         this.productRepository = productRepository;
+        this.uomApplicationService = uomApplicationService;
         this.requiresNew = new TransactionTemplate(transactionManager);
         this.requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -72,8 +77,8 @@ public class SalesOrderQtyWriter {
         }
         Instant now = Instant.now();
         for (SalesOrderLine line : o.getLines()) {
-            BigDecimal sum = stockMoveSalesQueryPort.sumPickedQuantityForSalesOrderLine(line.getId());
-            line.setQtyDelivered(sum.setScale(4, RoundingMode.HALF_UP));
+            BigDecimal sumBase = stockMoveSalesQueryPort.sumPickedQuantityForSalesOrderLine(line.getId());
+            line.setQtyDelivered(toDocumentQty(line, sumBase).setScale(4, RoundingMode.HALF_UP));
             line.setUpdatedAt(now);
         }
         boolean allDelivered = o.getLines().stream().allMatch(l -> {
@@ -176,6 +181,25 @@ public class SalesOrderQtyWriter {
         } else {
             o.setInvoiceStatus(SalesOrderInvoiceStatus.NOTHING);
         }
+    }
+
+    /** Convert picked base-UOM quantity into the document line unit (packaging or line UOM). */
+    private BigDecimal toDocumentQty(SalesOrderLine line, BigDecimal baseQty) {
+        if (baseQty == null) {
+            return BigDecimal.ZERO;
+        }
+        if (line.getQtyPerPackage() != null && line.getQtyPerPackage().signum() > 0) {
+            return ProductPackaging.fromBaseQty(baseQty, line.getQtyPerPackage());
+        }
+        Optional<Product> product = productRepository.findById(new ProductId(line.getProductId()));
+        if (product.isEmpty() || line.getUomId() == null) {
+            return baseQty;
+        }
+        UUID stockUom = product.get().getUomId().getId();
+        if (stockUom.equals(line.getUomId())) {
+            return baseQty;
+        }
+        return uomApplicationService.convert(stockUom, line.getUomId(), baseQty);
     }
 
     private <T> T retry(java.util.function.Supplier<T> action) {

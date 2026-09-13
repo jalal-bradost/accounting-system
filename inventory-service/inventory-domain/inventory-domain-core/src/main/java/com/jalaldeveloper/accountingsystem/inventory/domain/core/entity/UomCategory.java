@@ -26,12 +26,12 @@ public class UomCategory extends ArchivableAggregateRoot<UomCategoryId> {
     }
 
     public void validate() {
-        if (companyId == null) throw new InventoryDomainException("companyId required");
-        if (name == null || name.isBlank()) throw new InventoryDomainException("name required");
+        if (companyId == null) throw new InventoryDomainException("error.inventory.companyIdRequired", null, "companyId required");
+        if (name == null || name.isBlank()) throw new InventoryDomainException("error.inventory.nameRequired", null, "name required");
     }
 
     public void rename(String name) {
-        if (name == null || name.isBlank()) throw new InventoryDomainException("name required");
+        if (name == null || name.isBlank()) throw new InventoryDomainException("error.inventory.nameRequired", null, "name required");
         this.name = name;
     }
 

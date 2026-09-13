@@ -17,11 +17,13 @@ import com.jalaldeveloper.accountingsystem.domain.core.ValueObject.JournalType;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.Product;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.ProductCategory;
+import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.ProductPackaging;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.StockLocation;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.Warehouse;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.LocationType;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.PickingType;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductId;
+import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductPackagingId;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductType;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.WarehouseId;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.CreateStockPickingCommand;
@@ -32,6 +34,7 @@ import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.UomApplicationService;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.StockMovePurchaseQueryPort;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.ProductCategoryRepository;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.ProductPackagingRepository;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.ProductRepository;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.StockLocationRepository;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.WarehouseRepository;
@@ -99,6 +102,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     private final VendorPaymentRepository vendorPaymentRepository;
     private final PartnerApplicationService partnerApplicationService;
     private final ProductRepository productRepository;
+    private final ProductPackagingRepository productPackagingRepository;
     private final ProductCategoryRepository categoryRepository;
     private final WarehouseRepository warehouseRepository;
     private final StockLocationRepository stockLocationRepository;
@@ -120,6 +124,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                                           VendorPaymentRepository vendorPaymentRepository,
                                           PartnerApplicationService partnerApplicationService,
                                           ProductRepository productRepository,
+                                          ProductPackagingRepository productPackagingRepository,
                                           ProductCategoryRepository categoryRepository,
                                           WarehouseRepository warehouseRepository,
                                           StockLocationRepository stockLocationRepository,
@@ -140,6 +145,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         this.vendorPaymentRepository = vendorPaymentRepository;
         this.partnerApplicationService = partnerApplicationService;
         this.productRepository = productRepository;
+        this.productPackagingRepository = productPackagingRepository;
         this.categoryRepository = categoryRepository;
         this.warehouseRepository = warehouseRepository;
         this.stockLocationRepository = stockLocationRepository;
@@ -178,7 +184,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     private UUID resolveLiquidityAccountForPaymentJournal(UUID companyId, UUID journalId) {
         JournalType journalType = accountingReferenceLookupPort.resolveJournalType(companyId, journalId);
         if (journalType != JournalType.CASH && journalType != JournalType.BANK) {
-            throw new PurchaseDomainException("Payment journal must be cash or bank");
+            throw new PurchaseDomainException("error.purchase.paymentJournalCashOrBank", null, "Payment journal must be cash or bank");
         }
         return accountingReferenceLookupPort.resolveLiquidityAccountIdForJournal(companyId, journalId);
     }
@@ -189,10 +195,12 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         UUID companyId = companyIdOrDefault(command.getCompanyId());
         PartnerResponse vendor = partnerApplicationService.getPartner(command.getVendorPartnerId());
         if (!vendor.isVendor()) {
-            throw new PurchaseDomainException("Partner is not a vendor");
+            throw new PurchaseDomainException(
+                    "error.purchase.partnerNotVendor", null, "Partner is not a vendor");
         }
         if (!vendor.getCompanyId().equals(companyId)) {
-            throw new PurchaseDomainException("Vendor belongs to another company");
+            throw new PurchaseDomainException(
+                    "error.purchase.vendorCompanyMismatch", null, "Vendor belongs to another company");
         }
         Instant now = Instant.now();
         PurchaseOrder o = new PurchaseOrder();
@@ -203,7 +211,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 ? command.getName()
                 : "PO-" + o.getId().toString().substring(0, 8).toUpperCase(Locale.ROOT));
         if (purchaseOrderRepository.findByCompanyIdAndName(companyId, o.getName()).isPresent()) {
-            throw new PurchaseDomainException("Purchase order name already exists: " + o.getName());
+            throw new PurchaseDomainException("error.purchase.orderNameExists", new Object[] { o.getName() }, "Purchase order name already exists: " + o.getName());
         }
         o.setState(PurchaseOrderState.DRAFT);
         o.setCurrencyCode(command.getCurrencyCode());
@@ -229,6 +237,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             line.setName(lc.getName());
             line.setUomId(lc.getUomId());
             line.setWarehouseId(lc.getWarehouseId());
+            applyPackagingSnapshot(line, lc.getPackagingId());
             line.setQtyOrdered(lc.getQtyOrdered());
             line.setQtyReceived(BigDecimal.ZERO);
             line.setQtyInvoiced(BigDecimal.ZERO);
@@ -242,10 +251,10 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 FiscalTax tax = fiscalTaxRepository.findById(taxId)
                         .orElseThrow(() -> new PurchaseDomainException("Tax not found: " + taxId));
                 if (!tax.getCompanyId().equals(companyId) || !tax.isActive()) {
-                    throw new PurchaseDomainException("Invalid tax: " + taxId);
+                    throw new PurchaseDomainException("error.purchase.invalidTax", new Object[] { taxId }, "Invalid tax: " + taxId);
                 }
                 if (tax.getScope() != FiscalTaxScope.PURCHASE && tax.getScope() != FiscalTaxScope.BOTH) {
-                    throw new PurchaseDomainException("Tax scope not valid for purchase: " + taxId);
+                    throw new PurchaseDomainException("error.purchase.invalidTaxScope", new Object[] { taxId }, "Tax scope not valid for purchase: " + taxId);
                 }
                 PurchaseOrderLineTax lt = new PurchaseOrderLineTax();
                 lt.setId(UUID.randomUUID());
@@ -393,19 +402,19 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         PurchaseOrderRules.ensureCanConfirm(o.getState());
         UUID warehouseId = o.getWarehouseId();
         if (warehouseId == null) {
-            throw new PurchaseDomainException("warehouseId is required to confirm a purchase order");
+            throw new PurchaseDomainException("error.purchase.warehouseIdRequiredToConfirm", null, "warehouseId is required to confirm a purchase order");
         }
         Warehouse wh = warehouseRepository.findById(new WarehouseId(warehouseId))
                 .orElseThrow(() -> new PurchaseDomainException("Warehouse not found: " + warehouseId));
         if (!wh.getCompanyId().getId().equals(o.getCompanyId())) {
-            throw new PurchaseDomainException("Warehouse company mismatch");
+            throw new PurchaseDomainException("error.purchase.warehouseCompanyMismatch", null, "Warehouse company mismatch");
         }
         StockLocation supplier = findSupplierVirtual(o.getCompanyId());
         UUID destLoc = o.getDestLocationId() != null
                 ? o.getDestLocationId()
                 : wh.getStockLocationId() != null ? wh.getStockLocationId().getId() : null;
         if (destLoc == null) {
-            throw new PurchaseDomainException("Destination stock location could not be resolved");
+            throw new PurchaseDomainException("error.purchase.destinationStockLocationUnresolved", null, "Destination stock location could not be resolved");
         }
 
         BigDecimal rateToCompany = resolveExchangeRate(
@@ -420,15 +429,22 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 continue;
             }
             if (!product.isPurchaseOk()) {
-                throw new PurchaseDomainException("Product is not purchasable: " + line.getProductId());
+                throw new PurchaseDomainException("error.purchase.productNotPurchasable", new Object[] { line.getProductId() }, "Product is not purchasable: " + line.getProductId());
             }
             BigDecimal remaining = line.getQtyOrdered().subtract(line.getQtyReceived());
             if (remaining.signum() <= 0) {
                 continue;
             }
             UUID stockUom = product.getUomId().getId();
-            BigDecimal demandStockUom = uomApplicationService.convert(line.getUomId(), stockUom, remaining);
-            BigDecimal oneInStockUom = uomApplicationService.convert(line.getUomId(), stockUom, BigDecimal.ONE);
+            BigDecimal demandStockUom;
+            BigDecimal oneInStockUom;
+            if (line.getQtyPerPackage() != null && line.getQtyPerPackage().signum() > 0) {
+                demandStockUom = ProductPackaging.toBaseQty(remaining, line.getQtyPerPackage());
+                oneInStockUom = line.getQtyPerPackage();
+            } else {
+                demandStockUom = uomApplicationService.convert(line.getUomId(), stockUom, remaining);
+                oneInStockUom = uomApplicationService.convert(line.getUomId(), stockUom, BigDecimal.ONE);
+            }
             BigDecimal lineNetOne = PurchaseOrderRules.lineNet(BigDecimal.ONE, line.getUnitPrice(), line.getDiscountPercent());
             BigDecimal unitCostDoc = oneInStockUom.signum() > 0
                     ? lineNetOne.divide(oneInStockUom, 8, RoundingMode.HALF_UP)
@@ -480,10 +496,10 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         if (o.getState() == PurchaseOrderState.CONFIRMED) {
             if (vendorBillRepository.findByPurchaseOrderId(o.getId()).stream()
                     .anyMatch(b -> b.getState() == VendorBillState.POSTED)) {
-                throw new PurchaseDomainException("Cannot cancel: posted vendor bills exist for this order");
+                throw new PurchaseDomainException("error.purchase.cannotCancelPostedVendorBills", null, "Cannot cancel: posted vendor bills exist for this order");
             }
             if (stockMovePurchaseQueryPort.existsNonTerminalPickingForPurchaseOrder(o.getId())) {
-                throw new PurchaseDomainException("Cannot cancel: open pickings exist (confirm/cancel pickings first)");
+                throw new PurchaseDomainException("error.purchase.cannotCancelOpenPickings", null, "Cannot cancel: open pickings exist (confirm/cancel pickings first)");
             }
         }
         o.setState(PurchaseOrderState.CANCELLED);
@@ -580,13 +596,13 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         UUID companyId = companyIdOrDefault(command.getCompanyId());
         PurchaseOrder po = loadOrder(command.getPurchaseOrderId());
         if (!po.getCompanyId().equals(companyId)) {
-            throw new PurchaseDomainException("Purchase order company mismatch");
+            throw new PurchaseDomainException("error.purchase.orderCompanyMismatch", null, "Purchase order company mismatch");
         }
         if (po.getState() == PurchaseOrderState.CANCELLED) {
-            throw new PurchaseDomainException("Cannot bill a cancelled purchase order");
+            throw new PurchaseDomainException("error.purchase.cannotBillCancelledOrder", null, "Cannot bill a cancelled purchase order");
         }
         if (po.getState() != PurchaseOrderState.CONFIRMED) {
-            throw new PurchaseDomainException("Purchase order must be confirmed before billing");
+            throw new PurchaseDomainException("error.purchase.orderMustBeConfirmedBeforeBilling", null, "Purchase order must be confirmed before billing");
         }
         PurchaseOrder synced = purchaseOrderQtyWriter.updateQtyReceived(po.getId());
         if (synced != null) {
@@ -737,7 +753,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         BigDecimal credited = sumPostedCreditNotesForBill(bill.getId(), billCurrency);
         BigDecimal outstanding = billTotal.subtract(paid).subtract(credited).setScale(4, RoundingMode.HALF_UP);
         if (outstanding.signum() <= 0) {
-            throw new PurchaseDomainException("Vendor bill is already fully paid");
+            throw new PurchaseDomainException("error.purchase.vendorBillFullyPaid", null, "Vendor bill is already fully paid");
         }
         if (!billCurrency.equalsIgnoreCase(paymentCurrency)) {
             return;
@@ -756,7 +772,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         if (cat != null && cat.getStockInputAccountId() != null) {
             return cat.getStockInputAccountId();
         }
-        throw new PurchaseDomainException("Product category has no stock input account");
+        throw new PurchaseDomainException("error.purchase.categoryNoStockInputAccount", null, "Product category has no stock input account");
     }
 
     private UUID resolveExpenseAccount(Product product) {
@@ -776,13 +792,13 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 .orElseThrow(() -> new PurchaseDomainException("Vendor bill not found: " + billId));
         UUID companyId = companyIdOrDefault(command.getCompanyId());
         if (!source.getCompanyId().equals(companyId)) {
-            throw new PurchaseDomainException("Bill company mismatch");
+            throw new PurchaseDomainException("error.purchase.billCompanyMismatch", null, "Bill company mismatch");
         }
         if (source.getState() != VendorBillState.POSTED) {
-            throw new PurchaseDomainException("Only posted vendor bills can be credited");
+            throw new PurchaseDomainException("error.purchase.onlyPostedBillCanBeCredited", null, "Only posted vendor bills can be credited");
         }
         if (source.getMoveType() == VendorBillMoveType.CREDIT_NOTE) {
-            throw new PurchaseDomainException("Cannot create a credit note from another credit note");
+            throw new PurchaseDomainException("error.purchase.cannotCreditNoteFromCreditNote", null, "Cannot create a credit note from another credit note");
         }
         source.getLines().size();
         for (VendorBillLine line : source.getLines()) {
@@ -867,7 +883,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             cn.getLines().add(line);
         }
         if (cn.getLines().isEmpty()) {
-            throw new PurchaseDomainException("Credit note has no lines");
+            throw new PurchaseDomainException("error.purchase.creditNoteNoLines", null, "Credit note has no lines");
         }
         return toBillResponse(vendorBillRepository.save(cn));
     }
@@ -881,7 +897,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             return toBillResponse(bill);
         }
         if (bill.getState() == VendorBillState.CANCELLED) {
-            throw new PurchaseDomainException("Cannot post a cancelled bill");
+            throw new PurchaseDomainException("error.purchase.cannotPostCancelledBill", null, "Cannot post a cancelled bill");
         }
         PartnerResponse vendor = partnerApplicationService.getPartner(bill.getVendorPartnerId());
         UUID payableAccount = vendor.getPayableAccountId() != null
@@ -1000,7 +1016,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 .orElseThrow(() -> new PurchaseDomainException("Vendor bill not found"));
         UUID cid = companyContextProvider.getObject().requireCompany().getId();
         if (!bill.getCompanyId().equals(cid)) {
-            throw new PurchaseDomainException("Vendor bill not found");
+            throw new PurchaseDomainException("error.purchase.vendorBillNotFound", null, "Vendor bill not found");
         }
         bill.getLines().size();
         for (VendorBillLine line : bill.getLines()) {
@@ -1035,14 +1051,15 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                                                             LocalDate to) {
         UUID cid = companyIdOrDefault(companyId);
         if (to.isBefore(from)) {
-            throw new PurchaseDomainException("Statement end date must be on or after start date");
+            throw new PurchaseDomainException("error.purchase.statementEndOnOrAfterStart", null, "Statement end date must be on or after start date");
         }
         PartnerResponse partner = partnerApplicationService.getPartner(partnerId);
         if (!partner.getCompanyId().equals(cid)) {
-            throw new PurchaseDomainException("Partner belongs to another company");
+            throw new PurchaseDomainException("error.purchase.partnerCompanyMismatch", null, "Partner belongs to another company");
         }
         if (!partner.isVendor()) {
-            throw new PurchaseDomainException("Partner is not a vendor");
+            throw new PurchaseDomainException(
+                    "error.purchase.partnerNotVendor", null, "Partner is not a vendor");
         }
         return buildPayableSections(cid, partnerId, from, to);
     }
@@ -1208,13 +1225,13 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         VendorBill bill = vendorBillRepository.findById(command.getVendorBillId())
                 .orElseThrow(() -> new PurchaseDomainException("Vendor bill not found"));
         if (!bill.getCompanyId().equals(companyId)) {
-            throw new PurchaseDomainException("Bill company mismatch");
+            throw new PurchaseDomainException("error.purchase.billCompanyMismatch", null, "Bill company mismatch");
         }
         if (bill.getState() != VendorBillState.POSTED || bill.getJournalEntryId() == null) {
-            throw new PurchaseDomainException("Bill must be posted before payment");
+            throw new PurchaseDomainException("error.purchase.billMustBePostedBeforePayment", null, "Bill must be posted before payment");
         }
         if (bill.getMoveType() == VendorBillMoveType.CREDIT_NOTE) {
-            throw new PurchaseDomainException("Cannot register payment against a credit note");
+            throw new PurchaseDomainException("error.purchase.cannotPayCreditNote", null, "Cannot register payment against a credit note");
         }
         String paymentCurrency = command.getCurrencyCode() != null ? command.getCurrencyCode() : bill.getCurrencyCode();
         BigDecimal docAmt = command.getAmount().setScale(4, RoundingMode.HALF_UP);
@@ -1393,6 +1410,9 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             lr.setName(l.getName());
             lr.setUomId(l.getUomId());
             lr.setWarehouseId(l.getWarehouseId());
+            lr.setPackagingId(l.getPackagingId());
+            lr.setPackagingName(l.getPackagingName());
+            lr.setQtyPerPackage(l.getQtyPerPackage());
             lr.setQtyOrdered(l.getQtyOrdered());
             lr.setQtyReceived(l.getQtyReceived());
             lr.setQtyInvoiced(l.getQtyInvoiced());
@@ -1549,5 +1569,34 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             items.add(new JournalItemCommand(lossAccount, "Exchange loss", fxDiff.abs(), BigDecimal.ZERO,
                     null, null, null));
         }
+    }
+
+    private void applyPackagingSnapshot(PurchaseOrderLine line, UUID packagingId) {
+        if (packagingId == null) {
+            line.setPackagingId(null);
+            line.setPackagingName(null);
+            line.setQtyPerPackage(null);
+            return;
+        }
+        ProductPackaging packaging = productPackagingRepository.findById(new ProductPackagingId(packagingId))
+                .orElseThrow(() -> new PurchaseDomainException(
+                        "error.inventory.packagingNotFound",
+                        new Object[]{packagingId},
+                        "Packaging not found: " + packagingId));
+        if (!packaging.getProductId().getId().equals(line.getProductId())) {
+            throw new PurchaseDomainException(
+                    "error.inventory.packagingProductMismatch",
+                    null,
+                    "Packaging does not belong to this product");
+        }
+        if (!packaging.isActive()) {
+            throw new PurchaseDomainException(
+                    "error.inventory.packagingInactive",
+                    new Object[]{packaging.getName()},
+                    "Packaging is inactive: " + packaging.getName());
+        }
+        line.setPackagingId(packaging.getId().getId());
+        line.setPackagingName(packaging.getName());
+        line.setQtyPerPackage(packaging.getQty());
     }
 }

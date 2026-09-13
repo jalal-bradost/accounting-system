@@ -42,19 +42,19 @@ public class ProductCategory extends ArchivableAggregateRoot<ProductCategoryId> 
     }
 
     public void validate() {
-        if (companyId == null) throw new InventoryDomainException("companyId required");
-        if (name == null || name.isBlank()) throw new InventoryDomainException("name required");
-        if (valuationMethod == null) throw new InventoryDomainException("valuationMethod required");
+        if (companyId == null) throw new InventoryDomainException("error.inventory.companyIdRequired", null, "companyId required");
+        if (name == null || name.isBlank()) throw new InventoryDomainException("error.inventory.nameRequired", null, "name required");
+        if (valuationMethod == null) throw new InventoryDomainException("error.inventory.valuationMethodRequired", null, "valuationMethod required");
     }
 
     public void rename(String name) {
-        if (name == null || name.isBlank()) throw new InventoryDomainException("name required");
+        if (name == null || name.isBlank()) throw new InventoryDomainException("error.inventory.nameRequired", null, "name required");
         this.name = name;
     }
 
     public void changeParent(ProductCategoryId parentId) { this.parentId = parentId; }
     public void changeValuationMethod(ValuationMethod method) {
-        if (method == null) throw new InventoryDomainException("valuationMethod required");
+        if (method == null) throw new InventoryDomainException("error.inventory.valuationMethodRequired", null, "valuationMethod required");
         this.valuationMethod = method;
     }
     public void changeAccounts(UUID stockValuationAccountId,

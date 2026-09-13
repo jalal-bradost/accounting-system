@@ -36,13 +36,13 @@ public class Warehouse extends ArchivableAggregateRoot<WarehouseId> {
     }
 
     public void validate() {
-        if (companyId == null) throw new InventoryDomainException("companyId required");
-        if (code == null || code.isBlank()) throw new InventoryDomainException("warehouse code required");
-        if (name == null || name.isBlank()) throw new InventoryDomainException("warehouse name required");
+        if (companyId == null) throw new InventoryDomainException("error.inventory.companyIdRequired", null, "companyId required");
+        if (code == null || code.isBlank()) throw new InventoryDomainException("error.inventory.warehouseCodeRequired", null, "warehouse code required");
+        if (name == null || name.isBlank()) throw new InventoryDomainException("error.inventory.warehouseNameRequired", null, "warehouse name required");
     }
 
     public void rename(String name) {
-        if (name == null || name.isBlank()) throw new InventoryDomainException("warehouse name required");
+        if (name == null || name.isBlank()) throw new InventoryDomainException("error.inventory.warehouseNameRequired", null, "warehouse name required");
         this.name = name;
     }
 

@@ -29,4 +29,37 @@ public interface ProductJpaRepository extends JpaRepository<ProductEntity, UUID>
                                 Pageable pageable);
 
     boolean existsByCategoryId(UUID categoryId);
+
+    @Query("""
+        SELECT p FROM ProductEntity p
+        WHERE p.companyId = :companyId
+          AND p.active = TRUE
+          AND p.barcode IS NOT NULL
+          AND LOWER(TRIM(p.barcode)) = LOWER(TRIM(:barcode))
+        """)
+    java.util.Optional<ProductEntity> findActiveByCompanyIdAndBarcode(
+            @Param("companyId") UUID companyId,
+            @Param("barcode") String barcode);
+
+    @Query("""
+        SELECT p FROM ProductEntity p
+        WHERE p.companyId = :companyId
+          AND p.active = TRUE
+          AND LOWER(TRIM(p.sku)) = LOWER(TRIM(:sku))
+        """)
+    java.util.Optional<ProductEntity> findActiveByCompanyIdAndSku(
+            @Param("companyId") UUID companyId,
+            @Param("sku") String sku);
+
+    @Query("""
+        SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END FROM ProductEntity p
+        WHERE p.companyId = :companyId
+          AND p.barcode IS NOT NULL
+          AND LOWER(TRIM(p.barcode)) = LOWER(TRIM(:barcode))
+          AND (:excludeId IS NULL OR p.id <> :excludeId)
+        """)
+    boolean existsByCompanyIdAndBarcodeExcludingId(
+            @Param("companyId") UUID companyId,
+            @Param("barcode") String barcode,
+            @Param("excludeId") UUID excludeId);
 }

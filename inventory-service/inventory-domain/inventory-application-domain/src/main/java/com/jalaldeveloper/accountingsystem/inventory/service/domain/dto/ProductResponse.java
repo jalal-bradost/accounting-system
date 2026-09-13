@@ -32,6 +32,7 @@ public class ProductResponse {
     private Instant archivedAt;
     private String imageUrl;
     private String imageContentType;
+    private java.util.List<ProductPackagingResponse> packagings = new java.util.ArrayList<>();
 
     public UUID getId() { return id; }
     public void setId(UUID v) { this.id = v; }
@@ -79,4 +80,8 @@ public class ProductResponse {
     public void setImageUrl(String v) { this.imageUrl = v; }
     public String getImageContentType() { return imageContentType; }
     public void setImageContentType(String v) { this.imageContentType = v; }
+    public java.util.List<ProductPackagingResponse> getPackagings() { return packagings; }
+    public void setPackagings(java.util.List<ProductPackagingResponse> packagings) {
+        this.packagings = packagings != null ? packagings : new java.util.ArrayList<>();
+    }
 }

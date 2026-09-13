@@ -147,6 +147,9 @@ public class PosDataAccessMapper {
         d.setProductId(e.getProductId());
         d.setName(e.getName());
         d.setUomId(e.getUomId());
+        d.setPackagingId(e.getPackagingId());
+        d.setPackagingName(e.getPackagingName());
+        d.setQtyPerPackage(e.getQtyPerPackage());
         d.setQuantity(e.getQuantity());
         d.setUnitPrice(e.getUnitPrice());
         d.setDiscountPercent(e.getDiscountPercent());
@@ -166,6 +169,9 @@ public class PosDataAccessMapper {
         e.setProductId(d.getProductId());
         e.setName(d.getName());
         e.setUomId(d.getUomId());
+        e.setPackagingId(d.getPackagingId());
+        e.setPackagingName(d.getPackagingName());
+        e.setQtyPerPackage(d.getQtyPerPackage());
         e.setQuantity(d.getQuantity());
         e.setUnitPrice(d.getUnitPrice());
         e.setDiscountPercent(d.getDiscountPercent());

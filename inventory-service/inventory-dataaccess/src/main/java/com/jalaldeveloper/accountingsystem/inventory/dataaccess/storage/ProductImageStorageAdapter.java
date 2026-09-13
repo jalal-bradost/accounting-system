@@ -55,26 +55,26 @@ public class ProductImageStorageAdapter implements ProductImageStoragePort {
     @Override
     public StoredImage store(UUID companyId, UUID productId, String contentType, long size, InputStream content) {
         if (companyId == null || productId == null) {
-            throw new InventoryDomainException("companyId and productId required for image storage");
+            throw new InventoryDomainException("error.inventory.imageStorageIdsRequired", null, "companyId and productId required for image storage");
         }
         String normalized = normalizeContentType(contentType);
         if (!ALLOWED.contains(normalized)) {
-            throw new InventoryDomainException("Unsupported image type: " + contentType);
+            throw new InventoryDomainException("error.inventory.unsupportedImageType", new Object[] { contentType }, "Unsupported image type: " + contentType);
         }
         if (size <= 0 || size > maxBytes) {
-            throw new InventoryDomainException("Image must be between 1 byte and " + maxBytes + " bytes");
+            throw new InventoryDomainException("error.inventory.imageSizeRange", new Object[] { maxBytes }, "Image must be between 1 byte and " + maxBytes + " bytes");
         }
 
         String filename = companyId + "_" + productId + "_" + UUID.randomUUID() + EXT.get(normalized);
         Path target = root.resolve(filename).normalize();
         if (!target.startsWith(root)) {
-            throw new InventoryDomainException("Invalid image path");
+            throw new InventoryDomainException("error.inventory.invalidImagePath", null, "Invalid image path");
         }
 
         try (InputStream in = content) {
             Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException ex) {
-            throw new InventoryDomainException("Failed to store product image: " + ex.getMessage());
+            throw new InventoryDomainException("error.inventory.failedStoreProductImage", new Object[] { ex.getMessage() }, "Failed to store product image: " + ex.getMessage());
         }
 
         long written = 0;
@@ -89,7 +89,7 @@ public class ProductImageStorageAdapter implements ProductImageStoragePort {
             } catch (IOException ignored) {
                 // best effort
             }
-            throw new InventoryDomainException("Image exceeds maximum size of " + maxBytes + " bytes");
+            throw new InventoryDomainException("error.inventory.imageExceedsMaxSize", new Object[] { maxBytes }, "Image exceeds maximum size of " + maxBytes + " bytes");
         }
 
         return new StoredImage(publicBasePath + "/" + filename, normalized);
@@ -102,7 +102,7 @@ public class ProductImageStorageAdapter implements ProductImageStoragePort {
             try {
                 Files.deleteIfExists(root.resolve(filename).normalize());
             } catch (IOException ex) {
-                throw new InventoryDomainException("Failed to delete product image: " + ex.getMessage());
+                throw new InventoryDomainException("error.inventory.failedDeleteProductImage", new Object[] { ex.getMessage() }, "Failed to delete product image: " + ex.getMessage());
             }
         });
     }

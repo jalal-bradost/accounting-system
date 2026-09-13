@@ -12,11 +12,13 @@ import com.jalaldeveloper.accountingsystem.contacts.service.domain.dto.PartnerRe
 import com.jalaldeveloper.accountingsystem.contacts.service.domain.ports.input.PartnerApplicationService;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.Product;
+import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.ProductPackaging;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.StockLocation;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.Warehouse;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.LocationType;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.PickingType;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductId;
+import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductPackagingId;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductType;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.WarehouseId;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.CreateStockPickingCommand;
@@ -26,6 +28,7 @@ import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.Validate
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.StockPickingApplicationService;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.UomApplicationService;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.StockMoveSalesQueryPort;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.ProductPackagingRepository;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.ProductRepository;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.StockLocationRepository;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.WarehouseRepository;
@@ -90,6 +93,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
     private final PricelistRepository pricelistRepository;
     private final PartnerApplicationService partnerApplicationService;
     private final ProductRepository productRepository;
+    private final ProductPackagingRepository productPackagingRepository;
     private final WarehouseRepository warehouseRepository;
     private final StockLocationRepository stockLocationRepository;
     private final UomApplicationService uomApplicationService;
@@ -106,6 +110,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
                                        PricelistRepository pricelistRepository,
                                        PartnerApplicationService partnerApplicationService,
                                        ProductRepository productRepository,
+                                       ProductPackagingRepository productPackagingRepository,
                                        WarehouseRepository warehouseRepository,
                                        StockLocationRepository stockLocationRepository,
                                        UomApplicationService uomApplicationService,
@@ -121,6 +126,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         this.pricelistRepository = pricelistRepository;
         this.partnerApplicationService = partnerApplicationService;
         this.productRepository = productRepository;
+        this.productPackagingRepository = productPackagingRepository;
         this.warehouseRepository = warehouseRepository;
         this.stockLocationRepository = stockLocationRepository;
         this.uomApplicationService = uomApplicationService;
@@ -161,16 +167,17 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         UUID companyId = companyIdOrDefault(command.getCompanyId());
         PartnerResponse customer = partnerApplicationService.getPartner(command.getCustomerPartnerId());
         if (!customer.isCustomer()) {
-            throw new SalesDomainException("Partner is not a customer");
+            throw new SalesDomainException(
+                    "error.sales.partnerNotCustomer", null, "Partner is not a customer");
         }
         if (!customer.getCompanyId().equals(companyId)) {
-            throw new SalesDomainException("Customer belongs to another company");
+            throw new SalesDomainException("error.sales.customerCompanyMismatch", null, "Customer belongs to another company");
         }
         if (command.getPricelistId() != null) {
             Pricelist pl = pricelistRepository.findById(command.getPricelistId())
                     .orElseThrow(() -> new SalesDomainException("Pricelist not found"));
             if (!pl.getCompanyId().equals(companyId)) {
-                throw new SalesDomainException("Pricelist company mismatch");
+                throw new SalesDomainException("error.sales.pricelistCompanyMismatch", null, "Pricelist company mismatch");
             }
         }
         Instant now = Instant.now();
@@ -183,7 +190,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
                 ? command.getName()
                 : "SO-" + o.getId().toString().substring(0, 8).toUpperCase(Locale.ROOT));
         if (salesOrderRepository.findByCompanyIdAndName(companyId, o.getName()).isPresent()) {
-            throw new SalesDomainException("Sales order name already exists: " + o.getName());
+            throw new SalesDomainException("error.sales.orderNameExists", new Object[] { o.getName() }, "Sales order name already exists: " + o.getName());
         }
         o.setState(SalesOrderState.DRAFT);
         o.setDeliveryStatus(SalesOrderDeliveryStatus.PENDING);
@@ -206,7 +213,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
             Product product = productRepository.findById(new ProductId(lc.getProductId()))
                     .orElseThrow(() -> new SalesDomainException("Product not found: " + lc.getProductId()));
             if (!product.isSaleOk()) {
-                throw new SalesDomainException("Product is not salable: " + lc.getProductId());
+                throw new SalesDomainException("error.sales.productNotSalable", new Object[] { lc.getProductId() }, "Product is not salable: " + lc.getProductId());
             }
             BigDecimal unitPrice = resolveUnitPrice(companyId, o.getPricelistId(), lc.getProductId(),
                     lc.getQtyOrdered(), orderDate, lc.getUnitPrice(), product);
@@ -216,6 +223,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
             line.setProductId(lc.getProductId());
             line.setName(lc.getName());
             line.setUomId(lc.getUomId());
+            applyPackagingSnapshot(line, lc.getPackagingId());
             line.setQtyOrdered(lc.getQtyOrdered());
             line.setQtyDelivered(BigDecimal.ZERO);
             line.setQtyInvoiced(BigDecimal.ZERO);
@@ -230,10 +238,10 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
             for (UUID taxId : lc.getTaxIds()) {
                 FiscalTaxResponse tax = purchaseApplicationService.getFiscalTax(taxId);
                 if (!tax.getCompanyId().equals(companyId) || !tax.isActive()) {
-                    throw new SalesDomainException("Invalid tax: " + taxId);
+                    throw new SalesDomainException("error.sales.invalidTax", new Object[] { taxId }, "Invalid tax: " + taxId);
                 }
                 if (tax.getScope() != FiscalTaxScope.SALE && tax.getScope() != FiscalTaxScope.BOTH) {
-                    throw new SalesDomainException("Tax scope not valid for sale: " + taxId);
+                    throw new SalesDomainException("error.sales.invalidTaxScope", new Object[] { taxId }, "Tax scope not valid for sale: " + taxId);
                 }
                 SalesOrderLineTax lt = new SalesOrderLineTax();
                 lt.setId(UUID.randomUUID());
@@ -429,21 +437,22 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         recalcTotals(o);
         CreditStatusResponse credit = partnerApplicationService.creditStatus(o.getCustomerPartnerId());
         if (!credit.unlimited() && o.getAmountTotal().compareTo(credit.available()) > 0) {
-            throw new SalesDomainException("Credit limit exceeded for this order total");
+            throw new SalesDomainException(
+                    "error.sales.creditLimitExceeded", null, "Credit limit exceeded for this order total");
         }
         UUID warehouseId = o.getWarehouseId();
         if (warehouseId == null) {
-            throw new SalesDomainException("warehouseId is required to confirm a sales order");
+            throw new SalesDomainException("error.sales.warehouseIdRequiredToConfirm", null, "warehouseId is required to confirm a sales order");
         }
         Warehouse wh = warehouseRepository.findById(new WarehouseId(warehouseId))
                 .orElseThrow(() -> new SalesDomainException("Warehouse not found: " + warehouseId));
         if (!wh.getCompanyId().getId().equals(o.getCompanyId())) {
-            throw new SalesDomainException("Warehouse company mismatch");
+            throw new SalesDomainException("error.sales.warehouseCompanyMismatch", null, "Warehouse company mismatch");
         }
         StockLocation customerLoc = findCustomerVirtual(o.getCompanyId());
         UUID sourceLoc = wh.getStockLocationId() != null ? wh.getStockLocationId().getId() : null;
         if (sourceLoc == null) {
-            throw new SalesDomainException("Warehouse stock location could not be resolved");
+            throw new SalesDomainException("error.sales.warehouseStockLocationUnresolved", null, "Warehouse stock location could not be resolved");
         }
 
         List<StockMoveCommand> moves = new ArrayList<>();
@@ -458,8 +467,15 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
                 continue;
             }
             UUID stockUom = product.getUomId().getId();
-            BigDecimal demandStockUom = uomApplicationService.convert(line.getUomId(), stockUom, remaining);
-            BigDecimal oneInStockUom = uomApplicationService.convert(line.getUomId(), stockUom, BigDecimal.ONE);
+            BigDecimal demandStockUom;
+            BigDecimal oneInStockUom;
+            if (line.getQtyPerPackage() != null && line.getQtyPerPackage().signum() > 0) {
+                demandStockUom = ProductPackaging.toBaseQty(remaining, line.getQtyPerPackage());
+                oneInStockUom = line.getQtyPerPackage();
+            } else {
+                demandStockUom = uomApplicationService.convert(line.getUomId(), stockUom, remaining);
+                oneInStockUom = uomApplicationService.convert(line.getUomId(), stockUom, BigDecimal.ONE);
+            }
             BigDecimal lineNetOne = SalesOrderRules.lineNet(BigDecimal.ONE, line.getUnitPrice(), line.getDiscountPercent());
             BigDecimal unitCost = oneInStockUom.signum() > 0
                     ? lineNetOne.divide(oneInStockUom, 8, RoundingMode.HALF_UP)
@@ -521,10 +537,10 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         SalesOrderRules.ensureCanCancel(o.getState());
         if (o.getState() == SalesOrderState.CONFIRMED) {
             if (customerInvoiceApplicationService.hasPostedInvoiceForSalesOrder(o.getId())) {
-                throw new SalesDomainException("Cannot cancel: posted customer invoices exist for this order");
+                throw new SalesDomainException("error.sales.cannotCancelPostedInvoices", null, "Cannot cancel: posted customer invoices exist for this order");
             }
             if (stockMoveSalesQueryPort.existsNonTerminalPickingForSalesOrder(o.getId())) {
-                throw new SalesDomainException("Cannot cancel: open deliveries exist (finish or cancel pickings first)");
+                throw new SalesDomainException("error.sales.cannotCancelOpenDeliveries", null, "Cannot cancel: open deliveries exist (finish or cancel pickings first)");
             }
         }
         o.setState(SalesOrderState.CANCELLED);
@@ -647,13 +663,13 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         UUID companyId = companyIdOrDefault(command.getCompanyId());
         SalesOrder o = loadOrder(command.getSalesOrderId());
         if (!o.getCompanyId().equals(companyId)) {
-            throw new SalesDomainException("Sales order company mismatch");
+            throw new SalesDomainException("error.sales.orderCompanyMismatch", null, "Sales order company mismatch");
         }
         if (o.getState() == SalesOrderState.CANCELLED) {
-            throw new SalesDomainException("Cannot invoice a cancelled sales order");
+            throw new SalesDomainException("error.sales.cannotInvoiceCancelledOrder", null, "Cannot invoice a cancelled sales order");
         }
         if (o.getState() != SalesOrderState.CONFIRMED) {
-            throw new SalesDomainException("Sales order must be confirmed before invoicing");
+            throw new SalesDomainException("error.sales.orderMustBeConfirmedBeforeInvoicing", null, "Sales order must be confirmed before invoicing");
         }
         Map<UUID, BigDecimal> draftAllocated =
                 customerInvoiceApplicationService.draftAllocatedQtyBySalesOrderLine(o.getId());
@@ -701,13 +717,13 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         UUID companyId = companyIdOrDefault(command.getCompanyId());
         SalesOrder o = loadOrder(command.getSalesOrderId());
         if (!o.getCompanyId().equals(companyId)) {
-            throw new SalesDomainException("Sales order company mismatch");
+            throw new SalesDomainException("error.sales.orderCompanyMismatch", null, "Sales order company mismatch");
         }
         if (o.getState() == SalesOrderState.CANCELLED) {
-            throw new SalesDomainException("Cannot credit a cancelled sales order");
+            throw new SalesDomainException("error.sales.cannotCreditCancelledOrder", null, "Cannot credit a cancelled sales order");
         }
         if (o.getState() != SalesOrderState.CONFIRMED) {
-            throw new SalesDomainException("Sales order must be confirmed before creating a credit note");
+            throw new SalesDomainException("error.sales.orderMustBeConfirmedBeforeCreditNote", null, "Sales order must be confirmed before creating a credit note");
         }
 
         List<CustomerInvoiceResponse> postedInvoices =
@@ -729,7 +745,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
             UUID sourceInvoiceId = resolvedSourceInvoiceId;
             boolean onOrder = postedInvoices.stream().anyMatch(inv -> inv.getId().equals(sourceInvoiceId));
             if (!onOrder) {
-                throw new SalesDomainException("Source invoice does not belong to this sales order");
+                throw new SalesDomainException("error.sales.sourceInvoiceOrderMismatch", null, "Source invoice does not belong to this sales order");
             }
         }
 
@@ -826,6 +842,9 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
             lr.setProductId(l.getProductId());
             lr.setName(l.getName());
             lr.setUomId(l.getUomId());
+            lr.setPackagingId(l.getPackagingId());
+            lr.setPackagingName(l.getPackagingName());
+            lr.setQtyPerPackage(l.getQtyPerPackage());
             lr.setQtyOrdered(l.getQtyOrdered());
             lr.setQtyDelivered(l.getQtyDelivered());
             lr.setQtyInvoiced(l.getQtyInvoiced());
@@ -837,5 +856,34 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
             return lr;
         }).toList());
         return r;
+    }
+
+    private void applyPackagingSnapshot(SalesOrderLine line, UUID packagingId) {
+        if (packagingId == null) {
+            line.setPackagingId(null);
+            line.setPackagingName(null);
+            line.setQtyPerPackage(null);
+            return;
+        }
+        ProductPackaging packaging = productPackagingRepository.findById(new ProductPackagingId(packagingId))
+                .orElseThrow(() -> new SalesDomainException(
+                        "error.inventory.packagingNotFound",
+                        new Object[]{packagingId},
+                        "Packaging not found: " + packagingId));
+        if (!packaging.getProductId().getId().equals(line.getProductId())) {
+            throw new SalesDomainException(
+                    "error.inventory.packagingProductMismatch",
+                    null,
+                    "Packaging does not belong to this product");
+        }
+        if (!packaging.isActive()) {
+            throw new SalesDomainException(
+                    "error.inventory.packagingInactive",
+                    new Object[]{packaging.getName()},
+                    "Packaging is inactive: " + packaging.getName());
+        }
+        line.setPackagingId(packaging.getId().getId());
+        line.setPackagingName(packaging.getName());
+        line.setQtyPerPackage(packaging.getQty());
     }
 }

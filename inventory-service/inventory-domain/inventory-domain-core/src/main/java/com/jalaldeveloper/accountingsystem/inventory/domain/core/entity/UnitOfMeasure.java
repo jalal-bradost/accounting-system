@@ -44,28 +44,28 @@ public class UnitOfMeasure extends ArchivableAggregateRoot<UomId> {
     }
 
     public void validate() {
-        if (companyId == null) throw new InventoryDomainException("companyId required");
-        if (categoryId == null) throw new InventoryDomainException("uom categoryId required");
-        if (name == null || name.isBlank()) throw new InventoryDomainException("name required");
-        if (uomType == null) throw new InventoryDomainException("uomType required");
+        if (companyId == null) throw new InventoryDomainException("error.inventory.companyIdRequired", null, "companyId required");
+        if (categoryId == null) throw new InventoryDomainException("error.inventory.uomCategoryIdRequired", null, "uom categoryId required");
+        if (name == null || name.isBlank()) throw new InventoryDomainException("error.inventory.nameRequired", null, "name required");
+        if (uomType == null) throw new InventoryDomainException("error.inventory.uomTypeRequired", null, "uomType required");
         if (factor == null || factor.signum() <= 0) {
-            throw new InventoryDomainException("factor must be > 0");
+            throw new InventoryDomainException("error.inventory.uomFactorPositive", null, "factor must be > 0");
         }
         if (uomType == UomType.REFERENCE && factor.compareTo(BigDecimal.ONE) != 0) {
-            throw new InventoryDomainException("REFERENCE uom factor must be exactly 1");
+            throw new InventoryDomainException("error.inventory.referenceUomFactorOne", null, "REFERENCE uom factor must be exactly 1");
         }
         if (uomType == UomType.BIGGER && factor.compareTo(BigDecimal.ONE) <= 0) {
-            throw new InventoryDomainException("BIGGER uom factor must be > 1");
+            throw new InventoryDomainException("error.inventory.biggerUomFactorGtOne", null, "BIGGER uom factor must be > 1");
         }
         if (uomType == UomType.SMALLER && factor.compareTo(BigDecimal.ONE) >= 0) {
-            throw new InventoryDomainException("SMALLER uom factor must be < 1");
+            throw new InventoryDomainException("error.inventory.smallerUomFactorLtOne", null, "SMALLER uom factor must be < 1");
         }
     }
 
     /** Convert {@code qty} expressed in {@code this} unit to {@code target} unit. */
     public BigDecimal convertTo(BigDecimal qty, UnitOfMeasure target) {
         if (qty == null) return null;
-        if (target == null) throw new InventoryDomainException("target uom required");
+        if (target == null) throw new InventoryDomainException("error.inventory.targetUomRequired", null, "target uom required");
         if (!Objects.equals(this.categoryId, target.categoryId)) {
             throw new InventoryDomainException(
                     "Cannot convert between UoMs in different categories: " + this.name + " vs " + target.name);
@@ -82,13 +82,13 @@ public class UnitOfMeasure extends ArchivableAggregateRoot<UomId> {
     }
 
     public void rename(String name) {
-        if (name == null || name.isBlank()) throw new InventoryDomainException("name required");
+        if (name == null || name.isBlank()) throw new InventoryDomainException("error.inventory.nameRequired", null, "name required");
         this.name = name;
     }
 
     public void changeFactor(BigDecimal factor) {
         if (factor == null || factor.signum() <= 0) {
-            throw new InventoryDomainException("factor must be > 0");
+            throw new InventoryDomainException("error.inventory.uomFactorPositive", null, "factor must be > 0");
         }
         this.factor = factor;
         validate();
@@ -96,7 +96,7 @@ public class UnitOfMeasure extends ArchivableAggregateRoot<UomId> {
 
     public void changeRounding(int rounding) {
         if (rounding < 0 || rounding > CONVERSION_SCALE) {
-            throw new InventoryDomainException("rounding must be in [0," + CONVERSION_SCALE + "]");
+            throw new InventoryDomainException("error.inventory.roundingRange", new Object[] { CONVERSION_SCALE }, "rounding must be in [0," + CONVERSION_SCALE + "]");
         }
         this.rounding = rounding;
     }

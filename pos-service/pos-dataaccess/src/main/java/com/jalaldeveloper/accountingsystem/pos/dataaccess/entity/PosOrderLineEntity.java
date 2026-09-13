@@ -32,6 +32,12 @@ public class PosOrderLineEntity {
     private String name;
     @Column(name = "uom_id", nullable = false)
     private UUID uomId;
+    @Column(name = "packaging_id")
+    private UUID packagingId;
+    @Column(name = "packaging_name", length = 128)
+    private String packagingName;
+    @Column(name = "qty_per_package", precision = 19, scale = 4)
+    private BigDecimal qtyPerPackage;
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal quantity;
     @Column(name = "unit_price", nullable = false, precision = 19, scale = 4)
@@ -64,6 +70,12 @@ public class PosOrderLineEntity {
     public void setName(String name) { this.name = name; }
     public UUID getUomId() { return uomId; }
     public void setUomId(UUID uomId) { this.uomId = uomId; }
+    public UUID getPackagingId() { return packagingId; }
+    public void setPackagingId(UUID packagingId) { this.packagingId = packagingId; }
+    public String getPackagingName() { return packagingName; }
+    public void setPackagingName(String packagingName) { this.packagingName = packagingName; }
+    public BigDecimal getQtyPerPackage() { return qtyPerPackage; }
+    public void setQtyPerPackage(BigDecimal qtyPerPackage) { this.qtyPerPackage = qtyPerPackage; }
     public BigDecimal getQuantity() { return quantity; }
     public void setQuantity(BigDecimal quantity) { this.quantity = quantity; }
     public BigDecimal getUnitPrice() { return unitPrice; }

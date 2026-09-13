@@ -124,4 +124,24 @@ public class ProductRepositoryImpl implements ProductRepository {
                 || valuationLayerJpa.existsByProductId(productId)
                 || quantJpa.existsByProductId(productId);
     }
+
+    @Override
+    public Optional<Product> findActiveByCompanyIdAndBarcode(CompanyId companyId, String barcode) {
+        if (barcode == null || barcode.isBlank()) return Optional.empty();
+        return jpa.findActiveByCompanyIdAndBarcode(companyId.getId(), barcode.trim())
+                .map(mapper::entityToDomain);
+    }
+
+    @Override
+    public Optional<Product> findActiveByCompanyIdAndSku(CompanyId companyId, String sku) {
+        if (sku == null || sku.isBlank()) return Optional.empty();
+        return jpa.findActiveByCompanyIdAndSku(companyId.getId(), sku.trim())
+                .map(mapper::entityToDomain);
+    }
+
+    @Override
+    public boolean existsByCompanyIdAndBarcodeExcludingId(CompanyId companyId, String barcode, UUID excludeProductId) {
+        if (barcode == null || barcode.isBlank()) return false;
+        return jpa.existsByCompanyIdAndBarcodeExcludingId(companyId.getId(), barcode.trim(), excludeProductId);
+    }
 }

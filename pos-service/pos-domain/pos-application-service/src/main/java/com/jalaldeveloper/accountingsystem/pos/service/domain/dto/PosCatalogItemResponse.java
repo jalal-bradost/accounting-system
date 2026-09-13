@@ -9,7 +9,11 @@ public class PosCatalogItemResponse {
     private String name;
     private String barcode;
     private UUID uomId;
+    private UUID packagingId;
+    private String packagingName;
+    private BigDecimal qtyPerPackage;
     private BigDecimal listPrice;
+    private BigDecimal purchasePrice;
     private boolean saleOk;
     private UUID categoryId;
     private String categoryName;
@@ -27,8 +31,16 @@ public class PosCatalogItemResponse {
     public void setBarcode(String barcode) { this.barcode = barcode; }
     public UUID getUomId() { return uomId; }
     public void setUomId(UUID uomId) { this.uomId = uomId; }
+    public UUID getPackagingId() { return packagingId; }
+    public void setPackagingId(UUID packagingId) { this.packagingId = packagingId; }
+    public String getPackagingName() { return packagingName; }
+    public void setPackagingName(String packagingName) { this.packagingName = packagingName; }
+    public BigDecimal getQtyPerPackage() { return qtyPerPackage; }
+    public void setQtyPerPackage(BigDecimal qtyPerPackage) { this.qtyPerPackage = qtyPerPackage; }
     public BigDecimal getListPrice() { return listPrice; }
     public void setListPrice(BigDecimal listPrice) { this.listPrice = listPrice; }
+    public BigDecimal getPurchasePrice() { return purchasePrice; }
+    public void setPurchasePrice(BigDecimal purchasePrice) { this.purchasePrice = purchasePrice; }
     public boolean isSaleOk() { return saleOk; }
     public void setSaleOk(boolean saleOk) { this.saleOk = saleOk; }
     public UUID getCategoryId() { return categoryId; }

@@ -42,10 +42,10 @@ public class StockLocation extends ArchivableAggregateRoot<StockLocationId> {
     }
 
     public void validate() {
-        if (companyId == null) throw new InventoryDomainException("companyId required");
-        if (code == null || code.isBlank()) throw new InventoryDomainException("location code required");
-        if (name == null || name.isBlank()) throw new InventoryDomainException("location name required");
-        if (locationType == null) throw new InventoryDomainException("locationType required");
+        if (companyId == null) throw new InventoryDomainException("error.inventory.companyIdRequired", null, "companyId required");
+        if (code == null || code.isBlank()) throw new InventoryDomainException("error.inventory.locationCodeRequired", null, "location code required");
+        if (name == null || name.isBlank()) throw new InventoryDomainException("error.inventory.locationNameRequired", null, "location name required");
+        if (locationType == null) throw new InventoryDomainException("error.inventory.locationTypeRequired", null, "locationType required");
     }
 
     /** Internal locations contribute to on-hand qty; everything else is virtual / counterparty. */
@@ -58,7 +58,7 @@ public class StockLocation extends ArchivableAggregateRoot<StockLocationId> {
     }
 
     public void rename(String name) {
-        if (name == null || name.isBlank()) throw new InventoryDomainException("location name required");
+        if (name == null || name.isBlank()) throw new InventoryDomainException("error.inventory.locationNameRequired", null, "location name required");
         this.name = name;
     }
 

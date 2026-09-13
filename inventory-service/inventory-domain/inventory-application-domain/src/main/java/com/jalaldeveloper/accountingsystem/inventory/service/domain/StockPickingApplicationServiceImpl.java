@@ -195,10 +195,10 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
     public StockPickingResponse validatePicking(UUID pickingId, ValidatePickingCommand command) {
         StockPicking picking = loadOrThrow(pickingId);
         if (picking.getState() == PickingState.DONE) {
-            throw new InventoryDomainException("Picking already validated");
+            throw new InventoryDomainException("error.inventory.pickingAlreadyValidated", null, "Picking already validated");
         }
         if (picking.getState() == PickingState.CANCELLED) {
-            throw new InventoryDomainException("Cannot validate a cancelled picking");
+            throw new InventoryDomainException("error.inventory.cannotValidateCancelledPicking", null, "Cannot validate a cancelled picking");
         }
         if (picking.getState() == PickingState.DRAFT) {
             picking.confirm();
@@ -456,7 +456,7 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
     public StockPickingResponse returnPicking(UUID pickingId) {
         StockPicking original = loadOrThrow(pickingId);
         if (original.getState() != PickingState.DONE) {
-            throw new InventoryDomainException("Only a DONE picking can be returned");
+            throw new InventoryDomainException("error.inventory.onlyDonePickingCanReturn", null, "Only a DONE picking can be returned");
         }
         UUID newPickingId = UUID.randomUUID();
         List<StockMove> reversed = original.getMoves().stream()
@@ -507,7 +507,7 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
         CompanyId companyId = resolveCompany(command.getCompanyId());
         StockLocation location = loadLocation(command.getLocationId());
         if (!location.isInternal()) {
-            throw new InventoryDomainException("Adjustments only allowed at INTERNAL locations");
+            throw new InventoryDomainException("error.inventory.adjustmentsOnlyInternalLocations", null, "Adjustments only allowed at INTERNAL locations");
         }
         StockQuant quant = ensureQuant(companyId, new ProductId(command.getProductId()), location.getId());
         BigDecimal delta = command.getTargetQuantity().subtract(quant.getQuantity());
@@ -566,7 +566,10 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
 
     private StockPicking loadOrThrow(UUID id) {
         return pickingRepository.findById(new StockPickingId(id))
-                .orElseThrow(() -> new InventoryDomainException("Picking not found: " + id));
+                .orElseThrow(() -> new InventoryDomainException(
+                        "error.inventory.pickingNotFound",
+                        new Object[] {id},
+                        "Picking not found: " + id));
     }
 
     private StockLocation loadLocation(UUID id) {
@@ -657,17 +660,17 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
         switch (type) {
             case INCOMING -> {
                 if (source.isInternal() || !destination.isInternal()) {
-                    throw new InventoryDomainException("INCOMING expects external source -> internal destination");
+                    throw new InventoryDomainException("error.inventory.incomingLocationPattern", null, "INCOMING expects external source -> internal destination");
                 }
             }
             case OUTGOING -> {
                 if (!source.isInternal() || destination.isInternal()) {
-                    throw new InventoryDomainException("OUTGOING expects internal source -> external destination");
+                    throw new InventoryDomainException("error.inventory.outgoingLocationPattern", null, "OUTGOING expects internal source -> external destination");
                 }
             }
             case INTERNAL -> {
                 if (!source.isInternal() || !destination.isInternal()) {
-                    throw new InventoryDomainException("INTERNAL expects both source and destination internal");
+                    throw new InventoryDomainException("error.inventory.internalLocationPattern", null, "INTERNAL expects both source and destination internal");
                 }
             }
         }

@@ -40,6 +40,9 @@ public interface PosApplicationService {
     Page<PosCatalogItemResponse> searchCatalog(CompanyId companyId, UUID sessionId, String query, UUID categoryId,
                                                  Pageable pageable);
 
+    /** Exact barcode or SKU catalog lookup for the open session warehouse. */
+    PosCatalogItemResponse findCatalogByBarcode(CompanyId companyId, UUID sessionId, String barcode);
+
     PosOrderResponse createOrder(@Valid CreatePosOrderCommand command);
 
     PosOrderResponse addOrderLine(UUID orderId, @Valid PosOrderLineCommand command);

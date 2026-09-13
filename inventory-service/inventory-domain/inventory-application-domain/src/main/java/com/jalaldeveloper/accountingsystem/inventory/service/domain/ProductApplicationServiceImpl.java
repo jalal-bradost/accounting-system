@@ -4,6 +4,8 @@ import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.Money;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.Product;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.ProductCategory;
+import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.ProductPackaging;
+import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.UnitOfMeasure;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.exception.InventoryDomainException;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductCategoryId;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductId;
@@ -12,12 +14,15 @@ import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.CreatePr
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductCategoryCommand;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductCategoryResponse;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductImageMeta;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductPackagingResponse;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductResponse;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.UpdateProductCommand;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.mapper.InventoryDataMapper;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.ProductApplicationService;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.ProductCategoryRepository;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.ProductPackagingRepository;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.ProductRepository;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.repository.UomRepository;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.output.storage.ProductImageStoragePort;
 import com.jalaldeveloper.accountingsystem.platform.audit.AuditLogPort;
 import com.jalaldeveloper.accountingsystem.platform.web.CompanyContext;
@@ -33,6 +38,7 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -45,6 +51,8 @@ class ProductApplicationServiceImpl implements ProductApplicationService {
 
     private final ProductRepository productRepository;
     private final ProductCategoryRepository categoryRepository;
+    private final ProductPackagingRepository packagingRepository;
+    private final UomRepository uomRepository;
     private final InventoryDataMapper mapper;
     private final ProductImageStoragePort imageStorage;
     private final ObjectProvider<CompanyContext> companyContextProvider;
@@ -52,12 +60,16 @@ class ProductApplicationServiceImpl implements ProductApplicationService {
 
     ProductApplicationServiceImpl(ProductRepository productRepository,
                                   ProductCategoryRepository categoryRepository,
+                                  ProductPackagingRepository packagingRepository,
+                                  UomRepository uomRepository,
                                   InventoryDataMapper mapper,
                                   ProductImageStoragePort imageStorage,
                                   ObjectProvider<CompanyContext> companyContextProvider,
                                   AuditLogPort auditLogPort) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
+        this.packagingRepository = packagingRepository;
+        this.uomRepository = uomRepository;
         this.mapper = mapper;
         this.imageStorage = imageStorage;
         this.companyContextProvider = companyContextProvider;
@@ -68,10 +80,12 @@ class ProductApplicationServiceImpl implements ProductApplicationService {
     @Transactional
     public ProductResponse createProduct(CreateProductCommand command) {
         CompanyId companyId = resolveCompany(command.getCompanyId());
+        ensureBarcodeUnique(companyId, Product.normalizeBarcode(command.getBarcode()), null);
         UUID id = UUID.randomUUID();
         Product product = mapper.createCommandToProduct(command, id, companyId);
         product.validate();
         Product saved = productRepository.save(product);
+        ensureBasePackaging(saved);
         auditLogPort.recordBusinessEvent(companyId, MODEL_NAME, id,
                 "Product created: " + saved.getSku(), null);
         return toResponse(saved);
@@ -81,7 +95,7 @@ class ProductApplicationServiceImpl implements ProductApplicationService {
     @Transactional
     public ProductResponse uploadProductImage(UUID productId, MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new InventoryDomainException("Image file is required");
+            throw new InventoryDomainException("error.inventory.imageFileRequired", null, "Image file is required");
         }
         Product p = loadIncludingArchivedOrThrow(productId);
         productRepository.findImageMeta(productId).ifPresent(meta -> imageStorage.deleteIfPresent(meta.imageUrl()));
@@ -94,7 +108,7 @@ class ProductApplicationServiceImpl implements ProductApplicationService {
                     file.getSize(),
                     file.getInputStream());
         } catch (IOException ex) {
-            throw new InventoryDomainException("Failed to read uploaded image");
+            throw new InventoryDomainException("error.inventory.failedReadUploadedImage", null, "Failed to read uploaded image");
         }
         productRepository.updateImage(productId, stored.publicUrl(), stored.contentType());
         auditLogPort.recordBusinessEvent(p.getCompanyId(), MODEL_NAME, productId, "Product image updated", null);
@@ -124,7 +138,11 @@ class ProductApplicationServiceImpl implements ProductApplicationService {
             changes.put("name", Map.of("old", p.getName(), "new", cmd.getName()));
             p.rename(cmd.getName());
         }
-        if (cmd.getBarcode() != null) p.changeBarcode(cmd.getBarcode());
+        if (cmd.getBarcode() != null) {
+            String normalized = Product.normalizeBarcode(cmd.getBarcode());
+            ensureBarcodeUnique(p.getCompanyId(), normalized, productId);
+            p.changeBarcode(normalized);
+        }
         if (cmd.getDescription() != null) p.changeDescription(cmd.getDescription());
         if (cmd.getProductType() != null && cmd.getProductType() != p.getProductType()) {
             changes.put("productType", Map.of("old", p.getProductType(), "new", cmd.getProductType()));
@@ -197,7 +215,9 @@ class ProductApplicationServiceImpl implements ProductApplicationService {
     @Override
     @Transactional(readOnly = true)
     public ProductResponse getProduct(UUID productId) {
-        return toResponse(loadIncludingArchivedOrThrow(productId));
+        Product product = loadIncludingArchivedOrThrow(productId);
+        ensureBasePackaging(product);
+        return toResponse(product);
     }
 
     @Override
@@ -207,6 +227,73 @@ class ProductApplicationServiceImpl implements ProductApplicationService {
                 .map(mapper::productToResponse);
         enrichWithImages(page.getContent());
         return page;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<ProductResponse> findSaleableByBarcodeOrSku(CompanyId companyId, String code) {
+        if (code == null || code.isBlank()) {
+            return Optional.empty();
+        }
+        String trimmed = code.trim();
+        Optional<Product> found = productRepository.findActiveByCompanyIdAndBarcode(companyId, trimmed);
+        if (found.isEmpty()) {
+            found = productRepository.findActiveByCompanyIdAndSku(companyId, trimmed);
+        }
+        return found.filter(Product::isSaleOk).map(this::toResponse);
+    }
+
+    private void ensureBarcodeUnique(CompanyId companyId, String barcode, UUID excludeProductId) {
+        if (barcode == null) {
+            return;
+        }
+        if (productRepository.existsByCompanyIdAndBarcodeExcludingId(companyId, barcode, excludeProductId)) {
+            throw new InventoryDomainException(
+                    "error.inventory.barcodeDuplicate",
+                    new Object[]{barcode},
+                    "Barcode already in use: " + barcode);
+        }
+        if (packagingRepository.existsByCompanyIdAndBarcodeExcludingId(companyId, barcode, null)) {
+            throw new InventoryDomainException(
+                    "error.inventory.barcodeDuplicate",
+                    new Object[]{barcode},
+                    "Barcode already in use: " + barcode);
+        }
+    }
+
+    private void ensureBasePackaging(Product product) {
+        if (packagingRepository.findBaseByProductId(product.getId()).isPresent()) {
+            return;
+        }
+        String uomName = uomRepository.findById(product.getUomId())
+                .map(UnitOfMeasure::getName)
+                .orElse("Unit");
+        ProductPackaging base = ProductPackaging.createBase(
+                product.getCompanyId(),
+                product.getId(),
+                uomName,
+                product.getStandardCost(),
+                product.getListPrice(),
+                product.getBarcode());
+        packagingRepository.save(base);
+    }
+
+    private ProductPackagingResponse toPackagingResponse(ProductPackaging p) {
+        ProductPackagingResponse r = new ProductPackagingResponse();
+        r.setId(p.getId().getId());
+        r.setCompanyId(p.getCompanyId().getId());
+        r.setProductId(p.getProductId().getId());
+        r.setName(p.getName());
+        r.setQty(p.getQty());
+        r.setPurchasePrice(p.getPurchasePrice() != null ? p.getPurchasePrice().getAmount() : java.math.BigDecimal.ZERO);
+        r.setListPrice(p.getListPrice() != null ? p.getListPrice().getAmount() : java.math.BigDecimal.ZERO);
+        r.setBarcode(p.getBarcode());
+        r.setSku(p.getSku());
+        r.setActive(p.isActive());
+        r.setBase(p.isBase());
+        r.setCreatedAt(p.getCreatedAt());
+        r.setUpdatedAt(p.getUpdatedAt());
+        return r;
     }
 
     @Override
@@ -292,6 +379,9 @@ class ProductApplicationServiceImpl implements ProductApplicationService {
     private ProductResponse toResponse(Product product) {
         ProductResponse response = mapper.productToResponse(product);
         productRepository.findImageMeta(product.getId().getId()).ifPresent(meta -> applyImage(response, meta));
+        response.setPackagings(packagingRepository.findByProductId(product.getId()).stream()
+                .map(this::toPackagingResponse)
+                .toList());
         return response;
     }
 

@@ -106,6 +106,14 @@ public class PosController {
         return ResponseEntity.ok(PageResponse.of(result, Function.identity()));
     }
 
+    @GetMapping("/catalog/by-barcode")
+    @RequiresPermission("pos.order.read")
+    public ResponseEntity<PosCatalogItemResponse> catalogByBarcode(@CurrentCompany CompanyId companyId,
+                                                                   @RequestParam UUID sessionId,
+                                                                   @RequestParam String barcode) {
+        return ResponseEntity.ok(posApplicationService.findCatalogByBarcode(companyId, sessionId, barcode));
+    }
+
     @PostMapping("/orders")
     @RequiresPermission("pos.order.write")
     public ResponseEntity<PosOrderResponse> createOrder(@CurrentCompany CompanyId companyId,

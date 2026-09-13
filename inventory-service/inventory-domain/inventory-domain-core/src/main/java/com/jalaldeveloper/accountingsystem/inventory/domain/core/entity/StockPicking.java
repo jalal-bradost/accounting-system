@@ -69,22 +69,22 @@ public class StockPicking extends AggregateRoot<StockPickingId> {
     }
 
     public void validateInvariants() {
-        if (companyId == null) throw new InventoryDomainException("companyId required");
-        if (pickingType == null) throw new InventoryDomainException("pickingType required");
-        if (sourceLocationId == null) throw new InventoryDomainException("sourceLocationId required");
-        if (destinationLocationId == null) throw new InventoryDomainException("destinationLocationId required");
+        if (companyId == null) throw new InventoryDomainException("error.inventory.companyIdRequired", null, "companyId required");
+        if (pickingType == null) throw new InventoryDomainException("error.inventory.pickingTypeRequired", null, "pickingType required");
+        if (sourceLocationId == null) throw new InventoryDomainException("error.inventory.sourceLocationIdRequired", null, "sourceLocationId required");
+        if (destinationLocationId == null) throw new InventoryDomainException("error.inventory.destinationLocationIdRequired", null, "destinationLocationId required");
         if (sourceLocationId.equals(destinationLocationId)) {
-            throw new InventoryDomainException("picking source and destination must differ");
+            throw new InventoryDomainException("error.inventory.pickingSourceDestMustDiffer", null, "picking source and destination must differ");
         }
-        if (moves.isEmpty()) throw new InventoryDomainException("picking must have at least one move");
+        if (moves.isEmpty()) throw new InventoryDomainException("error.inventory.pickingMustHaveMove", null, "picking must have at least one move");
         for (StockMove m : moves) m.validateInvariants();
     }
 
     public StockMove addMove(StockMove move) {
         if (state != PickingState.DRAFT) {
-            throw new InventoryDomainException("Can only add moves to a DRAFT picking; current=" + state);
+            throw new InventoryDomainException("error.inventory.addMoveOnlyDraftPicking", new Object[] { state }, "Can only add moves to a DRAFT picking; current=" + state);
         }
-        if (move == null) throw new InventoryDomainException("move required");
+        if (move == null) throw new InventoryDomainException("error.inventory.moveRequired", null, "move required");
         if (this.getId() != null) move.attachToPicking(this.getId());
         moves.add(move);
         return move;
@@ -133,7 +133,7 @@ public class StockPicking extends AggregateRoot<StockPickingId> {
 
     public void cancel() {
         if (state == PickingState.DONE) {
-            throw new InventoryDomainException("cannot cancel a DONE picking");
+            throw new InventoryDomainException("error.inventory.cannotCancelDonePicking", null, "cannot cancel a DONE picking");
         }
         for (StockMove m : moves) {
             if (m.getState() != MoveState.DONE) m.cancel();

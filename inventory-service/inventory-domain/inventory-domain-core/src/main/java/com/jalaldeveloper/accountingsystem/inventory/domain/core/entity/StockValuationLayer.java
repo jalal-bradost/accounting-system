@@ -56,10 +56,10 @@ public class StockValuationLayer extends AggregateRoot<ValuationLayerId> {
     }
 
     public void validate() {
-        if (companyId == null) throw new InventoryDomainException("companyId required");
-        if (productId == null) throw new InventoryDomainException("productId required");
-        if (method == null) throw new InventoryDomainException("valuation method required");
-        if (quantity == null) throw new InventoryDomainException("quantity required");
+        if (companyId == null) throw new InventoryDomainException("error.inventory.companyIdRequired", null, "companyId required");
+        if (productId == null) throw new InventoryDomainException("error.inventory.productIdRequired", null, "productId required");
+        if (method == null) throw new InventoryDomainException("error.inventory.valuationMethodRequiredAlt", null, "valuation method required");
+        if (quantity == null) throw new InventoryDomainException("error.inventory.quantityRequired", null, "quantity required");
     }
 
     /**
@@ -69,7 +69,7 @@ public class StockValuationLayer extends AggregateRoot<ValuationLayerId> {
      */
     public ConsumptionResult consume(BigDecimal requestedQty) {
         if (requestedQty == null || requestedQty.signum() <= 0) {
-            throw new InventoryDomainException("requested consumption qty must be > 0");
+            throw new InventoryDomainException("error.inventory.consumptionQtyPositive", null, "requested consumption qty must be > 0");
         }
         if (remainingQuantity == null || remainingQuantity.signum() <= 0) {
             return new ConsumptionResult(BigDecimal.ZERO, Money.ZERO);

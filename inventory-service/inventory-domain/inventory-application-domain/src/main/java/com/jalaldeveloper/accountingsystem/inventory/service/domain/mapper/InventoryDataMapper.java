@@ -55,7 +55,7 @@ public class InventoryDataMapper {
                 .companyId(companyId)
                 .sku(cmd.getSku())
                 .name(cmd.getName())
-                .barcode(cmd.getBarcode())
+                .barcode(Product.normalizeBarcode(cmd.getBarcode()))
                 .description(cmd.getDescription())
                 .productType(cmd.getProductType())
                 .categoryId(cmd.getCategoryId() != null ? new ProductCategoryId(cmd.getCategoryId()) : null)

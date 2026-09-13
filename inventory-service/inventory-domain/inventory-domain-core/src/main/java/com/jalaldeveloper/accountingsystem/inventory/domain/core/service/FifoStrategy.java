@@ -32,7 +32,7 @@ public class FifoStrategy implements ValuationStrategy {
     @Override
     public ValuationResult valueIncoming(ValuationContext ctx) {
         if (ctx.providedUnitCost() == null) {
-            throw new InventoryDomainException("FIFO incoming move requires a unit cost (e.g. PO price)");
+            throw new InventoryDomainException("error.inventory.fifoIncomingRequiresUnitCost", null, "FIFO incoming move requires a unit cost (e.g. PO price)");
         }
         BigDecimal absQty = ctx.movedQty().abs();
         Money totalValue = new Money(ctx.providedUnitCost().getAmount().multiply(absQty));

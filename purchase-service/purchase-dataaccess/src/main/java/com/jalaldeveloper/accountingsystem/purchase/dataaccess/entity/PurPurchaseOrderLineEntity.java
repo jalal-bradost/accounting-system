@@ -37,6 +37,15 @@ public class PurPurchaseOrderLineEntity {
     @Column(name = "warehouse_id")
     private UUID warehouseId;
 
+    @Column(name = "packaging_id")
+    private UUID packagingId;
+
+    @Column(name = "packaging_name", length = 128)
+    private String packagingName;
+
+    @Column(name = "qty_per_package", precision = 19, scale = 4)
+    private BigDecimal qtyPerPackage;
+
     @Column(name = "qty_ordered", nullable = false, precision = 19, scale = 4)
     private BigDecimal qtyOrdered;
 
@@ -81,6 +90,12 @@ public class PurPurchaseOrderLineEntity {
     public void setUomId(UUID uomId) { this.uomId = uomId; }
     public UUID getWarehouseId() { return warehouseId; }
     public void setWarehouseId(UUID warehouseId) { this.warehouseId = warehouseId; }
+    public UUID getPackagingId() { return packagingId; }
+    public void setPackagingId(UUID packagingId) { this.packagingId = packagingId; }
+    public String getPackagingName() { return packagingName; }
+    public void setPackagingName(String packagingName) { this.packagingName = packagingName; }
+    public BigDecimal getQtyPerPackage() { return qtyPerPackage; }
+    public void setQtyPerPackage(BigDecimal qtyPerPackage) { this.qtyPerPackage = qtyPerPackage; }
     public BigDecimal getQtyOrdered() { return qtyOrdered; }
     public void setQtyOrdered(BigDecimal qtyOrdered) { this.qtyOrdered = qtyOrdered; }
     public BigDecimal getQtyReceived() { return qtyReceived; }

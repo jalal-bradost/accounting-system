@@ -9,19 +9,19 @@ public final class SalesOrderRules {
 
     public static void ensureCanSendQuotation(SalesOrderState state) {
         if (state != SalesOrderState.DRAFT) {
-            throw new SalesDomainException("Can only send quotation in DRAFT state, was " + state);
+            throw new SalesDomainException("error.sales.sendQuotationDraftOnly", new Object[] { state }, "Can only send quotation in DRAFT state, was " + state);
         }
     }
 
     public static void ensureCanConfirm(SalesOrderState state) {
         if (state != SalesOrderState.DRAFT && state != SalesOrderState.QUOTATION_SENT) {
-            throw new SalesDomainException("Can only confirm from DRAFT or QUOTATION_SENT, was " + state);
+            throw new SalesDomainException("error.sales.confirmFromDraftOrQuotation", new Object[] { state }, "Can only confirm from DRAFT or QUOTATION_SENT, was " + state);
         }
     }
 
     public static void ensureCanCancel(SalesOrderState state) {
         if (state == SalesOrderState.CANCELLED) {
-            throw new SalesDomainException("Order already cancelled");
+            throw new SalesDomainException("error.sales.orderAlreadyCancelled", null, "Order already cancelled");
         }
     }
 
