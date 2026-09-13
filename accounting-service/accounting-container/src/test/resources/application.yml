@@ -19,6 +19,8 @@ app:
     enabled: false
 
 spring:
+  profiles:
+    active: test
   application:
     name: accounting-service-test
   rabbitmq:
