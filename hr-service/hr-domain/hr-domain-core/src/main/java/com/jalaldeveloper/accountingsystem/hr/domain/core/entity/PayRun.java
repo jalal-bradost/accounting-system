@@ -44,10 +44,10 @@ public class PayRun {
     }
 
     public void validate() {
-        if (companyId == null) throw new HrDomainException("companyId required");
-        if (name == null || name.isBlank()) throw new HrDomainException("name required");
-        if (periodStart == null || periodEnd == null) throw new HrDomainException("period required");
-        if (periodEnd.isBefore(periodStart)) throw new HrDomainException("periodEnd must be on or after periodStart");
+        if (companyId == null) throw new HrDomainException("error.hr.companyIdRequired", null, "companyId required");
+        if (name == null || name.isBlank()) throw new HrDomainException("error.hr.nameRequired", null, "name required");
+        if (periodStart == null || periodEnd == null) throw new HrDomainException("error.hr.periodRequired", null, "period required");
+        if (periodEnd.isBefore(periodStart)) throw new HrDomainException("error.hr.periodEndOnOrAfterStart", null, "periodEnd must be on or after periodStart");
     }
 
     public PayRun withPayslips(List<Payslip> newPayslips) {
@@ -60,7 +60,7 @@ public class PayRun {
 
     public PayRun markPosted(UUID journalEntryId) {
         if (!STATE_COMPUTED.equals(state)) {
-            throw new HrDomainException("Only computed pay runs can be posted");
+            throw new HrDomainException("error.hr.onlyComputedPayRunCanPost", null, "Only computed pay runs can be posted");
         }
         return toBuilder()
                 .state(STATE_POSTED)
@@ -71,7 +71,7 @@ public class PayRun {
 
     public PayRun markPaid(UUID paymentJournalEntryId) {
         if (!STATE_POSTED.equals(state)) {
-            throw new HrDomainException("Only posted pay runs can be paid");
+            throw new HrDomainException("error.hr.onlyPostedPayRunCanPaid", null, "Only posted pay runs can be paid");
         }
         return toBuilder()
                 .state(STATE_PAID)

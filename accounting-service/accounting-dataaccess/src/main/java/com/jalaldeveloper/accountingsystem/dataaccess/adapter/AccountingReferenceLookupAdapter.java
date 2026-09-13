@@ -43,10 +43,10 @@ public class AccountingReferenceLookupAdapter implements AccountingReferenceLook
         Journal journal = journalRepository.findById(new JournalId(journalId))
                 .orElseThrow(() -> new AccountingDomainException("Payment journal not found"));
         if (!journal.getCompanyId().getId().equals(companyId)) {
-            throw new AccountingDomainException("Journal company mismatch");
+            throw new AccountingDomainException("error.accounting.journalCompanyMismatch", null, "Journal company mismatch");
         }
         if (journal.getJournalType() != JournalType.CASH && journal.getJournalType() != JournalType.BANK) {
-            throw new AccountingDomainException("Payment journal must be cash or bank");
+            throw new AccountingDomainException("error.accounting.paymentJournalCashOrBank", null, "Payment journal must be cash or bank");
         }
         return resolveAccountIdByCode(companyId, journal.getCode());
     }
@@ -66,7 +66,7 @@ public class AccountingReferenceLookupAdapter implements AccountingReferenceLook
         Journal journal = journalRepository.findById(new JournalId(journalId))
                 .orElseThrow(() -> new AccountingDomainException("Journal not found"));
         if (!journal.getCompanyId().getId().equals(companyId)) {
-            throw new AccountingDomainException("Journal company mismatch");
+            throw new AccountingDomainException("error.accounting.journalCompanyMismatch", null, "Journal company mismatch");
         }
         return journal.getJournalType();
     }

@@ -1,6 +1,7 @@
 package com.jalaldeveloper.accountingsystem.expense.application.rest;
 
 import com.jalaldeveloper.accountingsystem.application.handler.ErrorDTO;
+import com.jalaldeveloper.accountingsystem.application.handler.ExceptionMessageResolver;
 import com.jalaldeveloper.accountingsystem.domain.core.exception.AccountingDomainException;
 import com.jalaldeveloper.accountingsystem.expense.domain.core.exception.ExpenseDomainException;
 import org.springframework.core.Ordered;
@@ -15,11 +16,17 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class ExpenseExceptionHandler {
 
+    private final ExceptionMessageResolver messageResolver;
+
+    public ExpenseExceptionHandler(ExceptionMessageResolver messageResolver) {
+        this.messageResolver = messageResolver;
+    }
+
     @ExceptionHandler(ExpenseDomainException.class)
     public ResponseEntity<ErrorDTO> handleDomain(ExpenseDomainException ex) {
         ErrorDTO dto = ErrorDTO.builder()
                 .code("EXPENSE_DOMAIN_ERROR")
-                .message(ex.getMessage())
+                .message(messageResolver.resolve(ex))
                 .build();
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(dto);
     }
@@ -28,7 +35,7 @@ public class ExpenseExceptionHandler {
     public ResponseEntity<ErrorDTO> handleAccounting(AccountingDomainException ex) {
         ErrorDTO dto = ErrorDTO.builder()
                 .code("ACCOUNTING_DOMAIN_ERROR")
-                .message(ex.getMessage())
+                .message(messageResolver.resolve(ex))
                 .build();
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(dto);
     }

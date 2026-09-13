@@ -52,7 +52,10 @@ public class HrAccessPolicy {
 
     public void requireEmployeeAccess(UUID employeeId, String readPermission, String selfPermission) {
         if (!canAccessEmployee(employeeId, readPermission, selfPermission)) {
-            throw new HrDomainException("Access denied for employee: " + employeeId);
+            throw new HrDomainException(
+                    "error.hr.accessDenied",
+                    new Object[] {employeeId},
+                    "Access denied for employee: " + employeeId);
         }
     }
 

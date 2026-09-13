@@ -83,7 +83,7 @@ class PayRunApplicationServiceImpl implements PayRunApplicationService {
     public PayRunResponse computeRun(UUID id) {
         PayRun payRun = loadRun(id);
         if (!PayRun.STATE_DRAFT.equals(payRun.getState()) && !PayRun.STATE_COMPUTED.equals(payRun.getState())) {
-            throw new HrDomainException("Pay run cannot be computed in state: " + payRun.getState());
+            throw new HrDomainException("error.hr.payRunCannotComputeInState", new Object[] { payRun.getState() }, "Pay run cannot be computed in state: " + payRun.getState());
         }
         List<ContractRow> contracts = payrollPersistence.listRunningContracts(
                 payRun.getCompanyId().getId(), payRun.getPeriodStart(), payRun.getPeriodEnd());
@@ -129,7 +129,7 @@ class PayRunApplicationServiceImpl implements PayRunApplicationService {
     public PayRunResponse postRun(UUID id) {
         PayRun payRun = loadRun(id);
         if (!PayRun.STATE_COMPUTED.equals(payRun.getState())) {
-            throw new HrDomainException("Only computed pay runs can be posted");
+            throw new HrDomainException("error.hr.onlyComputedPayRunCanPost", null, "Only computed pay runs can be posted");
         }
         UUID companyId = payRun.getCompanyId().getId();
         UUID payJournalId = accountingReferenceLookupPort.resolveJournalIdByCode(companyId, PAY_JOURNAL_CODE);
@@ -194,7 +194,7 @@ class PayRunApplicationServiceImpl implements PayRunApplicationService {
     public PayRunResponse payRun(UUID id, PayRunCommand cmd) {
         PayRun payRun = loadRun(id);
         if (!PayRun.STATE_POSTED.equals(payRun.getState())) {
-            throw new HrDomainException("Only posted pay runs can be paid");
+            throw new HrDomainException("error.hr.onlyPostedPayRunCanPaid", null, "Only posted pay runs can be paid");
         }
         UUID companyId = payRun.getCompanyId().getId();
         UUID salariesPayableAccount = accountingReferenceLookupPort.resolveAccountIdByCode(companyId, SALARIES_PAYABLE);
@@ -275,7 +275,7 @@ class PayRunApplicationServiceImpl implements PayRunApplicationService {
         if (ctx != null) {
             return ctx.requireCompany();
         }
-        throw new HrDomainException("companyId required");
+        throw new HrDomainException("error.hr.companyIdRequired", null, "companyId required");
     }
 
     private PayRunResponse toResponse(PayRun run) {

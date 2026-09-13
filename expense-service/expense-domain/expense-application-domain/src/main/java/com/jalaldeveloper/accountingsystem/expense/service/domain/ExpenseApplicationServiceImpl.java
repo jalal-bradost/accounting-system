@@ -97,7 +97,7 @@ class ExpenseApplicationServiceImpl implements ExpenseApplicationService {
                 : null);
         EmployeeResponse employee = employeeApplicationService.get(command.getEmployeeId());
         if (!companyId.getId().equals(employee.companyId())) {
-            throw new ExpenseDomainException("Employee does not belong to company");
+            throw new ExpenseDomainException("error.expense.employeeCompanyMismatch", null, "Employee does not belong to company");
         }
         UUID managerId = command.getManagerEmployeeId() != null
                 ? command.getManagerEmployeeId()
@@ -137,7 +137,7 @@ class ExpenseApplicationServiceImpl implements ExpenseApplicationService {
         CompanyId companyId = expense.getCompanyId();
         EmployeeResponse employee = employeeApplicationService.get(command.getEmployeeId());
         if (!companyId.getId().equals(employee.companyId())) {
-            throw new ExpenseDomainException("Employee does not belong to company");
+            throw new ExpenseDomainException("error.expense.employeeCompanyMismatch", null, "Employee does not belong to company");
         }
         UUID managerId = command.getManagerEmployeeId() != null
                 ? command.getManagerEmployeeId()
@@ -189,7 +189,8 @@ class ExpenseApplicationServiceImpl implements ExpenseApplicationService {
     public ExpenseResponse post(UUID id) {
         Expense expense = requireExpense(id);
         if (expense.getState() != ExpenseState.APPROVED) {
-            throw new ExpenseDomainException("Only approved expenses can be posted");
+            throw new ExpenseDomainException(
+                    "error.expense.onlyApprovedCanPost", null, "Only approved expenses can be posted");
         }
         if (expense.getAccountId() == null) {
             UUID resolved = resolveAccountId(expense.getCompanyId().getId(), null, expense.getProductId());
@@ -198,7 +199,7 @@ class ExpenseApplicationServiceImpl implements ExpenseApplicationService {
             }
         }
         if (expense.getAccountId() == null) {
-            throw new ExpenseDomainException("accountId required to post");
+            throw new ExpenseDomainException("error.expense.accountIdRequiredToPost", null, "accountId required to post");
         }
 
         UUID payableAccount = accountingReferenceLookupPort.resolveAccountIdByCode(
@@ -207,7 +208,7 @@ class ExpenseApplicationServiceImpl implements ExpenseApplicationService {
 
         BigDecimal total = expense.getTotal().setScale(4, RoundingMode.HALF_UP);
         if (total.signum() <= 0) {
-            throw new ExpenseDomainException("total must be positive to post");
+            throw new ExpenseDomainException("error.expense.totalPositiveToPost", null, "total must be positive to post");
         }
 
         List<JournalItemCommand> items = new ArrayList<>();
@@ -248,17 +249,17 @@ class ExpenseApplicationServiceImpl implements ExpenseApplicationService {
     public ExpenseResponse registerPayment(UUID id, RegisterExpensePaymentCommand command) {
         Expense expense = requireExpense(id);
         if (expense.getState() != ExpenseState.POSTED) {
-            throw new ExpenseDomainException("Only posted expenses can be paid");
+            throw new ExpenseDomainException("error.expense.onlyPostedCanBePaid", null, "Only posted expenses can be paid");
         }
         if (expense.getJournalEntryId() == null) {
-            throw new ExpenseDomainException("Expense must be posted to the GL before payment");
+            throw new ExpenseDomainException("error.expense.mustBePostedToGlBeforePayment", null, "Expense must be posted to the GL before payment");
         }
 
         UUID companyId = expense.getCompanyId().getId();
         BigDecimal amount = command.getAmount().setScale(4, RoundingMode.HALF_UP);
         BigDecimal due = expense.getAmountDue();
         if (amount.compareTo(due) > 0) {
-            throw new ExpenseDomainException("payment amount exceeds amount due (" + due + ")");
+            throw new ExpenseDomainException("error.expense.paymentExceedsAmountDueWithDetail", new Object[] { due }, "payment amount exceeds amount due (" + due + ")");
         }
 
         UUID payableAccount = accountingReferenceLookupPort.resolveAccountIdByCode(
@@ -266,7 +267,7 @@ class ExpenseApplicationServiceImpl implements ExpenseApplicationService {
         JournalType paymentJournalType = accountingReferenceLookupPort
                 .resolveJournalType(companyId, command.getBankJournalId());
         if (paymentJournalType != JournalType.CASH && paymentJournalType != JournalType.BANK) {
-            throw new ExpenseDomainException("Payment journal must be cash or bank");
+            throw new ExpenseDomainException("error.expense.paymentJournalCashOrBank", null, "Payment journal must be cash or bank");
         }
         UUID liquidityAccountId = accountingReferenceLookupPort
                 .resolveLiquidityAccountIdForJournal(companyId, command.getBankJournalId());
@@ -368,7 +369,7 @@ class ExpenseApplicationServiceImpl implements ExpenseApplicationService {
             return ctx.currentCompany()
                     .orElseThrow(() -> new ExpenseDomainException("companyId required"));
         }
-        throw new ExpenseDomainException("companyId required");
+        throw new ExpenseDomainException("error.expense.companyIdRequired", null, "companyId required");
     }
 
     private static BigDecimal nz(BigDecimal v) {

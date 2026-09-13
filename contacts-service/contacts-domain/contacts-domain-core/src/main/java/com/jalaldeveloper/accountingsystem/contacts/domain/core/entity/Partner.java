@@ -81,16 +81,16 @@ public class Partner extends ArchivableAggregateRoot<PartnerId> {
     }
 
     public void validate() {
-        if (companyId == null) throw new ContactsDomainException("companyId required");
-        if (kind == null) throw new ContactsDomainException("kind required (COMPANY or INDIVIDUAL)");
+        if (companyId == null) throw new ContactsDomainException("error.contacts.companyIdRequired", null, "companyId required");
+        if (kind == null) throw new ContactsDomainException("error.contacts.kindRequired", null, "kind required (COMPANY or INDIVIDUAL)");
         if (displayName == null || displayName.isBlank()) {
-            throw new ContactsDomainException("displayName required");
+            throw new ContactsDomainException("error.contacts.displayNameRequired", null, "displayName required");
         }
         if (creditLimit == null || creditLimit.getAmount().signum() < 0) {
-            throw new ContactsDomainException("creditLimit must be >= 0");
+            throw new ContactsDomainException("error.contacts.creditLimitNonNegative", null, "creditLimit must be >= 0");
         }
         if (email != null && !email.isBlank() && !EMAIL_PATTERN.matcher(email).matches()) {
-            throw new ContactsDomainException("email is not a valid address: " + email);
+            throw new ContactsDomainException("error.contacts.invalidEmail", new Object[] { email }, "email is not a valid address: " + email);
         }
     }
 
@@ -98,14 +98,14 @@ public class Partner extends ArchivableAggregateRoot<PartnerId> {
     public void validateParent(Partner parent) {
         if (parentId == null) return;
         if (parent == null) {
-            throw new ContactsDomainException("parent partner not found: " + parentId.getId());
+            throw new ContactsDomainException("error.contacts.parentPartnerNotFound", new Object[] { parentId.getId() }, "parent partner not found: " + parentId.getId());
         }
         if (parent.kind == PartnerKind.INDIVIDUAL && this.kind == PartnerKind.COMPANY) {
             throw new ContactsDomainException(
                     "A company partner cannot have an individual as parent (got " + parent.getId().getId() + ")");
         }
         if (Objects.equals(parent.getId(), this.getId())) {
-            throw new ContactsDomainException("Partner cannot be its own parent");
+            throw new ContactsDomainException("error.contacts.partnerCannotBeOwnParent", null, "Partner cannot be its own parent");
         }
     }
 
@@ -114,7 +114,7 @@ public class Partner extends ArchivableAggregateRoot<PartnerId> {
 
     public void changeCreditLimit(Money newLimit) {
         if (newLimit == null || newLimit.getAmount().signum() < 0) {
-            throw new ContactsDomainException("creditLimit must be >= 0");
+            throw new ContactsDomainException("error.contacts.creditLimitNonNegative", null, "creditLimit must be >= 0");
         }
         this.creditLimit = newLimit;
     }
@@ -128,7 +128,7 @@ public class Partner extends ArchivableAggregateRoot<PartnerId> {
 
     public void rename(String displayName, String legalName) {
         if (displayName == null || displayName.isBlank()) {
-            throw new ContactsDomainException("displayName required");
+            throw new ContactsDomainException("error.contacts.displayNameRequired", null, "displayName required");
         }
         this.displayName = displayName;
         this.legalName = legalName;
@@ -136,7 +136,7 @@ public class Partner extends ArchivableAggregateRoot<PartnerId> {
 
     public void changeContact(String email, String phone, String website) {
         if (email != null && !email.isBlank() && !EMAIL_PATTERN.matcher(email).matches()) {
-            throw new ContactsDomainException("email is not a valid address: " + email);
+            throw new ContactsDomainException("error.contacts.invalidEmail", new Object[] { email }, "email is not a valid address: " + email);
         }
         this.email = email;
         this.phone = phone;
@@ -147,15 +147,15 @@ public class Partner extends ArchivableAggregateRoot<PartnerId> {
     public void changeLanguage(String language) { this.language = language; }
     public void changeCurrency(Currency currency) { this.currency = currency; }
     public void changeKind(PartnerKind kind) {
-        if (kind == null) throw new ContactsDomainException("kind required");
+        if (kind == null) throw new ContactsDomainException("error.contacts.kindRequiredShort", null, "kind required");
         this.kind = kind;
     }
     public void changeParent(PartnerId parentId) { this.parentId = parentId; }
 
     public PartnerAddress addAddress(PartnerAddress address) {
-        if (address == null) throw new ContactsDomainException("address required");
+        if (address == null) throw new ContactsDomainException("error.contacts.addressRequired", null, "address required");
         if (!Objects.equals(address.getPartnerId(), this.getId())) {
-            throw new ContactsDomainException("address.partnerId does not match");
+            throw new ContactsDomainException("error.contacts.addressPartnerIdMismatch", null, "address.partnerId does not match");
         }
         if (address.isDefaultForType()) {
             unmarkOtherDefaults(address.getType(), address.getId() != null ? address.getId().getId() : null);
@@ -189,9 +189,9 @@ public class Partner extends ArchivableAggregateRoot<PartnerId> {
     }
 
     public PartnerBankAccount addBankAccount(PartnerBankAccount account) {
-        if (account == null) throw new ContactsDomainException("bank account required");
+        if (account == null) throw new ContactsDomainException("error.contacts.bankAccountRequired", null, "bank account required");
         if (!Objects.equals(account.getPartnerId(), this.getId())) {
-            throw new ContactsDomainException("bankAccount.partnerId does not match");
+            throw new ContactsDomainException("error.contacts.bankAccountPartnerIdMismatch", null, "bankAccount.partnerId does not match");
         }
         bankAccounts.add(account);
         return account;

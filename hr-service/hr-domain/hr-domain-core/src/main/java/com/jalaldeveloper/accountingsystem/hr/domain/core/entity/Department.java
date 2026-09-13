@@ -29,9 +29,9 @@ public class Department extends ArchivableAggregateRoot<DepartmentId> {
     }
 
     public void validate() {
-        if (companyId == null) throw new HrDomainException("companyId required");
-        if (name == null || name.isBlank()) throw new HrDomainException("name required");
-        if (colorIndex < 0) throw new HrDomainException("colorIndex must be >= 0");
+        if (companyId == null) throw new HrDomainException("error.hr.companyIdRequired", null, "companyId required");
+        if (name == null || name.isBlank()) throw new HrDomainException("error.hr.nameRequired", null, "name required");
+        if (colorIndex < 0) throw new HrDomainException("error.hr.colorIndexNonNegative", null, "colorIndex must be >= 0");
     }
 
     public CompanyId getCompanyId() { return companyId; }

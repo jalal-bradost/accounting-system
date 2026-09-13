@@ -1,6 +1,7 @@
 package com.jalaldeveloper.accountingsystem.contacts.application.rest;
 
 import com.jalaldeveloper.accountingsystem.application.handler.ErrorDTO;
+import com.jalaldeveloper.accountingsystem.application.handler.ExceptionMessageResolver;
 import com.jalaldeveloper.accountingsystem.contacts.domain.core.exception.ContactsDomainException;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -13,11 +14,17 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class ContactsExceptionHandler {
 
+    private final ExceptionMessageResolver messageResolver;
+
+    public ContactsExceptionHandler(ExceptionMessageResolver messageResolver) {
+        this.messageResolver = messageResolver;
+    }
+
     @ExceptionHandler(ContactsDomainException.class)
     public ResponseEntity<ErrorDTO> handleDomain(ContactsDomainException ex) {
         ErrorDTO dto = ErrorDTO.builder()
                 .code("CONTACTS_DOMAIN_ERROR")
-                .message(ex.getMessage())
+                .message(messageResolver.resolve(ex))
                 .build();
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(dto);
     }

@@ -61,7 +61,7 @@ public class CurrencyConversionAdapter implements CurrencyConversionPort {
 
   private static String normalizeCode(String currencyCode) {
     if (currencyCode == null || currencyCode.isBlank()) {
-      throw new AccountingDomainException("Currency code is required");
+      throw new AccountingDomainException("error.accounting.currencyCodeRequired", null, "Currency code is required");
     }
     return currencyCode.trim().toUpperCase();
   }

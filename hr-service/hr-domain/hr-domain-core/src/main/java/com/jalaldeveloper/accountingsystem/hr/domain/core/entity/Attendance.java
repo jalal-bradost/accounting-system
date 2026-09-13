@@ -30,16 +30,16 @@ public class Attendance {
     }
 
     public void validate() {
-        if (companyId == null) throw new HrDomainException("companyId required");
-        if (employeeId == null) throw new HrDomainException("employeeId required");
-        if (checkIn == null) throw new HrDomainException("checkIn required");
+        if (companyId == null) throw new HrDomainException("error.hr.companyIdRequired", null, "companyId required");
+        if (employeeId == null) throw new HrDomainException("error.hr.employeeIdRequired", null, "employeeId required");
+        if (checkIn == null) throw new HrDomainException("error.hr.checkInRequired", null, "checkIn required");
         if (checkOut != null && checkOut.isBefore(checkIn)) {
-            throw new HrDomainException("checkOut must be after checkIn");
+            throw new HrDomainException("error.hr.checkOutAfterCheckIn", null, "checkOut must be after checkIn");
         }
         if (checkInMode == null || checkInMode.isBlank()) {
-            throw new HrDomainException("checkInMode required");
+            throw new HrDomainException("error.hr.checkInModeRequired", null, "checkInMode required");
         }
-        if (extraHoursMinutes < 0) throw new HrDomainException("extraHoursMinutes must be >= 0");
+        if (extraHoursMinutes < 0) throw new HrDomainException("error.hr.extraHoursMinutesNonNegative", null, "extraHoursMinutes must be >= 0");
     }
 
     public AttendanceId getId() { return id; }

@@ -46,10 +46,10 @@ public class Payslip {
     }
 
     public void validate() {
-        if (payRunId == null) throw new HrDomainException("payRunId required");
-        if (employeeId == null) throw new HrDomainException("employeeId required");
-        if (contractId == null) throw new HrDomainException("contractId required");
-        if (currencyCode == null || currencyCode.isBlank()) throw new HrDomainException("currencyCode required");
+        if (payRunId == null) throw new HrDomainException("error.hr.payRunIdRequired", null, "payRunId required");
+        if (employeeId == null) throw new HrDomainException("error.hr.employeeIdRequired", null, "employeeId required");
+        if (contractId == null) throw new HrDomainException("error.hr.contractIdRequired", null, "contractId required");
+        if (currencyCode == null || currencyCode.isBlank()) throw new HrDomainException("error.hr.currencyCodeRequired", null, "currencyCode required");
     }
 
     public Payslip markPosted() {

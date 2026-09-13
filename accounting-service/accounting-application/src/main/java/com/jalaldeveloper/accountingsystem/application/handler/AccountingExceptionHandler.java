@@ -12,11 +12,17 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class AccountingExceptionHandler {
 
+    private final ExceptionMessageResolver messageResolver;
+
+    public AccountingExceptionHandler(ExceptionMessageResolver messageResolver) {
+        this.messageResolver = messageResolver;
+    }
+
     @ExceptionHandler(AccountingDomainException.class)
     public ResponseEntity<ErrorDTO> handleAccountingDomainException(AccountingDomainException ex) {
         ErrorDTO dto = ErrorDTO.builder()
                 .code("ACCOUNTING_DOMAIN_ERROR")
-                .message(ex.getMessage())
+                .message(messageResolver.resolve(ex))
                 .build();
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(dto);
     }

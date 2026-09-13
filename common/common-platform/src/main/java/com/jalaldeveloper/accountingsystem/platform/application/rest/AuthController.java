@@ -22,6 +22,7 @@ import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.jalaldeveloper.accountingsystem.application.exception.LocalizedResponseStatusException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Comparator;
@@ -138,7 +139,10 @@ public class AuthController {
         UUID userId = requireUserId();
         boolean ok = userApplicationService.changeOwnPassword(userId, body.currentPassword(), body.newPassword());
         if (!ok) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current password is incorrect");
+            throw new LocalizedResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "error.auth.currentPasswordIncorrect",
+                    "Current password is incorrect");
         }
         return ResponseEntity.noContent().build();
     }
@@ -150,7 +154,8 @@ public class AuthController {
     private UUID requireUserId() {
         UUID id = currentUserId();
         if (id == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not authenticated");
+            throw new LocalizedResponseStatusException(
+                    HttpStatus.UNAUTHORIZED, "error.auth.notAuthenticated", "Not authenticated");
         }
         return id;
     }

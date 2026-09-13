@@ -19,9 +19,14 @@ public final class CreditLimitChecker {
     public record CreditStatus(Money creditLimit, Money outstandingReceivable, Money available, boolean unlimited) {}
 
     public static CreditStatus check(Partner partner, Money outstandingReceivable) {
-        if (partner == null) throw new ContactsDomainException("partner required");
+        if (partner == null) {
+            throw new ContactsDomainException("error.contacts.partnerRequired", null, "partner required");
+        }
         if (!partner.isCustomer()) {
-            throw new ContactsDomainException("partner is not a customer: " + partner.getId().getId());
+            throw new ContactsDomainException(
+                    "error.contacts.partnerNotCustomer",
+                    new Object[] {partner.getId().getId()},
+                    "partner is not a customer: " + partner.getId().getId());
         }
         Money limit = partner.getCreditLimit() != null ? partner.getCreditLimit() : Money.ZERO;
         Money outstanding = outstandingReceivable != null ? outstandingReceivable : Money.ZERO;
@@ -41,6 +46,12 @@ public final class CreditLimitChecker {
         Money projected = status.outstandingReceivable().add(requested);
         if (projected.isGreaterThan(status.creditLimit())) {
             throw new ContactsDomainException(
+                    "error.contacts.creditLimitExceeded",
+                    new Object[] {
+                        status.outstandingReceivable().getAmount(),
+                        requested.getAmount(),
+                        status.creditLimit().getAmount()
+                    },
                     "Credit limit exceeded: outstanding " + status.outstandingReceivable().getAmount()
                             + " + requested " + requested.getAmount()
                             + " exceeds limit " + status.creditLimit().getAmount());

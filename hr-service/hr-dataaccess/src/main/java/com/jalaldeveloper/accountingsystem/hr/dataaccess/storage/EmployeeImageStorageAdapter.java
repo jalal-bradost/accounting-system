@@ -55,35 +55,35 @@ public class EmployeeImageStorageAdapter implements EmployeeImageStoragePort {
     @Override
     public StoredImage store(UUID companyId, UUID employeeId, String contentType, long size, InputStream content) {
         if (companyId == null || employeeId == null) {
-            throw new HrDomainException("companyId and employeeId required for image storage");
+            throw new HrDomainException("error.hr.imageStorageIdsRequired", null, "companyId and employeeId required for image storage");
         }
         String normalized = normalizeContentType(contentType);
         if (!ALLOWED.contains(normalized)) {
-            throw new HrDomainException("Unsupported image type: " + contentType);
+            throw new HrDomainException("error.hr.unsupportedImageType", new Object[] { contentType }, "Unsupported image type: " + contentType);
         }
         if (size <= 0 || size > maxBytes) {
-            throw new HrDomainException("Image must be between 1 byte and " + maxBytes + " bytes");
+            throw new HrDomainException("error.hr.imageSizeRange", new Object[] { maxBytes }, "Image must be between 1 byte and " + maxBytes + " bytes");
         }
 
         String filename = companyId + "_" + employeeId + "_" + UUID.randomUUID() + EXT.get(normalized);
         Path target = root.resolve(filename).normalize();
         if (!target.startsWith(root)) {
-            throw new HrDomainException("Invalid image path");
+            throw new HrDomainException("error.hr.invalidImagePath", null, "Invalid image path");
         }
 
         try (InputStream in = content) {
             Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException ex) {
-            throw new HrDomainException("Failed to store employee image: " + ex.getMessage());
+            throw new HrDomainException("error.hr.failedStoreEmployeeImage", new Object[] { ex.getMessage() }, "Failed to store employee image: " + ex.getMessage());
         }
 
         try {
             if (Files.size(target) > maxBytes) {
                 Files.deleteIfExists(target);
-                throw new HrDomainException("Image exceeds maximum size of " + maxBytes + " bytes");
+                throw new HrDomainException("error.hr.imageExceedsMaxSize", new Object[] { maxBytes }, "Image exceeds maximum size of " + maxBytes + " bytes");
             }
         } catch (IOException ex) {
-            throw new HrDomainException("Failed to verify employee image size");
+            throw new HrDomainException("error.hr.failedVerifyImageSize", null, "Failed to verify employee image size");
         }
 
         return new StoredImage(publicBasePath + "/" + filename, normalized);
@@ -96,7 +96,7 @@ public class EmployeeImageStorageAdapter implements EmployeeImageStoragePort {
             try {
                 Files.deleteIfExists(root.resolve(filename).normalize());
             } catch (IOException ex) {
-                throw new HrDomainException("Failed to delete employee image: " + ex.getMessage());
+                throw new HrDomainException("error.hr.failedDeleteEmployeeImage", new Object[] { ex.getMessage() }, "Failed to delete employee image: " + ex.getMessage());
             }
         });
     }

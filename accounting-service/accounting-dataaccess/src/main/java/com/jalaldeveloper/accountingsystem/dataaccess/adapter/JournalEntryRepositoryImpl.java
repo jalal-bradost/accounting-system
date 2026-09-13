@@ -47,7 +47,7 @@ public class JournalEntryRepositoryImpl implements JournalEntryRepository {
                 .orElseThrow(() -> new IllegalStateException("Journal not found: " + journalEntry.getJournalId().getId()));
         JournalEntryEntity existing = jpaRepository.findById(journalEntry.getId().getId()).orElse(null);
         if (existing != null && existing.getStatus() == JournalEntryStatus.POSTED) {
-            throw new AccountingDomainException("Cannot modify a posted journal entry. Use reversal instead.");
+            throw new AccountingDomainException("error.accounting.cannotModifyPostedEntry", null, "Cannot modify a posted journal entry. Use reversal instead.");
         }
         JournalEntryEntity entity = mapper.domainToEntity(journalEntry, existing, journalEntity);
         Instant now = Instant.now();

@@ -293,7 +293,7 @@ class PayrollApplicationServiceImpl implements PayrollApplicationService {
 
     private void validateContractReferences(CompanyId companyId, SaveContractCommand cmd) {
         if (!persistence.employeeExists(cmd.employeeId())) {
-            throw new HrDomainException("Employee not found: " + cmd.employeeId());
+            throw new HrDomainException("error.hr.employeeNotFound", new Object[] { cmd.employeeId() }, "Employee not found: " + cmd.employeeId());
         }
         loadStructure(cmd.structureId());
         loadSchedule(cmd.workingScheduleId());
@@ -304,7 +304,7 @@ class PayrollApplicationServiceImpl implements PayrollApplicationService {
                 ? cmd.currencyCode()
                 : companyCurrencyPort.defaultCurrencyCode(companyId);
         if (!companyCurrencyPort.isActiveCurrency(companyId, currency)) {
-            throw new HrDomainException("Currency is not active for company: " + currency);
+            throw new HrDomainException("error.hr.currencyNotActiveForCompany", new Object[] { currency }, "Currency is not active for company: " + currency);
         }
     }
 
@@ -341,7 +341,7 @@ class PayrollApplicationServiceImpl implements PayrollApplicationService {
         if (ctx != null) {
             return ctx.requireCompany();
         }
-        throw new HrDomainException("companyId required");
+        throw new HrDomainException("error.hr.companyIdRequired", null, "companyId required");
     }
 
     private ScheduleRow toScheduleRow(UUID id, CompanyId companyId, SaveWorkingScheduleCommand cmd) {

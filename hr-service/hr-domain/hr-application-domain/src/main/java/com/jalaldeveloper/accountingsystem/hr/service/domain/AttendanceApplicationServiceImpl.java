@@ -134,7 +134,7 @@ class AttendanceApplicationServiceImpl implements AttendanceApplicationService {
     @Transactional
     public List<AttendanceResponse> bulkCreate(BulkCreateAttendanceCommand cmd) {
         if (cmd.getItems() == null || cmd.getItems().isEmpty()) {
-            throw new HrDomainException("At least one attendance item is required");
+            throw new HrDomainException("error.hr.attendanceItemRequired", null, "At least one attendance item is required");
         }
         List<AttendanceResponse> created = new ArrayList<>();
         for (CreateAttendanceCommand item : cmd.getItems()) {
@@ -151,13 +151,13 @@ class AttendanceApplicationServiceImpl implements AttendanceApplicationService {
     public List<AttendanceResponse> generateFromSchedule(GenerateAttendanceFromScheduleCommand cmd) {
         CompanyId companyId = resolveCompany(cmd.getCompanyId());
         if (cmd.getEmployeeId() == null) {
-            throw new HrDomainException("employeeId required");
+            throw new HrDomainException("error.hr.employeeIdRequired", null, "employeeId required");
         }
         ensureEmployeeExists(cmd.getEmployeeId());
         ScheduleRow schedule = payrollPersistence.findSchedule(cmd.getWorkingScheduleId())
                 .orElseThrow(() -> new HrDomainException("Working schedule not found: " + cmd.getWorkingScheduleId()));
         if (!schedule.companyId().equals(companyId.getId())) {
-            throw new HrDomainException("Working schedule company mismatch");
+            throw new HrDomainException("error.hr.workingScheduleCompanyMismatch", null, "Working schedule company mismatch");
         }
 
         Set<Short> workDays = new HashSet<>();
@@ -208,7 +208,7 @@ class AttendanceApplicationServiceImpl implements AttendanceApplicationService {
         if (ctx != null) {
             return ctx.requireCompany();
         }
-        throw new HrDomainException("companyId required");
+        throw new HrDomainException("error.hr.companyIdRequired", null, "companyId required");
     }
 
     private String normalizeMode(String mode) {

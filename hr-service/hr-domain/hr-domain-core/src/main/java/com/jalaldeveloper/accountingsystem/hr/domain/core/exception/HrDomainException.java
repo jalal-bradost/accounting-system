@@ -11,4 +11,8 @@ public class HrDomainException extends DomainException {
     public HrDomainException(String message, Throwable cause) {
         super(message, cause);
     }
+
+    public HrDomainException(String messageKey, Object[] messageArgs, String defaultMessage) {
+        super(messageKey, messageArgs, defaultMessage);
+    }
 }

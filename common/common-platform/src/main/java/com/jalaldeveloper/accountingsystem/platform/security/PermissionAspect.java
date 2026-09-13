@@ -64,7 +64,10 @@ public class PermissionAspect {
         };
 
         if (!allowed) {
-            throw new ForbiddenException("Missing required permission(s): " + required);
+            throw new ForbiddenException(
+                    "error.security.missingPermissions",
+                    new Object[] {required.toString()},
+                    "Missing required permission(s): " + required);
         }
         return pjp.proceed();
     }

@@ -40,27 +40,27 @@ public class LeaveAllocation {
     }
 
     public void validate() {
-        if (companyId == null) throw new HrDomainException("companyId required");
-        if (employeeId == null) throw new HrDomainException("employeeId required");
-        if (timeOffTypeId == null) throw new HrDomainException("timeOffTypeId required");
-        if (name == null || name.isBlank()) throw new HrDomainException("name required");
+        if (companyId == null) throw new HrDomainException("error.hr.companyIdRequired", null, "companyId required");
+        if (employeeId == null) throw new HrDomainException("error.hr.employeeIdRequired", null, "employeeId required");
+        if (timeOffTypeId == null) throw new HrDomainException("error.hr.timeOffTypeIdRequired", null, "timeOffTypeId required");
+        if (name == null || name.isBlank()) throw new HrDomainException("error.hr.nameRequired", null, "name required");
         if (numberOfDays == null || numberOfDays.signum() <= 0) {
-            throw new HrDomainException("numberOfDays must be positive");
+            throw new HrDomainException("error.hr.numberOfDaysPositive", null, "numberOfDays must be positive");
         }
-        if (dateFrom == null || dateTo == null) throw new HrDomainException("validity dates required");
-        if (dateTo.isBefore(dateFrom)) throw new HrDomainException("dateTo must be on or after dateFrom");
+        if (dateFrom == null || dateTo == null) throw new HrDomainException("error.hr.validityDatesRequired", null, "validity dates required");
+        if (dateTo.isBefore(dateFrom)) throw new HrDomainException("error.hr.dateToOnOrAfterFrom", null, "dateTo must be on or after dateFrom");
     }
 
     public LeaveAllocation approve() {
         if (!STATE_CONFIRM.equals(state)) {
-            throw new HrDomainException("Only allocations awaiting approval can be validated");
+            throw new HrDomainException("error.hr.onlyAwaitingAllocationCanValidate", null, "Only allocations awaiting approval can be validated");
         }
         return toBuilder().state(STATE_VALIDATE).build();
     }
 
     public LeaveAllocation refuse() {
         if (STATE_REFUSE.equals(state)) {
-            throw new HrDomainException("Allocation already refused");
+            throw new HrDomainException("error.hr.allocationAlreadyRefused", null, "Allocation already refused");
         }
         return toBuilder().state(STATE_REFUSE).build();
     }

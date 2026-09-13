@@ -1,5 +1,6 @@
 package com.jalaldeveloper.accountingsystem.platform.security;
 
+import com.jalaldeveloper.accountingsystem.application.handler.SecurityErrorResponseWriter;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -53,7 +54,8 @@ public class PlatformSecurityConfiguration {
             HttpSecurity http,
             PlatformSecurityProperties securityProperties,
             ObjectProvider<JwtAuthenticationFilter> jwtFilter,
-            CorsConfigurationSource platformCorsConfigurationSource) throws Exception {
+            CorsConfigurationSource platformCorsConfigurationSource,
+            SecurityErrorResponseWriter securityErrorResponseWriter) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable);
         http.cors(c -> c.configurationSource(platformCorsConfigurationSource));
 
@@ -73,18 +75,22 @@ public class PlatformSecurityConfiguration {
                 .requestMatchers("/h2-console", "/h2-console/**").permitAll()
                 .requestMatchers("/api/**").authenticated());
         http.exceptionHandling(e -> e
-                .authenticationEntryPoint((request, response, authException) -> {
-                    response.setStatus(HttpStatus.UNAUTHORIZED.value());
-                    response.setContentType("application/json");
-                    response.getWriter().write(
-                            "{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication required\"}");
-                })
-                .accessDeniedHandler((request, response, accessDeniedException) -> {
-                    response.setStatus(HttpStatus.FORBIDDEN.value());
-                    response.setContentType("application/json");
-                    response.getWriter().write(
-                            "{\"code\":\"ACCESS_DENIED\",\"message\":\"Access denied\"}");
-                }));
+                .authenticationEntryPoint((request, response, authException) -> securityErrorResponseWriter
+                        .writeJsonError(
+                                request,
+                                response,
+                                HttpStatus.UNAUTHORIZED,
+                                "UNAUTHORIZED",
+                                "error.security.unauthorized",
+                                "Authentication required"))
+                .accessDeniedHandler((request, response, accessDeniedException) -> securityErrorResponseWriter
+                        .writeJsonError(
+                                request,
+                                response,
+                                HttpStatus.FORBIDDEN,
+                                "ACCESS_DENIED",
+                                "error.security.accessDenied",
+                                "Access denied")));
         jwtFilter.ifAvailable(f -> http.addFilterBefore(f, UsernamePasswordAuthenticationFilter.class));
         return http.build();
     }

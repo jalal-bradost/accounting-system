@@ -62,14 +62,14 @@ public class Expense {
     }
 
     public void validate() {
-        if (companyId == null) throw new ExpenseDomainException("companyId required");
-        if (description == null || description.isBlank()) throw new ExpenseDomainException("description required");
-        if (employeeId == null) throw new ExpenseDomainException("employeeId required");
-        if (expenseDate == null) throw new ExpenseDomainException("expenseDate required");
-        if (currencyCode == null || currencyCode.isBlank()) throw new ExpenseDomainException("currencyCode required");
-        if (total == null || total.signum() < 0) throw new ExpenseDomainException("total must be >= 0");
-        if (taxAmount == null || taxAmount.signum() < 0) throw new ExpenseDomainException("taxAmount must be >= 0");
-        if (taxAmount.compareTo(total) > 0) throw new ExpenseDomainException("taxAmount cannot exceed total");
+        if (companyId == null) throw new ExpenseDomainException("error.expense.companyIdRequired", null, "companyId required");
+        if (description == null || description.isBlank()) throw new ExpenseDomainException("error.expense.descriptionRequired", null, "description required");
+        if (employeeId == null) throw new ExpenseDomainException("error.expense.employeeIdRequired", null, "employeeId required");
+        if (expenseDate == null) throw new ExpenseDomainException("error.expense.expenseDateRequired", null, "expenseDate required");
+        if (currencyCode == null || currencyCode.isBlank()) throw new ExpenseDomainException("error.expense.currencyCodeRequired", null, "currencyCode required");
+        if (total == null || total.signum() < 0) throw new ExpenseDomainException("error.expense.totalNonNegative", null, "total must be >= 0");
+        if (taxAmount == null || taxAmount.signum() < 0) throw new ExpenseDomainException("error.expense.taxAmountNonNegative", null, "taxAmount must be >= 0");
+        if (taxAmount.compareTo(total) > 0) throw new ExpenseDomainException("error.expense.taxAmountCannotExceedTotal", null, "taxAmount cannot exceed total");
     }
 
     public boolean isEditable() {
@@ -90,10 +90,10 @@ public class Expense {
 
     public void submit() {
         if (state != ExpenseState.DRAFT) {
-            throw new ExpenseDomainException("Only draft expenses can be submitted");
+            throw new ExpenseDomainException("error.expense.onlyDraftCanSubmit", null, "Only draft expenses can be submitted");
         }
         if (total == null || total.signum() <= 0) {
-            throw new ExpenseDomainException("total must be positive to submit");
+            throw new ExpenseDomainException("error.expense.totalPositiveToSubmit", null, "total must be positive to submit");
         }
         this.state = ExpenseState.SUBMITTED;
         touch();
@@ -101,7 +101,7 @@ public class Expense {
 
     public void approve() {
         if (state != ExpenseState.SUBMITTED) {
-            throw new ExpenseDomainException("Only submitted expenses can be approved");
+            throw new ExpenseDomainException("error.expense.onlySubmittedCanApprove", null, "Only submitted expenses can be approved");
         }
         this.state = ExpenseState.APPROVED;
         touch();
@@ -109,7 +109,7 @@ public class Expense {
 
     public void refuse() {
         if (state != ExpenseState.SUBMITTED) {
-            throw new ExpenseDomainException("Only submitted expenses can be refused");
+            throw new ExpenseDomainException("error.expense.onlySubmittedCanRefuse", null, "Only submitted expenses can be refused");
         }
         this.state = ExpenseState.DRAFT;
         touch();
@@ -117,13 +117,13 @@ public class Expense {
 
     public void markPosted(UUID journalEntryId) {
         if (state != ExpenseState.APPROVED) {
-            throw new ExpenseDomainException("Only approved expenses can be posted");
+            throw new ExpenseDomainException("error.expense.onlyApprovedCanPost", null, "Only approved expenses can be posted");
         }
         if (accountId == null) {
-            throw new ExpenseDomainException("accountId required to post");
+            throw new ExpenseDomainException("error.expense.accountIdRequiredToPost", null, "accountId required to post");
         }
         if (total == null || total.signum() <= 0) {
-            throw new ExpenseDomainException("total must be positive to post");
+            throw new ExpenseDomainException("error.expense.totalPositiveToPost", null, "total must be positive to post");
         }
         this.journalEntryId = journalEntryId;
         this.state = ExpenseState.POSTED;
@@ -133,20 +133,20 @@ public class Expense {
     public void registerPayment(UUID paymentJournalEntryId, UUID paymentJournalId,
                                 BigDecimal amount, LocalDate paymentDate, String paymentReference) {
         if (state != ExpenseState.POSTED) {
-            throw new ExpenseDomainException("Only posted expenses can be paid");
+            throw new ExpenseDomainException("error.expense.onlyPostedCanBePaid", null, "Only posted expenses can be paid");
         }
         if (journalEntryId == null) {
-            throw new ExpenseDomainException("Expense must have a posted journal entry before payment");
+            throw new ExpenseDomainException("error.expense.journalEntryRequiredBeforePayment", null, "Expense must have a posted journal entry before payment");
         }
         if (paymentJournalEntryId == null || paymentJournalId == null) {
-            throw new ExpenseDomainException("payment journal required");
+            throw new ExpenseDomainException("error.expense.paymentJournalRequired", null, "payment journal required");
         }
         if (amount == null || amount.signum() <= 0) {
-            throw new ExpenseDomainException("payment amount must be positive");
+            throw new ExpenseDomainException("error.expense.paymentAmountPositive", null, "payment amount must be positive");
         }
         BigDecimal due = getAmountDue();
         if (amount.compareTo(due) > 0) {
-            throw new ExpenseDomainException("payment amount exceeds amount due");
+            throw new ExpenseDomainException("error.expense.paymentExceedsAmountDue", null, "payment amount exceeds amount due");
         }
         this.paymentJournalEntryId = paymentJournalEntryId;
         this.paymentJournalId = paymentJournalId;
@@ -161,7 +161,7 @@ public class Expense {
 
     public void cancel() {
         if (state != ExpenseState.DRAFT && state != ExpenseState.SUBMITTED) {
-            throw new ExpenseDomainException("Only draft or submitted expenses can be cancelled");
+            throw new ExpenseDomainException("error.expense.onlyDraftOrSubmittedCanCancel", null, "Only draft or submitted expenses can be cancelled");
         }
         this.state = ExpenseState.CANCELLED;
         touch();
@@ -172,7 +172,7 @@ public class Expense {
                             BigDecimal taxAmount, String currencyCode, ReimbursementType reimbursement,
                             String notes) {
         if (!isEditable()) {
-            throw new ExpenseDomainException("Expense is not editable in state " + state);
+            throw new ExpenseDomainException("error.expense.notEditableInState", new Object[] { state }, "Expense is not editable in state " + state);
         }
         this.description = description;
         this.productId = productId;

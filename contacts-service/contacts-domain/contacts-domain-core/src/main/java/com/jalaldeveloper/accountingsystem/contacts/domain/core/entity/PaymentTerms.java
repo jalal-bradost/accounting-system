@@ -33,14 +33,14 @@ public class PaymentTerms extends ArchivableAggregateRoot<PaymentTermsId> {
     }
 
     public void validate() {
-        if (companyId == null) throw new ContactsDomainException("companyId required");
-        if (name == null || name.isBlank()) throw new ContactsDomainException("name required");
-        if (daysNet < 0) throw new ContactsDomainException("daysNet must be >= 0");
+        if (companyId == null) throw new ContactsDomainException("error.contacts.companyIdRequired", null, "companyId required");
+        if (name == null || name.isBlank()) throw new ContactsDomainException("error.contacts.nameRequired", null, "name required");
+        if (daysNet < 0) throw new ContactsDomainException("error.contacts.daysNetNonNegative", null, "daysNet must be >= 0");
         if (discountDays < 0 || discountDays > daysNet) {
-            throw new ContactsDomainException("discountDays must be between 0 and daysNet");
+            throw new ContactsDomainException("error.contacts.discountDaysRange", null, "discountDays must be between 0 and daysNet");
         }
         if (discountPercent.signum() < 0 || discountPercent.compareTo(BigDecimal.valueOf(100)) > 0) {
-            throw new ContactsDomainException("discountPercent must be in [0,100]");
+            throw new ContactsDomainException("error.contacts.discountPercentRange", null, "discountPercent must be in [0,100]");
         }
     }
 

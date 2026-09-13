@@ -53,13 +53,13 @@ public class Employee extends ArchivableAggregateRoot<EmployeeId> {
     }
 
     public void validate() {
-        if (companyId == null) throw new HrDomainException("companyId required");
-        if (displayName == null || displayName.isBlank()) throw new HrDomainException("displayName required");
+        if (companyId == null) throw new HrDomainException("error.hr.companyIdRequired", null, "companyId required");
+        if (displayName == null || displayName.isBlank()) throw new HrDomainException("error.hr.displayNameRequired", null, "displayName required");
     }
 
     public Employee linkUser(UserId userId) {
         if (userId == null) {
-            throw new HrDomainException("userId required to link user");
+            throw new HrDomainException("error.hr.userIdRequiredToLink", null, "userId required to link user");
         }
         return toBuilder().linkedUserId(userId).build();
     }

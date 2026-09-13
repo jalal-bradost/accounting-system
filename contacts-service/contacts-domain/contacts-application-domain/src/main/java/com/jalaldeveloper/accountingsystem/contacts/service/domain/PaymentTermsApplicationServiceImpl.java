@@ -59,7 +59,7 @@ class PaymentTermsApplicationServiceImpl implements PaymentTermsApplicationServi
                 .discountPercent(cmd.getDiscountPercent() != null ? cmd.getDiscountPercent() : existing.getDiscountPercent())
                 .build();
         if (existing.isActive() != updated.isActive()) {
-            throw new ContactsDomainException("Use archive/unarchive to change active flag");
+            throw new ContactsDomainException("error.contacts.useArchiveForActiveFlag", null, "Use archive/unarchive to change active flag");
         }
         updated.validate();
         return mapper.paymentTermsToResponse(repository.save(updated));

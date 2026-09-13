@@ -26,10 +26,14 @@ public class AccountingDomainServiceImpl implements AccountingDomainService {
     @Override
     public JournalEntry createReversalEntry(JournalEntry originalEntry, String reason, String reversalSequenceNumber) {
         if (originalEntry.getStatus() != JournalEntryStatus.POSTED) {
-            throw new AccountingDomainException("Cannot reverse a non-posted entry.");
+            throw new AccountingDomainException(
+                    "error.accounting.cannotReverseNonPosted", null, "Cannot reverse a non-posted entry.");
         }
         if (reversalSequenceNumber == null || reversalSequenceNumber.isBlank()) {
-            throw new AccountingDomainException("Reversal entry must have a sequence number.");
+            throw new AccountingDomainException(
+                    "error.accounting.reversalSequenceRequired",
+                    null,
+                    "Reversal entry must have a sequence number.");
         }
 
         List<JournalItem> reversedItems = originalEntry.getItems().stream()

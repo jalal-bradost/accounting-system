@@ -31,7 +31,7 @@ public class JournalEntry extends AggregateRoot<JournalEntryId> {
 
     public void validate() {
         if (items == null || items.size() < 2) {
-            throw new AccountingDomainException("Journal entry must have at least two lines.");
+            throw new AccountingDomainException("error.accounting.entryMinTwoLines", null, "Journal entry must have at least two lines.");
         }
         BigDecimal zero = BigDecimal.ZERO;
         for (JournalItem item : items) {
@@ -48,17 +48,20 @@ public class JournalEntry extends AggregateRoot<JournalEntryId> {
         BigDecimal totalDebit = items.stream().map(JournalItem::getDebit).reduce(BigDecimal.ZERO, (a, b) -> a.add(b != null ? b : BigDecimal.ZERO));
         BigDecimal totalCredit = items.stream().map(JournalItem::getCredit).reduce(BigDecimal.ZERO, (a, b) -> a.add(b != null ? b : BigDecimal.ZERO));
         if (totalDebit.compareTo(totalCredit) != 0) {
-            throw new AccountingDomainException("Entry is not balanced! Debits must equal Credits.");
+            throw new AccountingDomainException(
+                    "error.accounting.entryNotBalanced",
+                    null,
+                    "Entry is not balanced! Debits must equal Credits.");
         }
     }
 
     public void post() {
         if (this.status != JournalEntryStatus.DRAFT) {
-            throw new AccountingDomainException("Only Draft entries can be posted.");
+            throw new AccountingDomainException("error.accounting.onlyDraftCanPost", null, "Only Draft entries can be posted.");
         }
 
         if (items == null || items.isEmpty()) {
-            throw new AccountingDomainException("Cannot post an empty journal entry.");
+            throw new AccountingDomainException("error.accounting.cannotPostEmptyEntry", null, "Cannot post an empty journal entry.");
         }
 
         // Logic from previous step: Ensures Sum(Debit) == Sum(Credit)
@@ -69,7 +72,7 @@ public class JournalEntry extends AggregateRoot<JournalEntryId> {
 
     public void cancel() {
         if (this.status != JournalEntryStatus.DRAFT) {
-            throw new AccountingDomainException("Only DRAFT entries can be cancelled. POSTED entries must be reversed.");
+            throw new AccountingDomainException("error.accounting.onlyDraftCanCancel", null, "Only DRAFT entries can be cancelled. POSTED entries must be reversed.");
         }
         this.status = JournalEntryStatus.CANCELLED;
     }

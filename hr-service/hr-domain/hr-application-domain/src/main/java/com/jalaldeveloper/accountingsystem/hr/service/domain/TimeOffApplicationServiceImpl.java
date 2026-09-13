@@ -60,7 +60,7 @@ class TimeOffApplicationServiceImpl implements TimeOffApplicationService {
     public TimeOffTypeResponse createType(SaveTimeOffTypeCommand cmd) {
         CompanyId companyId = resolveCompany(cmd.companyId());
         if (typeRepository.existsByCompanyAndCode(companyId, cmd.code())) {
-            throw new HrDomainException("Time off type code already exists: " + cmd.code());
+            throw new HrDomainException("error.hr.timeOffTypeCodeExists", new Object[] { cmd.code() }, "Time off type code already exists: " + cmd.code());
         }
         TimeOffType type = TimeOffType.builder()
                 .id(new TimeOffTypeId(UUID.randomUUID()))
@@ -95,7 +95,7 @@ class TimeOffApplicationServiceImpl implements TimeOffApplicationService {
         CompanyId companyId = resolveCompany(cmd.companyId());
         ensureEmployee(cmd.employeeId());
         TimeOffType type = loadType(cmd.timeOffTypeId());
-        if (type.isCompensatory()) throw new HrDomainException("Compensatory time off is not supported");
+        if (type.isCompensatory()) throw new HrDomainException("error.hr.compensatoryTimeOffNotSupported", null, "Compensatory time off is not supported");
         LeaveAllocation allocation = LeaveAllocation.builder()
                 .id(new LeaveAllocationId(UUID.randomUUID()))
                 .companyId(companyId)
@@ -158,7 +158,7 @@ class TimeOffApplicationServiceImpl implements TimeOffApplicationService {
         CompanyId companyId = resolveCompany(cmd.companyId());
         ensureEmployee(cmd.employeeId());
         TimeOffType type = loadType(cmd.timeOffTypeId());
-        if (type.isCompensatory()) throw new HrDomainException("Compensatory time off is not supported");
+        if (type.isCompensatory()) throw new HrDomainException("error.hr.compensatoryTimeOffNotSupported", null, "Compensatory time off is not supported");
         BigDecimal days = cmd.numberOfDays() != null
                 ? cmd.numberOfDays()
                 : LeaveRequest.computeDays(cmd.dateFrom(), cmd.dateTo());
@@ -319,7 +319,7 @@ class TimeOffApplicationServiceImpl implements TimeOffApplicationService {
         }
         var page = employeeRepository.search(companyId, null, null, false,
                 org.springframework.data.domain.PageRequest.of(0, 1));
-        if (page.isEmpty()) throw new HrDomainException("No employees found for dashboard");
+        if (page.isEmpty()) throw new HrDomainException("error.hr.noEmployeesForDashboard", null, "No employees found for dashboard");
         return page.getContent().get(0).getId().getId();
     }
 
@@ -361,7 +361,7 @@ class TimeOffApplicationServiceImpl implements TimeOffApplicationService {
         if (companyId != null) return new CompanyId(companyId);
         CompanyContext ctx = companyContextProvider.getIfAvailable();
         if (ctx != null) return ctx.requireCompany();
-        throw new HrDomainException("companyId required");
+        throw new HrDomainException("error.hr.companyIdRequired", null, "companyId required");
     }
 
     private TimeOffTypeResponse toTypeResponse(TimeOffType t) {

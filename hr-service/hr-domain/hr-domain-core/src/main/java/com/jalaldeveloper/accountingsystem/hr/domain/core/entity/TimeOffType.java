@@ -34,12 +34,12 @@ public class TimeOffType {
     }
 
     public void validate() {
-        if (companyId == null) throw new HrDomainException("companyId required");
-        if (name == null || name.isBlank()) throw new HrDomainException("name required");
-        if (code == null || code.isBlank()) throw new HrDomainException("code required");
-        if (displayCode == null || displayCode.isBlank()) throw new HrDomainException("displayCode required");
+        if (companyId == null) throw new HrDomainException("error.hr.companyIdRequired", null, "companyId required");
+        if (name == null || name.isBlank()) throw new HrDomainException("error.hr.nameRequired", null, "name required");
+        if (code == null || code.isBlank()) throw new HrDomainException("error.hr.codeRequired", null, "code required");
+        if (displayCode == null || displayCode.isBlank()) throw new HrDomainException("error.hr.displayCodeRequired", null, "displayCode required");
         if (isCompensatory()) {
-            throw new HrDomainException("Compensatory time off is not supported");
+            throw new HrDomainException("error.hr.compensatoryTimeOffNotSupported", null, "Compensatory time off is not supported");
         }
     }
 

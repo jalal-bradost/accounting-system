@@ -204,22 +204,22 @@ public final class PayrollApi {
     ) {
         public void validateForSave() {
             if (employeeId == null) {
-                throw new HrDomainException("employeeId required");
+                throw new HrDomainException("error.hr.employeeIdRequired", null, "employeeId required");
             }
             if (name == null || name.isBlank()) {
-                throw new HrDomainException("name required");
+                throw new HrDomainException("error.hr.nameRequired", null, "name required");
             }
             if (structureId == null) {
-                throw new HrDomainException("structureId required");
+                throw new HrDomainException("error.hr.structureIdRequired", null, "structureId required");
             }
             if (workingScheduleId == null) {
-                throw new HrDomainException("workingScheduleId required");
+                throw new HrDomainException("error.hr.workingScheduleIdRequired", null, "workingScheduleId required");
             }
             if (wage == null) {
-                throw new HrDomainException("wage required");
+                throw new HrDomainException("error.hr.wageRequired", null, "wage required");
             }
             if (dateStart == null) {
-                throw new HrDomainException("dateStart required");
+                throw new HrDomainException("error.hr.dateStartRequired", null, "dateStart required");
             }
         }
     }

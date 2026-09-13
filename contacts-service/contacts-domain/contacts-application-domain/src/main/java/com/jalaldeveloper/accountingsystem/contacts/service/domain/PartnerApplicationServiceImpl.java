@@ -90,7 +90,7 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
     @Transactional
     public PartnerResponse uploadPartnerImage(UUID partnerId, MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new ContactsDomainException("Image file is required");
+            throw new ContactsDomainException("error.contacts.imageFileRequired", null, "Image file is required");
         }
         Partner partner = loadIncludingArchivedOrThrow(partnerId);
         partnerRepository.findImageMeta(partnerId).ifPresent(meta -> imageStorage.deleteIfPresent(meta.imageUrl()));
@@ -103,7 +103,7 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
                     file.getSize(),
                     file.getInputStream());
         } catch (IOException ex) {
-            throw new ContactsDomainException("Failed to read uploaded image");
+            throw new ContactsDomainException("error.contacts.failedReadUploadedImage", null, "Failed to read uploaded image");
         }
         partnerRepository.updateImage(partnerId, stored.publicUrl(), stored.contentType());
         auditLogPort.recordBusinessEvent(partner.getCompanyId(), MODEL_NAME, partnerId, "Partner image updated", null);
@@ -272,7 +272,7 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
         Partner partner = loadOrThrow(partnerId);
         PartnerAddress current = partner.findAddress(addressId);
         if (current.getType() != cmd.getType()) {
-            throw new ContactsDomainException("Address type cannot be changed; remove + add");
+            throw new ContactsDomainException("error.contacts.addressTypeCannotChange", null, "Address type cannot be changed; remove + add");
         }
         current.update(cmd.getStreet1(), cmd.getStreet2(), cmd.getCity(),
                 cmd.getState(), cmd.getPostalCode(), cmd.getCountry());
@@ -318,7 +318,7 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
     public CreditStatusResponse creditStatus(UUID partnerId) {
         Partner partner = loadIncludingArchivedOrThrow(partnerId);
         if (!partner.isCustomer()) {
-            throw new ContactsDomainException("Partner is not a customer");
+            throw new ContactsDomainException("error.contacts.partnerNotCustomer", null, "Partner is not a customer");
         }
         PartnerBalancePort balancePort = partnerBalancePortProvider.getIfAvailable();
         Money outstanding = balancePort != null
@@ -342,7 +342,7 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
     public PayableStatusResponse payableStatus(UUID partnerId) {
         Partner partner = loadIncludingArchivedOrThrow(partnerId);
         if (!partner.isVendor()) {
-            throw new ContactsDomainException("Partner is not a vendor");
+            throw new ContactsDomainException("error.contacts.partnerNotVendor", null, "Partner is not a vendor");
         }
         PartnerBalancePort balancePort = partnerBalancePortProvider.getIfAvailable();
         Money outstanding = balancePort != null

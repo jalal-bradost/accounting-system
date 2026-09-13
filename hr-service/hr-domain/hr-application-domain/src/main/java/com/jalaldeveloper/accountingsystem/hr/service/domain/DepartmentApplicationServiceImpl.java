@@ -63,7 +63,7 @@ class DepartmentApplicationServiceImpl implements DepartmentApplicationService {
                 .colorIndex(cmd.getColorIndex() != null ? cmd.getColorIndex() : existing.getColorIndex())
                 .build();
         if (existing.isActive() != updated.isActive()) {
-            throw new HrDomainException("Use archive/unarchive to change active flag");
+            throw new HrDomainException("error.hr.useArchiveForActiveFlag", null, "Use archive/unarchive to change active flag");
         }
         updated.validate();
         return toResponse(departmentRepository.save(updated));

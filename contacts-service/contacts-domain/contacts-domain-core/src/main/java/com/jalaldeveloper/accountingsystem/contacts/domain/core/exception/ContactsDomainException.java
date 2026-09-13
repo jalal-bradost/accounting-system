@@ -11,4 +11,8 @@ public class ContactsDomainException extends DomainException {
     public ContactsDomainException(String message, Throwable cause) {
         super(message, cause);
     }
+
+    public ContactsDomainException(String messageKey, Object[] messageArgs, String defaultMessage) {
+        super(messageKey, messageArgs, defaultMessage);
+    }
 }

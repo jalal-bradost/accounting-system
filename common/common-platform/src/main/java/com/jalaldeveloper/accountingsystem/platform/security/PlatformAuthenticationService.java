@@ -1,11 +1,11 @@
 package com.jalaldeveloper.accountingsystem.platform.security;
 
+import com.jalaldeveloper.accountingsystem.application.exception.LocalizedResponseStatusException;
 import com.jalaldeveloper.accountingsystem.platform.dataaccess.entity.AppUserEntity;
 import com.jalaldeveloper.accountingsystem.platform.dataaccess.repository.AppUserJpaRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
 
@@ -30,17 +30,22 @@ public class PlatformAuthenticationService {
 
     public LoginResult login(UUID companyId, String username, String password) {
         if (!securityProperties.isEnabled()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "JWT login is disabled (app.security.enabled=false)");
+            throw new LocalizedResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "error.auth.jwtDisabled",
+                    "JWT login is disabled (app.security.enabled=false)");
         }
         AppUserEntity user = resolveUser(companyId, username)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
+                .orElseThrow(() -> new LocalizedResponseStatusException(
+                        HttpStatus.UNAUTHORIZED, "error.auth.invalidCredentials", "Invalid credentials"));
         if (!user.isActive()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User inactive");
+            throw new LocalizedResponseStatusException(
+                    HttpStatus.UNAUTHORIZED, "error.auth.userInactive", "User inactive");
         }
         String hash = user.getPasswordHash();
         if (hash == null || hash.isBlank() || !passwordEncoder.matches(password, hash)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
+            throw new LocalizedResponseStatusException(
+                    HttpStatus.UNAUTHORIZED, "error.auth.invalidCredentials", "Invalid credentials");
         }
         String token = jwtService.createAccessToken(user.getId(), user.getCompanyId());
         long expSec = securityProperties.getJwt().getExpirationMinutes() * 60L;

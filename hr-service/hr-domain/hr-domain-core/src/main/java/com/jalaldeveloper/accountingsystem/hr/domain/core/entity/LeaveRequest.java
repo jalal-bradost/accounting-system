@@ -40,13 +40,13 @@ public class LeaveRequest {
     }
 
     public void validate() {
-        if (companyId == null) throw new HrDomainException("companyId required");
-        if (employeeId == null) throw new HrDomainException("employeeId required");
-        if (timeOffTypeId == null) throw new HrDomainException("timeOffTypeId required");
-        if (dateFrom == null || dateTo == null) throw new HrDomainException("dates required");
-        if (dateTo.isBefore(dateFrom)) throw new HrDomainException("dateTo must be on or after dateFrom");
+        if (companyId == null) throw new HrDomainException("error.hr.companyIdRequired", null, "companyId required");
+        if (employeeId == null) throw new HrDomainException("error.hr.employeeIdRequired", null, "employeeId required");
+        if (timeOffTypeId == null) throw new HrDomainException("error.hr.timeOffTypeIdRequired", null, "timeOffTypeId required");
+        if (dateFrom == null || dateTo == null) throw new HrDomainException("error.hr.datesRequired", null, "dates required");
+        if (dateTo.isBefore(dateFrom)) throw new HrDomainException("error.hr.dateToOnOrAfterFrom", null, "dateTo must be on or after dateFrom");
         if (numberOfDays == null || numberOfDays.signum() <= 0) {
-            throw new HrDomainException("numberOfDays must be positive");
+            throw new HrDomainException("error.hr.numberOfDaysPositive", null, "numberOfDays must be positive");
         }
     }
 
@@ -57,24 +57,24 @@ public class LeaveRequest {
 
     public LeaveRequest approve() {
         if (!STATE_CONFIRM.equals(state)) {
-            throw new HrDomainException("Only requests awaiting approval can be validated");
+            throw new HrDomainException("error.hr.onlyAwaitingRequestCanValidate", null, "Only requests awaiting approval can be validated");
         }
         return toBuilder().state(STATE_VALIDATE).build();
     }
 
     public LeaveRequest refuse() {
         if (STATE_REFUSE.equals(state)) {
-            throw new HrDomainException("Request already refused");
+            throw new HrDomainException("error.hr.requestAlreadyRefused", null, "Request already refused");
         }
         if (STATE_CANCEL.equals(state)) {
-            throw new HrDomainException("Cancelled request cannot be refused");
+            throw new HrDomainException("error.hr.cancelledRequestCannotRefuse", null, "Cancelled request cannot be refused");
         }
         return toBuilder().state(STATE_REFUSE).build();
     }
 
     public LeaveRequest cancel() {
         if (STATE_VALIDATE.equals(state)) {
-            throw new HrDomainException("Validated request cannot be cancelled");
+            throw new HrDomainException("error.hr.validatedRequestCannotCancel", null, "Validated request cannot be cancelled");
         }
         return toBuilder().state(STATE_CANCEL).build();
     }

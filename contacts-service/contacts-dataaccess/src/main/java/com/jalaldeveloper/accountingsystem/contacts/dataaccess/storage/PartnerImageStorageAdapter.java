@@ -55,35 +55,35 @@ public class PartnerImageStorageAdapter implements PartnerImageStoragePort {
     @Override
     public StoredImage store(UUID companyId, UUID partnerId, String contentType, long size, InputStream content) {
         if (companyId == null || partnerId == null) {
-            throw new ContactsDomainException("companyId and partnerId required for image storage");
+            throw new ContactsDomainException("error.contacts.imageStorageIdsRequired", null, "companyId and partnerId required for image storage");
         }
         String normalized = normalizeContentType(contentType);
         if (!ALLOWED.contains(normalized)) {
-            throw new ContactsDomainException("Unsupported image type: " + contentType);
+            throw new ContactsDomainException("error.contacts.unsupportedImageType", new Object[] { contentType }, "Unsupported image type: " + contentType);
         }
         if (size <= 0 || size > maxBytes) {
-            throw new ContactsDomainException("Image must be between 1 byte and " + maxBytes + " bytes");
+            throw new ContactsDomainException("error.contacts.imageSizeRange", new Object[] { maxBytes }, "Image must be between 1 byte and " + maxBytes + " bytes");
         }
 
         String filename = companyId + "_" + partnerId + "_" + UUID.randomUUID() + EXT.get(normalized);
         Path target = root.resolve(filename).normalize();
         if (!target.startsWith(root)) {
-            throw new ContactsDomainException("Invalid image path");
+            throw new ContactsDomainException("error.contacts.invalidImagePath", null, "Invalid image path");
         }
 
         try (InputStream in = content) {
             Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException ex) {
-            throw new ContactsDomainException("Failed to store partner image: " + ex.getMessage());
+            throw new ContactsDomainException("error.contacts.failedStorePartnerImage", new Object[] { ex.getMessage() }, "Failed to store partner image: " + ex.getMessage());
         }
 
         try {
             if (Files.size(target) > maxBytes) {
                 Files.deleteIfExists(target);
-                throw new ContactsDomainException("Image exceeds maximum size of " + maxBytes + " bytes");
+                throw new ContactsDomainException("error.contacts.imageExceedsMaxSize", new Object[] { maxBytes }, "Image exceeds maximum size of " + maxBytes + " bytes");
             }
         } catch (IOException ex) {
-            throw new ContactsDomainException("Failed to verify partner image size");
+            throw new ContactsDomainException("error.contacts.failedVerifyImageSize", null, "Failed to verify partner image size");
         }
 
         return new StoredImage(publicBasePath + "/" + filename, normalized);
@@ -96,7 +96,7 @@ public class PartnerImageStorageAdapter implements PartnerImageStoragePort {
             try {
                 Files.deleteIfExists(root.resolve(filename).normalize());
             } catch (IOException ex) {
-                throw new ContactsDomainException("Failed to delete partner image: " + ex.getMessage());
+                throw new ContactsDomainException("error.contacts.failedDeletePartnerImage", new Object[] { ex.getMessage() }, "Failed to delete partner image: " + ex.getMessage());
             }
         });
     }

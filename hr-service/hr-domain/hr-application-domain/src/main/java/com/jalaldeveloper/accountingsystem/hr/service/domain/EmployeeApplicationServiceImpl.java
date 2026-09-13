@@ -88,7 +88,7 @@ class EmployeeApplicationServiceImpl implements EmployeeApplicationService {
                 .workLocation(cmd.getWorkLocation() != null ? cmd.getWorkLocation() : existing.getWorkLocation())
                 .build();
         if (existing.isActive() != updated.isActive()) {
-            throw new HrDomainException("Use archive/unarchive to change active flag");
+            throw new HrDomainException("error.hr.useArchiveForActiveFlag", null, "Use archive/unarchive to change active flag");
         }
         updated.validate();
         Employee saved = employeeRepository.save(updated);
@@ -100,7 +100,7 @@ class EmployeeApplicationServiceImpl implements EmployeeApplicationService {
     public EmployeeResponse getMe() {
         CompanyContext ctx = companyContextProvider.getIfAvailable();
         if (ctx == null) {
-            throw new HrDomainException("No authenticated context");
+            throw new HrDomainException("error.hr.noAuthenticatedContext", null, "No authenticated context");
         }
         EmployeeContextResolver resolver = new EmployeeContextResolver(ctx, employeeRepository);
         return resolver.currentEmployee()
@@ -165,7 +165,7 @@ class EmployeeApplicationServiceImpl implements EmployeeApplicationService {
     @Transactional
     public EmployeeResponse uploadImage(UUID id, MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new HrDomainException("Image file is required");
+            throw new HrDomainException("error.hr.imageFileRequired", null, "Image file is required");
         }
         Employee employee = loadIncludingArchivedOrThrow(id);
         employeeRepository.findImageMeta(id).ifPresent(meta -> imageStorage.deleteIfPresent(meta.imageUrl()));
@@ -178,7 +178,7 @@ class EmployeeApplicationServiceImpl implements EmployeeApplicationService {
                     file.getSize(),
                     file.getInputStream());
         } catch (IOException ex) {
-            throw new HrDomainException("Failed to read uploaded image");
+            throw new HrDomainException("error.hr.failedReadUploadedImage", null, "Failed to read uploaded image");
         }
         employeeRepository.updateImage(id, stored.publicUrl(), stored.contentType());
         return get(id);
@@ -251,10 +251,10 @@ class EmployeeApplicationServiceImpl implements EmployeeApplicationService {
         }
         UserId uid = new UserId(userId);
         if (!platformUserLookupPort.userExistsInCompany(companyId, uid)) {
-            throw new HrDomainException("Platform user not found in company: " + userId);
+            throw new HrDomainException("error.hr.platformUserNotFoundInCompany", new Object[] { userId }, "Platform user not found in company: " + userId);
         }
         if (platformUserLookupPort.isUserLinkedToAnotherEmployee(companyId, uid, excludeEmployeeId)) {
-            throw new HrDomainException("User is already linked to another employee");
+            throw new HrDomainException("error.hr.userAlreadyLinkedToEmployee", null, "User is already linked to another employee");
         }
     }
 

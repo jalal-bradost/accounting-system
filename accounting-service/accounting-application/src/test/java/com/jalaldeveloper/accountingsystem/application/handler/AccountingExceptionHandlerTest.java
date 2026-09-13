@@ -8,6 +8,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
@@ -28,8 +31,13 @@ class AccountingExceptionHandlerTest {
     @MockitoBean
     private AccountApplicationService accountApplicationService;
 
+    @MockitoBean
+    private ExceptionMessageResolver exceptionMessageResolver;
+
     @Test
     void handleAccountingDomainException_returns422AndErrorBody() throws Exception {
+        when(exceptionMessageResolver.resolve(any(AccountingDomainException.class)))
+                .thenAnswer(inv -> inv.getArgument(0, AccountingDomainException.class).getMessage());
         when(accountApplicationService.getAccount(any()))
                 .thenThrow(new AccountingDomainException("Entry is not balanced!"));
 

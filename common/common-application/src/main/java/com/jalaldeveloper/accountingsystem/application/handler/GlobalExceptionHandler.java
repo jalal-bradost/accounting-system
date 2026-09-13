@@ -1,5 +1,6 @@
 package com.jalaldeveloper.accountingsystem.application.handler;
 
+import com.jalaldeveloper.accountingsystem.domain.exception.DomainException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.ValidationException;
@@ -20,6 +21,22 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    private final ExceptionMessageResolver messageResolver;
+
+    public GlobalExceptionHandler(ExceptionMessageResolver messageResolver) {
+        this.messageResolver = messageResolver;
+    }
+
+    @ResponseBody
+    @ExceptionHandler(value = {DomainException.class})
+    @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+    public ErrorDTO handleDomainException(DomainException exception) {
+        log.error(exception.getMessage(), exception);
+        return ErrorDTO.builder()
+                .code("DOMAIN_ERROR")
+                .message(messageResolver.resolve(exception))
+                .build();
+    }
 
     @ResponseBody
     @ExceptionHandler(value = {Exception.class})

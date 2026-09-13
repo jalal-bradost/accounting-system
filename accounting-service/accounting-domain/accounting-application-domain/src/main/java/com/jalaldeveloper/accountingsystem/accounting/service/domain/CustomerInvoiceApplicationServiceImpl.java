@@ -152,15 +152,17 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
 
     private UUID resolveLiquidityAccountForPaymentJournal(UUID companyId, UUID journalId) {
         Journal j = journalRepository.findById(new JournalId(journalId))
-                .orElseThrow(() -> new AccountingDomainException("Payment journal not found"));
+                .orElseThrow(() -> new AccountingDomainException("error.accounting.paymentJournalNotFound", null, "Payment journal not found"));
         if (!j.getCompanyId().getId().equals(companyId)) {
-            throw new AccountingDomainException("Journal company mismatch");
+            throw new AccountingDomainException("error.accounting.journalCompanyMismatch", null, "Journal company mismatch");
         }
         if (j.getJournalType() != JournalType.CASH && j.getJournalType() != JournalType.BANK) {
-            throw new AccountingDomainException("Payment journal must be cash or bank");
+            throw new AccountingDomainException("error.accounting.paymentJournalCashOrBank", null, "Payment journal must be cash or bank");
         }
         return accountRepository.findByCompanyIdAndCode(new CompanyId(companyId), j.getCode())
                 .orElseThrow(() -> new AccountingDomainException(
+                        "error.accounting.liquidityAccountNotFoundForJournal",
+                        new Object[] { j.getCode() },
                         "Liquidity account for journal code " + j.getCode() + " not found"))
                 .getId().getId();
     }
@@ -171,13 +173,13 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         UUID companyId = companyIdOrDefault(command.getCompanyId());
         PartnerResponse customer = partnerApplicationService.getPartner(command.getCustomerPartnerId());
         if (!customer.isCustomer()) {
-            throw new AccountingDomainException("Partner is not a customer");
+            throw new AccountingDomainException("error.accounting.partnerNotCustomer", null, "Partner is not a customer");
         }
         if (!customer.getCompanyId().equals(companyId)) {
-            throw new AccountingDomainException("Customer belongs to another company");
+            throw new AccountingDomainException("error.accounting.customerCompanyMismatch", null, "Customer belongs to another company");
         }
         UUID defaultRevenue = accountRepository.findByCompanyIdAndCode(new CompanyId(companyId), DEFAULT_REVENUE_ACCOUNT_CODE)
-                .orElseThrow(() -> new AccountingDomainException("Default revenue account not found"))
+                .orElseThrow(() -> new AccountingDomainException("error.accounting.defaultRevenueAccountNotFound", null, "Default revenue account not found"))
                 .getId().getId();
 
         Instant now = Instant.now();
@@ -196,7 +198,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
             try {
                 moveType = CustomerInvoiceMoveType.valueOf(command.getMoveType().trim().toUpperCase());
             } catch (IllegalArgumentException ex) {
-                throw new AccountingDomainException("Invalid moveType: " + command.getMoveType());
+                throw new AccountingDomainException("error.accounting.invalidMoveType", new Object[] { command.getMoveType() }, "Invalid moveType: " + command.getMoveType());
             }
         }
         inv.setMoveType(moveType);
@@ -210,7 +212,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         int seq = 0;
         for (CustomerInvoiceLineCommand lc : command.getLines()) {
             if (lc.getUnitPrice().compareTo(BigDecimal.ZERO) <= 0) {
-                throw new AccountingDomainException("Line unit price must be positive");
+                throw new AccountingDomainException("error.accounting.lineUnitPricePositive", null, "Line unit price must be positive");
             }
             UUID revAcc = lc.getRevenueAccountId() != null ? lc.getRevenueAccountId() : defaultRevenue;
             CustomerInvoiceLine line = new CustomerInvoiceLine();
@@ -243,16 +245,16 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
     @Transactional
     public CustomerInvoiceResponse createCreditNoteFromInvoice(UUID invoiceId, CreateCreditNoteFromInvoiceCommand command) {
         CustomerInvoice source = invoiceRepository.findByIdWithLines(invoiceId)
-                .orElseThrow(() -> new AccountingDomainException("Customer invoice not found"));
+                .orElseThrow(() -> new AccountingDomainException("error.accounting.customerInvoiceNotFound", null, "Customer invoice not found"));
         UUID companyId = companyIdOrDefault(command.getCompanyId());
         if (!source.getCompanyId().equals(companyId)) {
-            throw new AccountingDomainException("Invoice company mismatch");
+            throw new AccountingDomainException("error.accounting.invoiceCompanyMismatch", null, "Invoice company mismatch");
         }
         if (source.getState() != CustomerInvoiceState.POSTED) {
-            throw new AccountingDomainException("Only posted invoices can be credited");
+            throw new AccountingDomainException("error.accounting.onlyPostedInvoiceCanBeCredited", null, "Only posted invoices can be credited");
         }
         if (source.getMoveType() == CustomerInvoiceMoveType.CREDIT_NOTE) {
-            throw new AccountingDomainException("Cannot create a credit note from another credit note");
+            throw new AccountingDomainException("error.accounting.cannotCreditNoteFromCreditNote", null, "Cannot create a credit note from another credit note");
         }
 
         Map<UUID, BigDecimal> qtyByLineId = new LinkedHashMap<>();
@@ -321,7 +323,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
             lines.add(lc);
         }
         if (lines.isEmpty()) {
-            throw new AccountingDomainException("Credit note has no lines");
+            throw new AccountingDomainException("error.accounting.creditNoteNoLines", null, "Credit note has no lines");
         }
         create.setLines(lines);
         return createCustomerInvoice(create);
@@ -331,9 +333,9 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
     @Transactional
     public CustomerInvoiceResponse postCustomerInvoice(UUID invoiceId) {
         CustomerInvoice inv = invoiceRepository.findByIdWithLines(invoiceId)
-                .orElseThrow(() -> new AccountingDomainException("Customer invoice not found"));
+                .orElseThrow(() -> new AccountingDomainException("error.accounting.customerInvoiceNotFound", null, "Customer invoice not found"));
         if (inv.getState() != CustomerInvoiceState.DRAFT) {
-            throw new AccountingDomainException("Invoice is not draft");
+            throw new AccountingDomainException("error.accounting.invoiceNotDraft", null, "Invoice is not draft");
         }
 
         BigDecimal rate = resolveExchangeRate(
@@ -385,7 +387,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
             UUID receivableAccount = customer.getReceivableAccountId() != null
                     ? customer.getReceivableAccountId()
                     : accountRepository.findByCompanyIdAndCode(new CompanyId(inv.getCompanyId()), DEFAULT_AR_ACCOUNT_CODE)
-                    .orElseThrow(() -> new AccountingDomainException("Default AR account not found"))
+                    .orElseThrow(() -> new AccountingDomainException("error.accounting.defaultArAccountNotFound", null, "Default AR account not found"))
                     .getId().getId();
             if (creditNote) {
                 items.add(0, new JournalItemCommand(receivableAccount, "Accounts receivable", BigDecimal.ZERO, arTotalComp,
@@ -398,7 +400,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
 
         if (!items.isEmpty()) {
             Journal saleJournal = journalRepository.findByCompanyIdAndCode(new CompanyId(inv.getCompanyId()), SALE_JOURNAL_CODE)
-                    .orElseThrow(() -> new AccountingDomainException("Sale journal not found"));
+                    .orElseThrow(() -> new AccountingDomainException("error.accounting.saleJournalNotFound", null, "Sale journal not found"));
             CreateJournalEntryCommand jcmd = new CreateJournalEntryCommand(
                     inv.getCompanyId(),
                     saleJournal.getId().getId(),
@@ -446,7 +448,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
     @Transactional(readOnly = true)
     public List<CustomerInvoiceResponse> listCreditNotesForInvoice(UUID invoiceId) {
         invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new AccountingDomainException("Customer invoice not found"));
+                .orElseThrow(() -> new AccountingDomainException("error.accounting.customerInvoiceNotFound", null, "Customer invoice not found"));
         return invoiceRepository.findByReversedInvoiceIdWithLines(invoiceId).stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
@@ -470,7 +472,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
     public CustomerInvoiceResponse getCustomerInvoice(UUID invoiceId) {
         return invoiceRepository.findByIdWithLines(invoiceId)
                 .map(this::toResponse)
-                .orElseThrow(() -> new AccountingDomainException("Customer invoice not found"));
+                .orElseThrow(() -> new AccountingDomainException("error.accounting.customerInvoiceNotFound", null, "Customer invoice not found"));
     }
 
     @Override
@@ -496,15 +498,15 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
     public CustomerPaymentResponse registerCustomerPayment(RegisterCustomerPaymentCommand command) {
         UUID companyId = companyIdOrDefault(command.getCompanyId());
         CustomerInvoice inv = invoiceRepository.findById(command.getCustomerInvoiceId())
-                .orElseThrow(() -> new AccountingDomainException("Customer invoice not found"));
+                .orElseThrow(() -> new AccountingDomainException("error.accounting.customerInvoiceNotFound", null, "Customer invoice not found"));
         if (!inv.getCompanyId().equals(companyId)) {
-            throw new AccountingDomainException("Invoice company mismatch");
+            throw new AccountingDomainException("error.accounting.invoiceCompanyMismatch", null, "Invoice company mismatch");
         }
         if (inv.getState() != CustomerInvoiceState.POSTED || inv.getJournalEntryId() == null) {
-            throw new AccountingDomainException("Invoice must be posted before payment");
+            throw new AccountingDomainException("error.accounting.invoiceMustBePostedBeforePayment", null, "Invoice must be posted before payment");
         }
         if (inv.getMoveType() == CustomerInvoiceMoveType.CREDIT_NOTE) {
-            throw new AccountingDomainException("Cannot register payment against a credit note");
+            throw new AccountingDomainException("error.accounting.cannotPayCreditNote", null, "Cannot register payment against a credit note");
         }
 
         BigDecimal docAmt = command.getAmount().setScale(4, RoundingMode.HALF_UP);
@@ -515,12 +517,12 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         UUID receivableAccount = customer.getReceivableAccountId() != null
                 ? customer.getReceivableAccountId()
                 : accountRepository.findByCompanyIdAndCode(new CompanyId(companyId), DEFAULT_AR_ACCOUNT_CODE)
-                .orElseThrow(() -> new AccountingDomainException("Default AR account not found"))
+                .orElseThrow(() -> new AccountingDomainException("error.accounting.defaultArAccountNotFound", null, "Default AR account not found"))
                 .getId().getId();
 
         UUID liquidityAccount = resolveLiquidityAccountForPaymentJournal(companyId, command.getPaymentJournalId());
         Journal paymentJournal = journalRepository.findById(new JournalId(command.getPaymentJournalId()))
-                .orElseThrow(() -> new AccountingDomainException("Payment journal not found"));
+                .orElseThrow(() -> new AccountingDomainException("error.accounting.paymentJournalNotFound", null, "Payment journal not found"));
 
         BigDecimal invoiceRate = resolveExchangeRate(
                 companyId, inv.getCurrencyCode(), inv.getInvoiceDate(), inv.getExchangeRateToCompany());
@@ -555,13 +557,13 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
                 .filter(i -> receivableAccount.equals(i.getAccountId()) && i.getDebit().compareTo(BigDecimal.ZERO) > 0)
                 .map(JournalEntryResponse.JournalItemResponse::getId)
                 .findFirst()
-                .orElseThrow(() -> new AccountingDomainException("Could not find AR line on customer invoice entry"));
+                .orElseThrow(() -> new AccountingDomainException("error.accounting.arLineNotFoundOnInvoiceEntry", null, "Could not find AR line on customer invoice entry"));
         JournalEntryResponse paymentEntry = journalEntryApplicationService.getJournalEntry(payEntry.getJournalEntryId());
         UUID payArItem = paymentEntry.getItems().stream()
                 .filter(i -> receivableAccount.equals(i.getAccountId()) && i.getCredit().compareTo(BigDecimal.ZERO) > 0)
                 .map(JournalEntryResponse.JournalItemResponse::getId)
                 .findFirst()
-                .orElseThrow(() -> new AccountingDomainException("Could not find AR line on payment entry"));
+                .orElseThrow(() -> new AccountingDomainException("error.accounting.arLineNotFoundOnPaymentEntry", null, "Could not find AR line on payment entry"));
 
         UUID reconciliationId = UUID.randomUUID();
         reconciliationApplicationService.reconcile(
@@ -640,14 +642,14 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
 
     private void ensurePaymentWithinOutstanding(CustomerInvoice inv, BigDecimal docAmt, String paymentCurrency) {
         CustomerInvoice loaded = invoiceRepository.findByIdWithLines(inv.getId())
-                .orElseThrow(() -> new AccountingDomainException("Customer invoice not found"));
+                .orElseThrow(() -> new AccountingDomainException("error.accounting.customerInvoiceNotFound", null, "Customer invoice not found"));
         String invoiceCurrency = loaded.getCurrencyCode();
         BigDecimal invoiceTotal = invoiceTotalDocumentCurrency(loaded);
         BigDecimal paid = sumPaymentsForInvoice(loaded.getId(), invoiceCurrency);
         BigDecimal credited = sumPostedCreditNotesForInvoice(loaded.getId(), invoiceCurrency);
         BigDecimal outstanding = invoiceTotal.subtract(paid).subtract(credited).setScale(4, RoundingMode.HALF_UP);
         if (outstanding.signum() <= 0) {
-            throw new AccountingDomainException("Customer invoice is already fully paid");
+            throw new AccountingDomainException("error.accounting.invoiceFullyPaid", null, "Customer invoice is already fully paid");
         }
         if (!invoiceCurrency.equalsIgnoreCase(paymentCurrency)) {
             return;
@@ -756,13 +758,13 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         }
         if (fxDiff.signum() > 0) {
             UUID lossAccount = accountRepository.findByCompanyIdAndCode(new CompanyId(companyId), EXCHANGE_LOSS_ACCOUNT_CODE)
-                    .orElseThrow(() -> new AccountingDomainException("Exchange loss account not found"))
+                    .orElseThrow(() -> new AccountingDomainException("error.accounting.exchangeLossAccountNotFound", null, "Exchange loss account not found"))
                     .getId().getId();
             items.add(new JournalItemCommand(lossAccount, "Exchange loss", fxDiff, BigDecimal.ZERO,
                     null, null, null));
         } else {
             UUID gainAccount = accountRepository.findByCompanyIdAndCode(new CompanyId(companyId), EXCHANGE_GAIN_ACCOUNT_CODE)
-                    .orElseThrow(() -> new AccountingDomainException("Exchange gain account not found"))
+                    .orElseThrow(() -> new AccountingDomainException("error.accounting.exchangeGainAccountNotFound", null, "Exchange gain account not found"))
                     .getId().getId();
             items.add(new JournalItemCommand(gainAccount, "Exchange gain", BigDecimal.ZERO, fxDiff.abs(),
                     null, null, null));
