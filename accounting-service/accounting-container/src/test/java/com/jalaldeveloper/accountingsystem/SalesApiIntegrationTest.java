@@ -481,6 +481,69 @@ class SalesApiIntegrationTest {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void sales_dashboard_returns_kpis_for_period() throws Exception {
+        UUID stockLoc = lookupLocationByCode("WH/STOCK");
+        UUID supplier = lookupLocationByCode("VIRT/SUPPLIERS");
+        UUID warehouse = lookupWarehouseByCode("WH");
+        UUID categoryId = lookupCategoryByName("All");
+        UUID uomId = lookupUomByName("Unit");
+        UUID productId = createProduct("SO-DASH-" + UUID.randomUUID().toString().substring(0, 6),
+                "Dashboard Product", categoryId, uomId, "10.00", "100.00");
+
+        UUID receipt = createPicking(warehouse, "INCOMING", supplier, stockLoc, productId, uomId, "10", "10.00");
+        validatePicking(receipt);
+
+        UUID arAccountId = accountIdByCode("430003");
+        UUID custId = createCustomer(arAccountId);
+
+        String draftBody = "{\"customerPartnerId\":\"" + custId + "\",\"currencyCode\":\"USD\",\"warehouseId\":\"" + warehouse
+                + "\",\"orderDate\":\"2026-09-10\",\"lines\":[{\"productId\":\"" + productId + "\",\"name\":\"Quote line\",\"uomId\":\"" + uomId
+                + "\",\"qtyOrdered\":1,\"unitPrice\":80,\"discountPercent\":0,\"taxIds\":[]}]}";
+        mockMvc.perform(post("/api/v1/sales/orders")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(draftBody))
+                .andExpect(status().isOk());
+
+        String soBody = "{\"customerPartnerId\":\"" + custId + "\",\"currencyCode\":\"USD\",\"warehouseId\":\"" + warehouse
+                + "\",\"orderDate\":\"2026-09-12\",\"lines\":[{\"productId\":\"" + productId + "\",\"name\":\"Order line\",\"uomId\":\"" + uomId
+                + "\",\"qtyOrdered\":2,\"unitPrice\":100,\"discountPercent\":0,\"taxIds\":[]}]}";
+        JsonNode so = json.readTree(mockMvc.perform(post("/api/v1/sales/orders")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(soBody))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID soId = UUID.fromString(so.get("id").asText());
+
+        mockMvc.perform(post("/api/v1/sales/orders/" + soId + "/confirm")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk());
+
+        JsonNode dash = json.readTree(mockMvc.perform(get("/api/v1/sales/dashboard")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .param("from", "2026-09-01")
+                        .param("to", "2026-09-30"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+
+        assertThat(dash.get("quotations").get("value").decimalValue()).isGreaterThanOrEqualTo(BigDecimal.ONE);
+        assertThat(dash.get("orders").get("value").decimalValue()).isGreaterThanOrEqualTo(BigDecimal.ONE);
+        assertThat(dash.get("revenue").get("value").decimalValue()).isGreaterThanOrEqualTo(new BigDecimal("200"));
+        assertThat(dash.get("averageOrder").get("value").decimalValue()).isGreaterThan(BigDecimal.ZERO);
+        assertThat(dash.get("series").isArray()).isTrue();
+        assertThat(dash.get("topOrders").isArray()).isTrue();
+        assertThat(dash.get("topOrders").size()).isGreaterThanOrEqualTo(1);
+        assertThat(dash.get("topProducts").isArray()).isTrue();
+        assertThat(dash.get("topProducts").size()).isGreaterThanOrEqualTo(1);
+        assertThat(dash.get("topCategories").isArray()).isTrue();
+        assertThat(dash.get("topCategories").size()).isGreaterThanOrEqualTo(1);
+        assertThat(dash.get("channels").isArray()).isTrue();
+        assertThat(dash.get("paymentMethods").isArray()).isTrue();
+        assertThat(dash.get("granularity").asText()).isEqualTo("DAY");
+    }
+
     private UUID createFiscalSaleTax(String name, UUID accountId) throws Exception {
         String body = "{\"name\":\"" + name + "\",\"amountType\":\"PERCENT\",\"amount\":10,\"priceInclude\":false,"
                 + "\"scope\":\"SALE\",\"accountId\":\"" + accountId + "\"}";

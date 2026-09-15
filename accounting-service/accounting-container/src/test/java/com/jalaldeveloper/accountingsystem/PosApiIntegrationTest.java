@@ -87,6 +87,96 @@ class PosApiIntegrationTest {
         mockMvc.perform(get("/api/v1/pos/receipts/" + order.get("receiptId").asText())
                         .header("X-Company-Id", COMPANY_ID.toString()))
                 .andExpect(status().isOk());
+
+        MvcResult sessionOrdersResult = mockMvc.perform(get("/api/v1/pos/sessions/" + sessionId + "/orders")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode sessionOrders = json.readTree(sessionOrdersResult.getResponse().getContentAsString());
+        assertThat(sessionOrders.isArray()).isTrue();
+        assertThat(sessionOrders).hasSizeGreaterThanOrEqualTo(1);
+        assertThat(sessionOrders.get(0).get("id").asText()).isEqualTo(order.get("id").asText());
+        assertThat(sessionOrders.get(0).get("state").asText()).isEqualTo("FINALIZED");
+    }
+
+    @Test
+    void checkout_sellsPackagedProductFromPackStock() throws Exception {
+        UUID stockLoc = lookupLocationByCode("WH/STOCK");
+        UUID supplier = lookupLocationByCode("VIRT/SUPPLIERS");
+        UUID warehouse = lookupWarehouseByCode("WH");
+        UUID categoryId = lookupCategoryByName("All");
+        UUID uomId = lookupUomByName("Unit");
+        UUID pepsiId = createProduct("POS-PEPSI-" + UUID.randomUUID().toString().substring(0, 6),
+                "Pepsi", categoryId, uomId, "1.00", "2.00");
+        UUID receiptPicking = createPicking(warehouse, supplier, stockLoc, pepsiId, uomId, "20", "1.00");
+        validatePicking(receiptPicking);
+
+        MvcResult packagingResult = mockMvc.perform(post("/api/v1/inventory/products/" + pepsiId + "/packagings")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Pack of 10\",\"qty\":10}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode packaging = json.readTree(packagingResult.getResponse().getContentAsString());
+        UUID packagingId = UUID.fromString(packaging.get("id").asText());
+        UUID packedId = UUID.fromString(packaging.get("packagedProductId").asText());
+
+        mockMvc.perform(post("/api/v1/inventory/products/" + pepsiId + "/packagings/" + packagingId + "/pack")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"quantity\":2,\"locationId\":\"" + stockLoc + "\"}"))
+                .andExpect(status().isOk());
+        assertOnHand(pepsiId, "0");
+        assertOnHand(packedId, "2");
+
+        UUID arAccountId = accountIdByCode("430003");
+        UUID customerId = createCustomer(arAccountId);
+        UUID cashJournalId = journalIdByType("CASH");
+        String configBody = "{\"name\":\"POS Pack " + UUID.randomUUID().toString().substring(0, 6)
+                + "\",\"warehouseId\":\"" + warehouse
+                + "\",\"defaultCustomerPartnerId\":\"" + customerId
+                + "\",\"cashJournalId\":\"" + cashJournalId
+                + "\",\"currencyCode\":\"USD\"}";
+        MvcResult configResult = mockMvc.perform(post("/api/v1/pos/configs")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(configBody))
+                .andExpect(status().isOk())
+                .andReturn();
+        UUID configId = UUID.fromString(json.readTree(configResult.getResponse().getContentAsString()).get("id").asText());
+        MvcResult sessionResult = mockMvc.perform(post("/api/v1/pos/sessions")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"configId\":\"" + configId + "\",\"openingCash\":100}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        UUID sessionId = UUID.fromString(json.readTree(sessionResult.getResponse().getContentAsString()).get("id").asText());
+
+        String checkoutBody = "{\"sessionId\":\"" + sessionId
+                + "\",\"lines\":[{\"productId\":\"" + packedId
+                + "\",\"name\":\"Pepsi – Pack of 10\",\"uomId\":\"" + uomId
+                + "\",\"quantity\":1,\"unitPrice\":20,\"discountPercent\":0,\"taxIds\":[]}]"
+                + ",\"payments\":[{\"method\":\"CASH\",\"amount\":20,\"reference\":\"PACK-CASH\"}]}";
+        MvcResult checkoutResult = mockMvc.perform(post("/api/v1/pos/checkout")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(checkoutBody))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode order = json.readTree(checkoutResult.getResponse().getContentAsString());
+        assertThat(order.get("state").asText()).isEqualTo("FINALIZED");
+        assertThat(order.get("lines").get(0).get("productId").asText()).isEqualTo(packedId.toString());
+
+        MvcResult sessionOrdersResult = mockMvc.perform(get("/api/v1/pos/sessions/" + sessionId + "/orders")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode sessionOrders = json.readTree(sessionOrdersResult.getResponse().getContentAsString());
+        assertThat(sessionOrders).hasSizeGreaterThanOrEqualTo(1);
+        assertThat(sessionOrders.get(0).get("id").asText()).isEqualTo(order.get("id").asText());
+
+        assertOnHand(pepsiId, "0");
+        assertOnHand(packedId, "1");
     }
 
     private UUID lookupLocationByCode(String code) throws Exception {
@@ -187,6 +277,15 @@ class PosApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isOk());
+    }
+
+    private void assertOnHand(UUID productId, String expected) throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/v1/inventory/on-hand/" + productId)
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(json.readTree(result.getResponse().getContentAsString()).get("totalOnHand").decimalValue())
+                .isEqualByComparingTo(expected);
     }
 
     private UUID createCustomer(UUID receivableAccountId) throws Exception {

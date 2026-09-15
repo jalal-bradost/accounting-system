@@ -188,6 +188,54 @@ class InventoryApiIntegrationTest {
                 .andExpect(jsonPath("$.convertedQuantity").value(24));
     }
 
+    @Test
+    void packAndUnpack_movesStockToPackagedProduct() throws Exception {
+        UUID stockLoc = lookupLocationByCode("WH/STOCK");
+        UUID supplier = lookupLocationByCode("VIRT/SUPPLIERS");
+        UUID warehouse = lookupWarehouseByCode("WH");
+        UUID categoryId = lookupCategoryByName("All");
+        UUID uomId = lookupUomByName("Unit");
+
+        UUID pepsiId = createProduct("PEPSI-" + UUID.randomUUID().toString().substring(0, 8),
+                "Pepsi", categoryId, uomId, "1.00", "2.00");
+        UUID receipt = createPicking(warehouse, "INCOMING", supplier, stockLoc, pepsiId, uomId, "50", "1.00");
+        validatePicking(receipt);
+        assertOnHand(pepsiId, "50");
+
+        MvcResult packagingResult = mockMvc.perform(post("/api/v1/inventory/products/" + pepsiId + "/packagings")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Pack of 10\",\"qty\":10}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode packaging = json.readTree(packagingResult.getResponse().getContentAsString());
+        UUID packagingId = UUID.fromString(packaging.get("id").asText());
+        UUID packedId = UUID.fromString(packaging.get("packagedProductId").asText());
+
+        mockMvc.perform(post("/api/v1/inventory/products/" + pepsiId + "/packagings/" + packagingId + "/pack")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"quantity\":5,\"locationId\":\"" + stockLoc + "\"}"))
+                .andExpect(status().isOk());
+        assertOnHand(pepsiId, "0");
+        assertOnHand(packedId, "5");
+
+        mockMvc.perform(post("/api/v1/inventory/pickings/adjust")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productId\":\"" + packedId + "\",\"locationId\":\"" + stockLoc
+                                + "\",\"targetQuantity\":4,\"reason\":\"packed\"}"))
+                .andExpect(status().isUnprocessableEntity());
+
+        mockMvc.perform(post("/api/v1/inventory/products/" + packedId + "/packagings/" + packagingId + "/unpack")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"quantity\":1,\"locationId\":\"" + stockLoc + "\"}"))
+                .andExpect(status().isOk());
+        assertOnHand(pepsiId, "10");
+        assertOnHand(packedId, "4");
+    }
+
     // ============= Helpers =============
 
     private UUID lookupLocationByCode(String code) throws Exception {

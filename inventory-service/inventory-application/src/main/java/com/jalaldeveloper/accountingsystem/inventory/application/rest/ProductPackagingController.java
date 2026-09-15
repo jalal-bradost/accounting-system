@@ -2,6 +2,7 @@ package com.jalaldeveloper.accountingsystem.inventory.application.rest;
 
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductPackagingCommand;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductPackagingResponse;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.PackStockCommand;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.ports.input.ProductPackagingApplicationService;
 import com.jalaldeveloper.accountingsystem.platform.security.RequiresPermission;
 import jakarta.validation.Valid;
@@ -48,5 +49,21 @@ public class ProductPackagingController {
                                        @PathVariable UUID packagingId) {
         service.delete(productId, packagingId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{packagingId}/pack")
+    @RequiresPermission("inventory.product.write")
+    public ResponseEntity<ProductPackagingResponse> pack(@PathVariable UUID productId,
+                                                         @PathVariable UUID packagingId,
+                                                         @Valid @RequestBody PackStockCommand command) {
+        return ResponseEntity.ok(service.pack(productId, packagingId, command));
+    }
+
+    @PostMapping("/{packagingId}/unpack")
+    @RequiresPermission("inventory.product.write")
+    public ResponseEntity<ProductPackagingResponse> unpack(@PathVariable UUID productId,
+                                                           @PathVariable UUID packagingId,
+                                                           @Valid @RequestBody PackStockCommand command) {
+        return ResponseEntity.ok(service.unpack(productId, packagingId, command));
     }
 }

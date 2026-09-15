@@ -6,6 +6,7 @@ import com.jalaldeveloper.accountingsystem.domain.valueobject.Money;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.exception.InventoryDomainException;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductCategoryId;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductId;
+import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductPackagingId;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductType;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.UomId;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ValuationMethod;
@@ -44,6 +45,8 @@ public class Product extends ArchivableAggregateRoot<ProductId> {
     private UUID stockInputAccountIdOverride;
     private UUID stockOutputAccountIdOverride;
     private UUID cogsAccountIdOverride;
+    private ProductId parentProductId;
+    private ProductPackagingId sourcePackagingId;
 
     private Product(Builder b) {
         super.setId(b.id);
@@ -65,6 +68,8 @@ public class Product extends ArchivableAggregateRoot<ProductId> {
         this.stockInputAccountIdOverride = b.stockInputAccountIdOverride;
         this.stockOutputAccountIdOverride = b.stockOutputAccountIdOverride;
         this.cogsAccountIdOverride = b.cogsAccountIdOverride;
+        this.parentProductId = b.parentProductId;
+        this.sourcePackagingId = b.sourcePackagingId;
         if (b.archived) {
             super.restoreArchiveState(false, b.archivedAt, b.archivedBy);
         }
@@ -93,6 +98,11 @@ public class Product extends ArchivableAggregateRoot<ProductId> {
     /** Whether this product produces accounting valuation entries (subset of {@link #tracksStock()}). */
     public boolean isValued() {
         return productType == ProductType.STOCKABLE;
+    }
+
+    /** Packaged variant of another product; stock is in pack units, not the parent base UOM. */
+    public boolean isPackagedVariant() {
+        return sourcePackagingId != null;
     }
 
     public ValuationMethod resolveValuationMethod(ProductCategory fallback) {
@@ -196,6 +206,8 @@ public class Product extends ArchivableAggregateRoot<ProductId> {
     public UUID getStockInputAccountIdOverride() { return stockInputAccountIdOverride; }
     public UUID getStockOutputAccountIdOverride() { return stockOutputAccountIdOverride; }
     public UUID getCogsAccountIdOverride() { return cogsAccountIdOverride; }
+    public ProductId getParentProductId() { return parentProductId; }
+    public ProductPackagingId getSourcePackagingId() { return sourcePackagingId; }
 
     public static Builder builder() { return new Builder(); }
 
@@ -219,6 +231,8 @@ public class Product extends ArchivableAggregateRoot<ProductId> {
         private UUID stockInputAccountIdOverride;
         private UUID stockOutputAccountIdOverride;
         private UUID cogsAccountIdOverride;
+        private ProductId parentProductId;
+        private ProductPackagingId sourcePackagingId;
         private boolean archived;
         private Instant archivedAt;
         private String archivedBy;
@@ -242,6 +256,8 @@ public class Product extends ArchivableAggregateRoot<ProductId> {
         public Builder stockInputAccountIdOverride(UUID v) { this.stockInputAccountIdOverride = v; return this; }
         public Builder stockOutputAccountIdOverride(UUID v) { this.stockOutputAccountIdOverride = v; return this; }
         public Builder cogsAccountIdOverride(UUID v) { this.cogsAccountIdOverride = v; return this; }
+        public Builder parentProductId(ProductId v) { this.parentProductId = v; return this; }
+        public Builder sourcePackagingId(ProductPackagingId v) { this.sourcePackagingId = v; return this; }
         public Builder archived(boolean v) { this.archived = v; return this; }
         public Builder archivedAt(Instant v) { this.archivedAt = v; return this; }
         public Builder archivedBy(String v) { this.archivedBy = v; return this; }

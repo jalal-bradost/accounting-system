@@ -15,11 +15,11 @@ public class ProductPackagingCommand {
     @DecimalMin(value = "0.0001", inclusive = true)
     private BigDecimal qty;
 
-    @NotNull
+    /** When null, server defaults to base product cost × qty. */
     @DecimalMin(value = "0.0", inclusive = true)
     private BigDecimal purchasePrice;
 
-    @NotNull
+    /** When null, server defaults to base product list price × qty. */
     @DecimalMin(value = "0.0", inclusive = true)
     private BigDecimal listPrice;
 

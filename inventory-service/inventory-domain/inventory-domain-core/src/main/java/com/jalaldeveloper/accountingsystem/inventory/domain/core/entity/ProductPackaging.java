@@ -27,6 +27,8 @@ public class ProductPackaging {
     private String sku;
     private boolean active = true;
     private boolean base;
+    /** System-managed product that holds stock in pack units (null for base packaging). */
+    private ProductId packagedProductId;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -123,6 +125,8 @@ public class ProductPackaging {
     public void setActive(boolean active) { this.active = active; }
     public boolean isBase() { return base; }
     public void setBase(boolean base) { this.base = base; }
+    public ProductId getPackagedProductId() { return packagedProductId; }
+    public void setPackagedProductId(ProductId packagedProductId) { this.packagedProductId = packagedProductId; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

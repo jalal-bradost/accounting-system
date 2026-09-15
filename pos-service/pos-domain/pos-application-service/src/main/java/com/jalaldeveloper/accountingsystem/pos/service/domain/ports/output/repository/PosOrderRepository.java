@@ -4,6 +4,7 @@ import com.jalaldeveloper.accountingsystem.pos.domain.core.PosOrderState;
 import com.jalaldeveloper.accountingsystem.pos.domain.core.entity.PosOrder;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -11,6 +12,8 @@ public interface PosOrderRepository {
     PosOrder save(PosOrder order);
 
     Optional<PosOrder> findById(UUID id);
+
+    List<PosOrder> findBySessionIdAndStateOrderByCreatedAtDesc(UUID sessionId, PosOrderState state);
 
     long countByCompanyId(UUID companyId);
 

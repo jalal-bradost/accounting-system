@@ -6,6 +6,7 @@ import com.jalaldeveloper.accountingsystem.inventory.dataaccess.entity.ProductEn
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.Product;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductCategoryId;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductId;
+import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductPackagingId;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.UomId;
 import org.springframework.stereotype.Component;
 
@@ -35,7 +36,9 @@ public class ProductDataAccessMapper {
                 .stockValuationAccountIdOverride(e.getStockValuationAccountIdOverride())
                 .stockInputAccountIdOverride(e.getStockInputAccountIdOverride())
                 .stockOutputAccountIdOverride(e.getStockOutputAccountIdOverride())
-                .cogsAccountIdOverride(e.getCogsAccountIdOverride());
+                .cogsAccountIdOverride(e.getCogsAccountIdOverride())
+                .parentProductId(e.getParentProductId() != null ? new ProductId(e.getParentProductId()) : null)
+                .sourcePackagingId(e.getSourcePackagingId() != null ? new ProductPackagingId(e.getSourcePackagingId()) : null);
         if (!e.isActive()) {
             b.archived(true).archivedAt(e.getArchivedAt()).archivedBy(e.getArchivedBy());
         }
@@ -64,6 +67,8 @@ public class ProductDataAccessMapper {
         e.setStockInputAccountIdOverride(p.getStockInputAccountIdOverride());
         e.setStockOutputAccountIdOverride(p.getStockOutputAccountIdOverride());
         e.setCogsAccountIdOverride(p.getCogsAccountIdOverride());
+        e.setParentProductId(p.getParentProductId() != null ? p.getParentProductId().getId() : null);
+        e.setSourcePackagingId(p.getSourcePackagingId() != null ? p.getSourcePackagingId().getId() : null);
         e.setActive(p.isActive());
         e.setArchivedAt(p.getArchivedAt());
         e.setArchivedBy(p.getArchivedBy());

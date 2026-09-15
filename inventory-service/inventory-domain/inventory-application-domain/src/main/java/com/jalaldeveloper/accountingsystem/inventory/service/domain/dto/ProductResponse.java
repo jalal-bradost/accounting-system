@@ -33,6 +33,8 @@ public class ProductResponse {
     private String imageUrl;
     private String imageContentType;
     private java.util.List<ProductPackagingResponse> packagings = new java.util.ArrayList<>();
+    private UUID parentProductId;
+    private UUID sourcePackagingId;
 
     public UUID getId() { return id; }
     public void setId(UUID v) { this.id = v; }
@@ -84,4 +86,8 @@ public class ProductResponse {
     public void setPackagings(java.util.List<ProductPackagingResponse> packagings) {
         this.packagings = packagings != null ? packagings : new java.util.ArrayList<>();
     }
+    public UUID getParentProductId() { return parentProductId; }
+    public void setParentProductId(UUID parentProductId) { this.parentProductId = parentProductId; }
+    public UUID getSourcePackagingId() { return sourcePackagingId; }
+    public void setSourcePackagingId(UUID sourcePackagingId) { this.sourcePackagingId = sourcePackagingId; }
 }

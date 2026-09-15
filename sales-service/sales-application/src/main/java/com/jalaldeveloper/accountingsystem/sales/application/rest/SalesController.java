@@ -8,17 +8,21 @@ import com.jalaldeveloper.accountingsystem.platform.application.dto.PageResponse
 import com.jalaldeveloper.accountingsystem.platform.security.RequiresPermission;
 import com.jalaldeveloper.accountingsystem.platform.web.CurrentCompany;
 import com.jalaldeveloper.accountingsystem.sales.domain.core.SalesOrderState;
+import com.jalaldeveloper.accountingsystem.sales.service.domain.SalesDashboardService;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.CreateCustomerInvoiceFromSalesOrderCommand;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.CreateSalesOrderCommand;
+import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.SalesDashboardResponse;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.SalesOrderResponse;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.dto.SalesOrderSummaryResponse;
 import com.jalaldeveloper.accountingsystem.sales.service.domain.ports.input.SalesApplicationService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.function.Function;
@@ -28,9 +32,21 @@ import java.util.function.Function;
 public class SalesController {
 
     private final SalesApplicationService salesApplicationService;
+    private final SalesDashboardService salesDashboardService;
 
-    public SalesController(SalesApplicationService salesApplicationService) {
+    public SalesController(SalesApplicationService salesApplicationService,
+                           SalesDashboardService salesDashboardService) {
         this.salesApplicationService = salesApplicationService;
+        this.salesDashboardService = salesDashboardService;
+    }
+
+    @GetMapping("/dashboard")
+    @RequiresPermission("sales.order.read")
+    public ResponseEntity<SalesDashboardResponse> dashboard(
+            @CurrentCompany CompanyId companyId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ResponseEntity.ok(salesDashboardService.getDashboard(companyId.getId(), from, to));
     }
 
     @PostMapping("/orders")

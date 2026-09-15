@@ -57,5 +57,8 @@ public interface PosApplicationService {
 
     PosOrderResponse getOrder(UUID orderId);
 
+    /** Completed (finalized) POS orders for the register session order list. */
+    List<PosOrderResponse> listSessionOrders(UUID sessionId);
+
     PosReceiptResponse getReceipt(UUID receiptId);
 }

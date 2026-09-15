@@ -870,17 +870,27 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
                         "error.inventory.packagingNotFound",
                         new Object[]{packagingId},
                         "Packaging not found: " + packagingId));
-        if (!packaging.getProductId().getId().equals(line.getProductId())) {
-            throw new SalesDomainException(
-                    "error.inventory.packagingProductMismatch",
-                    null,
-                    "Packaging does not belong to this product");
-        }
         if (!packaging.isActive()) {
             throw new SalesDomainException(
                     "error.inventory.packagingInactive",
                     new Object[]{packaging.getName()},
                     "Packaging is inactive: " + packaging.getName());
+        }
+        boolean belongsToLine = packaging.getProductId().getId().equals(line.getProductId())
+                || (packaging.getPackagedProductId() != null
+                && packaging.getPackagedProductId().getId().equals(line.getProductId()));
+        if (!belongsToLine) {
+            throw new SalesDomainException(
+                    "error.inventory.packagingProductMismatch",
+                    null,
+                    "Packaging does not belong to this product");
+        }
+        if (!packaging.isBase() && packaging.getPackagedProductId() != null) {
+            line.setProductId(packaging.getPackagedProductId().getId());
+            line.setPackagingId(packaging.getId().getId());
+            line.setPackagingName(packaging.getName());
+            line.setQtyPerPackage(null);
+            return;
         }
         line.setPackagingId(packaging.getId().getId());
         line.setPackagingName(packaging.getName());

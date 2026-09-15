@@ -2,7 +2,9 @@ package com.jalaldeveloper.accountingsystem.pos.service.domain;
 
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.CustomerInvoiceResponse;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.customerinvoice.RegisterCustomerPaymentCommand;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.CompanyCurrencyApplicationService;
 import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.input.service.CustomerInvoiceApplicationService;
+import com.jalaldeveloper.accountingsystem.accounting.service.domain.ports.output.repository.CompanyCurrencyRepository.CurrencyRow;
 import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.ProductPackaging;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.valueobject.ProductType;
@@ -90,6 +92,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
     private final StockValuationApplicationService stockValuationApplicationService;
     private final CustomerInvoiceApplicationService customerInvoiceApplicationService;
     private final PurchaseApplicationService purchaseApplicationService;
+    private final CompanyCurrencyApplicationService companyCurrencyApplicationService;
 
     public PosApplicationServiceImpl(PosConfigRepository configRepository,
                                      PosSessionRepository sessionRepository,
@@ -101,7 +104,8 @@ public class PosApplicationServiceImpl implements PosApplicationService {
                                      StockPickingApplicationService stockPickingApplicationService,
                                      StockValuationApplicationService stockValuationApplicationService,
                                      CustomerInvoiceApplicationService customerInvoiceApplicationService,
-                                     PurchaseApplicationService purchaseApplicationService) {
+                                     PurchaseApplicationService purchaseApplicationService,
+                                     CompanyCurrencyApplicationService companyCurrencyApplicationService) {
         this.configRepository = configRepository;
         this.sessionRepository = sessionRepository;
         this.orderRepository = orderRepository;
@@ -113,6 +117,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         this.stockValuationApplicationService = stockValuationApplicationService;
         this.customerInvoiceApplicationService = customerInvoiceApplicationService;
         this.purchaseApplicationService = purchaseApplicationService;
+        this.companyCurrencyApplicationService = companyCurrencyApplicationService;
     }
 
     @Override
@@ -132,7 +137,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         entity.setCashJournalId(command.getCashJournalId());
         entity.setBankJournalId(command.getBankJournalId());
         entity.setPricelistId(command.getPricelistId());
-        entity.setCurrencyCode(command.getCurrencyCode());
+        entity.setCurrencyCode(resolveCompanyCurrencyCode(command.getCompanyId(), command.getCurrencyCode()));
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
         return toConfigResponse(configRepository.save(entity));
@@ -190,7 +195,13 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         session.setCashJournalId(config.getCashJournalId());
         session.setBankJournalId(config.getBankJournalId());
         session.setPricelistId(config.getPricelistId());
-        session.setCurrencyCode(config.getCurrencyCode());
+        String currency = resolveCompanyCurrencyCode(config.getCompanyId(), config.getCurrencyCode());
+        session.setCurrencyCode(currency);
+        if (currency != null && !currency.equalsIgnoreCase(config.getCurrencyCode())) {
+            config.setCurrencyCode(currency);
+            config.setUpdatedAt(Instant.now());
+            configRepository.save(config);
+        }
         session.setOpeningCash(defaultZero(command.getOpeningCash()));
         session.setOpenedAt(Instant.now());
         return toSessionResponse(sessionRepository.save(session));
@@ -241,30 +252,17 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         var packagingOpt = productPackagingApplicationService.findActiveByBarcode(companyId, trimmed);
         if (packagingOpt.isPresent()) {
             ProductPackaging packaging = packagingOpt.get();
-            ProductResponse product = productApplicationService.getProduct(packaging.getProductId().getId());
+            UUID catalogProductId = packaging.getPackagedProductId() != null
+                    ? packaging.getPackagedProductId().getId()
+                    : packaging.getProductId().getId();
+            ProductResponse product = productApplicationService.getProduct(catalogProductId);
             if (!product.isSaleOk()) {
                 throw new PosDomainException(
                         "error.pos.productNotFoundByBarcode",
                         new Object[]{trimmed},
                         "No saleable product found for barcode: " + trimmed);
             }
-            PosCatalogItemResponse item = toCatalogItemResponse(product, categoryNames, companyId, session.getWarehouseId());
-            item.setPackagingId(packaging.getId().getId());
-            item.setPackagingName(packaging.getName());
-            item.setQtyPerPackage(packaging.getQty());
-            if (packaging.getListPrice() != null) {
-                item.setListPrice(packaging.getListPrice().getAmount());
-            }
-            if (packaging.getPurchasePrice() != null) {
-                item.setPurchasePrice(packaging.getPurchasePrice().getAmount());
-            }
-            if (packaging.getBarcode() != null) {
-                item.setBarcode(packaging.getBarcode());
-            }
-            if (packaging.getSku() != null) {
-                item.setSku(packaging.getSku());
-            }
-            return item;
+            return toCatalogItemResponse(product, categoryNames, companyId, session.getWarehouseId());
         }
         ProductResponse product = productApplicationService.findSaleableByBarcodeOrSku(companyId, trimmed)
                 .orElseThrow(() -> new PosDomainException(
@@ -292,7 +290,12 @@ public class PosApplicationServiceImpl implements PosApplicationService {
                 : session.getDefaultCustomerPartnerId());
         order.setName(nextOrderName(order.getCompanyId()));
         order.setState(PosOrderState.DRAFT);
-        order.setCurrencyCode(session.getCurrencyCode());
+        String currency = resolveCompanyCurrencyCode(session.getCompanyId(), session.getCurrencyCode());
+        order.setCurrencyCode(currency);
+        if (currency != null && !currency.equalsIgnoreCase(session.getCurrencyCode())) {
+            session.setCurrencyCode(currency);
+            sessionRepository.save(session);
+        }
         order.setNote(command.getNote());
         order.setAmountUntaxed(BigDecimal.ZERO);
         order.setAmountTax(BigDecimal.ZERO);
@@ -425,6 +428,15 @@ public class PosApplicationServiceImpl implements PosApplicationService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<PosOrderResponse> listSessionOrders(UUID sessionId) {
+        loadSession(sessionId);
+        return orderRepository.findBySessionIdAndStateOrderByCreatedAtDesc(sessionId, PosOrderState.FINALIZED).stream()
+                .map(this::toOrderResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public PosReceiptResponse getReceipt(UUID receiptId) {
         return toReceiptResponse(receiptRepository.findById(receiptId)
                 .orElseThrow(() -> new PosDomainException("POS receipt not found: " + receiptId)));
@@ -525,10 +537,13 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         line.setId(UUID.randomUUID());
         line.setOrder(order);
         line.setSequence(sequence);
+        ProductPackagingResponse packaging = applyPackagingSnapshot(line, command.getPackagingId(), product);
+        if (packaging != null && packaging.getPackagedProductId() != null && !packaging.isBase()) {
+            product = productApplicationService.getProduct(packaging.getPackagedProductId());
+        }
         line.setProductId(product.getId());
         line.setName(command.getName() != null && !command.getName().isBlank() ? command.getName() : product.getName());
         line.setUomId(command.getUomId() != null ? command.getUomId() : product.getUomId());
-        ProductPackagingResponse packaging = applyPackagingSnapshot(line, command.getPackagingId(), product);
         BigDecimal defaultPrice = packaging != null && packaging.getListPrice() != null
                 ? packaging.getListPrice()
                 : defaultZero(product.getListPrice());
@@ -549,7 +564,9 @@ public class PosApplicationServiceImpl implements PosApplicationService {
             return null;
         }
         ProductPackagingResponse packaging = productPackagingApplicationService.get(packagingId);
-        if (!product.getId().equals(packaging.getProductId())) {
+        boolean belongs = product.getId().equals(packaging.getProductId())
+                || product.getId().equals(packaging.getPackagedProductId());
+        if (!belongs) {
             throw new PosDomainException(
                     "error.inventory.packagingProductMismatch",
                     null,
@@ -560,6 +577,12 @@ public class PosApplicationServiceImpl implements PosApplicationService {
                     "error.inventory.packagingInactive",
                     new Object[]{packaging.getName()},
                     "Packaging is inactive: " + packaging.getName());
+        }
+        if (!packaging.isBase() && packaging.getPackagedProductId() != null) {
+            line.setPackagingId(packaging.getId());
+            line.setPackagingName(packaging.getName());
+            line.setQtyPerPackage(null);
+            return packaging;
         }
         line.setPackagingId(packaging.getId());
         line.setPackagingName(packaging.getName());
@@ -650,6 +673,18 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         }
     }
 
+    /**
+     * Prefer the company's accounting base currency for POS sales/display.
+     * Falls back to {@code preferred} when no base currency is configured.
+     */
+    private String resolveCompanyCurrencyCode(UUID companyId, String preferred) {
+        return companyCurrencyApplicationService.baseCurrency(companyId)
+                .map(CurrencyRow::code)
+                .map(code -> code == null ? null : code.trim().toUpperCase())
+                .filter(code -> !code.isEmpty())
+                .orElseGet(() -> preferred == null ? null : preferred.trim().toUpperCase());
+    }
+
     private String nextOrderName(UUID companyId) {
         return "POS/" + String.format("%06d", orderRepository.countByCompanyId(companyId) + 1);
     }
@@ -676,7 +711,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         response.setCashJournalId(entity.getCashJournalId());
         response.setBankJournalId(entity.getBankJournalId());
         response.setPricelistId(entity.getPricelistId());
-        response.setCurrencyCode(entity.getCurrencyCode());
+        response.setCurrencyCode(resolveCompanyCurrencyCode(entity.getCompanyId(), entity.getCurrencyCode()));
         response.setActive(entity.isActive());
         return response;
     }
@@ -691,7 +726,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         response.setCashJournalId(entity.getCashJournalId());
         response.setBankJournalId(entity.getBankJournalId());
         response.setPricelistId(entity.getPricelistId());
-        response.setCurrencyCode(entity.getCurrencyCode());
+        response.setCurrencyCode(resolveCompanyCurrencyCode(entity.getCompanyId(), entity.getCurrencyCode()));
         response.setOpeningCash(entity.getOpeningCash());
         response.setClosingCash(entity.getClosingCash());
         response.setExpectedCash(entity.getOpeningCash().add(expectedCashSales(entity.getId())));
@@ -716,7 +751,7 @@ public class PosApplicationServiceImpl implements PosApplicationService {
         PosConfigCardResponse card = new PosConfigCardResponse();
         card.setId(config.getId());
         card.setName(config.getName());
-        card.setCurrencyCode(config.getCurrencyCode());
+        card.setCurrencyCode(resolveCompanyCurrencyCode(config.getCompanyId(), config.getCurrencyCode()));
         card.setActive(config.isActive());
         sessionRepository.findFirstByConfigIdAndStateOrderByOpenedAtDesc(config.getId(), PosSessionState.OPEN)
                 .ifPresent(session -> {

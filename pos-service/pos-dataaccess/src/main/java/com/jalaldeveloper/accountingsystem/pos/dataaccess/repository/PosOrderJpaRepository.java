@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -35,6 +36,8 @@ public interface PosOrderJpaRepository extends JpaRepository<PosOrderEntity, UUI
     long countByCompanyId(UUID companyId);
 
     long countBySessionIdAndState(UUID sessionId, PosOrderState state);
+
+    List<PosOrderEntity> findBySessionIdAndStateOrderByCreatedAtDesc(UUID sessionId, PosOrderState state);
 
     @Query("""
             select coalesce(sum(o.amountTotal), 0) from PosOrderEntity o

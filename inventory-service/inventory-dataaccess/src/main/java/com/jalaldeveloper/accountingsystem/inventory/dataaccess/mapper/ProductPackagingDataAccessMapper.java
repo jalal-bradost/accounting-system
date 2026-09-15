@@ -25,6 +25,9 @@ public class ProductPackagingDataAccessMapper {
         d.setSku(e.getSku());
         d.setActive(e.isActive());
         d.setBase(e.isBase());
+        if (e.getPackagedProductId() != null) {
+            d.setPackagedProductId(new ProductId(e.getPackagedProductId()));
+        }
         d.setCreatedAt(e.getCreatedAt());
         d.setUpdatedAt(e.getUpdatedAt());
         return d;
@@ -48,6 +51,7 @@ public class ProductPackagingDataAccessMapper {
         e.setSku(d.getSku());
         e.setActive(d.isActive());
         e.setBase(d.isBase());
+        e.setPackagedProductId(d.getPackagedProductId() != null ? d.getPackagedProductId().getId() : null);
         e.setCreatedAt(d.getCreatedAt());
         e.setUpdatedAt(d.getUpdatedAt());
     }

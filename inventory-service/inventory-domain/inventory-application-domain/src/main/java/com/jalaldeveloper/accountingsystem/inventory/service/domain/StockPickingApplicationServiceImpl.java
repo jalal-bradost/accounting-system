@@ -538,6 +538,12 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
         StockMoveCommand move = new StockMoveCommand();
         move.setProductId(command.getProductId());
         Product product = loadProduct(new ProductId(command.getProductId()));
+        if (product.isPackagedVariant()) {
+            throw new InventoryDomainException(
+                    "error.inventory.packagedProductAdjustViaPackUnpack",
+                    null,
+                    "Packed stock can only be changed with Pack / Unpack on the parent product");
+        }
         move.setUomId(product.getUomId().getId());
         move.setDemandQuantity(delta.abs());
         move.setUnitCost(product.getStandardCost() != null ? product.getStandardCost().getAmount() : BigDecimal.ZERO);

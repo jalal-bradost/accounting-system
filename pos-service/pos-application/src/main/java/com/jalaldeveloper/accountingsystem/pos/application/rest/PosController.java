@@ -164,6 +164,12 @@ public class PosController {
         return ResponseEntity.ok(posApplicationService.getOrder(orderId));
     }
 
+    @GetMapping("/sessions/{sessionId}/orders")
+    @RequiresPermission("pos.order.read")
+    public ResponseEntity<List<PosOrderResponse>> listSessionOrders(@PathVariable UUID sessionId) {
+        return ResponseEntity.ok(posApplicationService.listSessionOrders(sessionId));
+    }
+
     @GetMapping("/receipts/{receiptId}")
     @RequiresPermission("pos.receipt.read")
     public ResponseEntity<PosReceiptResponse> getReceipt(@PathVariable UUID receiptId) {

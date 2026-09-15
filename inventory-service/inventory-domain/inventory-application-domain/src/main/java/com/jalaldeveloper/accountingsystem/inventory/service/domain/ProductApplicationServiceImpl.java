@@ -253,7 +253,14 @@ class ProductApplicationServiceImpl implements ProductApplicationService {
                     new Object[]{barcode},
                     "Barcode already in use: " + barcode);
         }
-        if (packagingRepository.existsByCompanyIdAndBarcodeExcludingId(companyId, barcode, null)) {
+        UUID excludePackagingId = null;
+        if (excludeProductId != null) {
+            Product existing = productRepository.findByIdIncludingArchived(new ProductId(excludeProductId)).orElse(null);
+            if (existing != null && existing.getSourcePackagingId() != null) {
+                excludePackagingId = existing.getSourcePackagingId().getId();
+            }
+        }
+        if (packagingRepository.existsByCompanyIdAndBarcodeExcludingId(companyId, barcode, excludePackagingId)) {
             throw new InventoryDomainException(
                     "error.inventory.barcodeDuplicate",
                     new Object[]{barcode},
@@ -262,6 +269,9 @@ class ProductApplicationServiceImpl implements ProductApplicationService {
     }
 
     private void ensureBasePackaging(Product product) {
+        if (product.isPackagedVariant()) {
+            return;
+        }
         if (packagingRepository.findBaseByProductId(product.getId()).isPresent()) {
             return;
         }
@@ -291,6 +301,7 @@ class ProductApplicationServiceImpl implements ProductApplicationService {
         r.setSku(p.getSku());
         r.setActive(p.isActive());
         r.setBase(p.isBase());
+        r.setPackagedProductId(p.getPackagedProductId() != null ? p.getPackagedProductId().getId() : null);
         r.setCreatedAt(p.getCreatedAt());
         r.setUpdatedAt(p.getUpdatedAt());
         return r;

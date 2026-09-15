@@ -4,6 +4,7 @@ import com.jalaldeveloper.accountingsystem.domain.valueobject.CompanyId;
 import com.jalaldeveloper.accountingsystem.inventory.domain.core.entity.ProductPackaging;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductPackagingCommand;
 import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.ProductPackagingResponse;
+import com.jalaldeveloper.accountingsystem.inventory.service.domain.dto.PackStockCommand;
 import jakarta.validation.Valid;
 
 import java.util.Collection;
@@ -26,6 +27,10 @@ public interface ProductPackagingApplicationService {
     Optional<ProductPackaging> findActiveByBarcode(CompanyId companyId, String barcode);
 
     ProductPackagingResponse get(UUID packagingId);
+
+    ProductPackagingResponse pack(UUID productId, UUID packagingId, @Valid PackStockCommand command);
+
+    ProductPackagingResponse unpack(UUID productId, UUID packagingId, @Valid PackStockCommand command);
 
     /** Ensure a base packaging row exists for the product (idempotent). */
     ProductPackagingResponse ensureBasePackaging(UUID productId);

@@ -96,6 +96,8 @@ public class InventoryDataMapper {
         r.setCogsAccountIdOverride(p.getCogsAccountIdOverride());
         r.setActive(p.isActive());
         r.setArchivedAt(p.getArchivedAt());
+        r.setParentProductId(p.getParentProductId() != null ? p.getParentProductId().getId() : null);
+        r.setSourcePackagingId(p.getSourcePackagingId() != null ? p.getSourcePackagingId().getId() : null);
         return r;
     }
 

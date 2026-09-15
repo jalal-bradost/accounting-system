@@ -7,14 +7,17 @@ import com.jalaldeveloper.accountingsystem.platform.application.dto.PageResponse
 import com.jalaldeveloper.accountingsystem.platform.security.RequiresPermission;
 import com.jalaldeveloper.accountingsystem.platform.web.CurrentCompany;
 import com.jalaldeveloper.accountingsystem.purchase.domain.core.PurchaseOrderState;
+import com.jalaldeveloper.accountingsystem.purchase.service.domain.PurchaseDashboardService;
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.dto.*;
 import com.jalaldeveloper.accountingsystem.purchase.service.domain.ports.input.PurchaseApplicationService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -25,9 +28,21 @@ import java.util.function.Function;
 public class PurchaseController {
 
     private final PurchaseApplicationService purchaseApplicationService;
+    private final PurchaseDashboardService purchaseDashboardService;
 
-    public PurchaseController(PurchaseApplicationService purchaseApplicationService) {
+    public PurchaseController(PurchaseApplicationService purchaseApplicationService,
+                              PurchaseDashboardService purchaseDashboardService) {
         this.purchaseApplicationService = purchaseApplicationService;
+        this.purchaseDashboardService = purchaseDashboardService;
+    }
+
+    @GetMapping("/dashboard")
+    @RequiresPermission("purchase.order.read")
+    public ResponseEntity<PurchaseDashboardResponse> dashboard(
+            @CurrentCompany CompanyId companyId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ResponseEntity.ok(purchaseDashboardService.getDashboard(companyId.getId(), from, to));
     }
 
     @PostMapping("/orders")

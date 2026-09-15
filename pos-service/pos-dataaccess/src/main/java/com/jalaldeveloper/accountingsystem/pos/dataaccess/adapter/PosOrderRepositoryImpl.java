@@ -8,6 +8,7 @@ import com.jalaldeveloper.accountingsystem.pos.service.domain.ports.output.repos
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -31,6 +32,13 @@ public class PosOrderRepositoryImpl implements PosOrderRepository {
     @Override
     public Optional<PosOrder> findById(UUID id) {
         return jpa.findByIdWithLinesAndPayments(id).map(mapper::entityToDomain);
+    }
+
+    @Override
+    public List<PosOrder> findBySessionIdAndStateOrderByCreatedAtDesc(UUID sessionId, PosOrderState state) {
+        return jpa.findBySessionIdAndStateOrderByCreatedAtDesc(sessionId, state).stream()
+                .map(mapper::entityToDomain)
+                .toList();
     }
 
     @Override

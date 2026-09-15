@@ -57,6 +57,9 @@ public class ProductPackagingEntity {
     @Column(name = "is_base", nullable = false)
     private boolean base;
 
+    @Column(name = "packaged_product_id")
+    private UUID packagedProductId;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -87,6 +90,8 @@ public class ProductPackagingEntity {
     public void setActive(boolean active) { this.active = active; }
     public boolean isBase() { return base; }
     public void setBase(boolean base) { this.base = base; }
+    public UUID getPackagedProductId() { return packagedProductId; }
+    public void setPackagedProductId(UUID packagedProductId) { this.packagedProductId = packagedProductId; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
