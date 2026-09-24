@@ -1,0 +1,52 @@
+package com.bradox.delin.inventory.application.rest;
+
+import com.bradox.delin.domain.valueobject.CompanyId;
+import com.bradox.delin.inventory.service.domain.dto.ProductCategoryCommand;
+import com.bradox.delin.inventory.service.domain.dto.ProductCategoryResponse;
+import com.bradox.delin.inventory.service.domain.ports.input.ProductApplicationService;
+import com.bradox.delin.platform.security.RequiresPermission;
+import com.bradox.delin.platform.web.CurrentCompany;
+import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.UUID;
+
+@RestController
+@RequestMapping(value = "/api/v1/inventory/product-categories", produces = "application/json")
+public class ProductCategoryController {
+
+    private final ProductApplicationService service;
+
+    public ProductCategoryController(ProductApplicationService service) {
+        this.service = service;
+    }
+
+    @PostMapping
+    @RequiresPermission("inventory.product.write")
+    public ResponseEntity<ProductCategoryResponse> create(@Valid @RequestBody ProductCategoryCommand cmd) {
+        return ResponseEntity.ok(service.createCategory(cmd));
+    }
+
+    @PutMapping("/{id}")
+    @RequiresPermission("inventory.product.write")
+    public ResponseEntity<ProductCategoryResponse> update(@PathVariable UUID id,
+                                                           @Valid @RequestBody ProductCategoryCommand cmd) {
+        return ResponseEntity.ok(service.updateCategory(id, cmd));
+    }
+
+    @DeleteMapping("/{id}")
+    @RequiresPermission("inventory.product.write")
+    public ResponseEntity<Void> delete(@PathVariable UUID id) {
+        service.deleteCategory(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping
+    @RequiresPermission("inventory.product.read")
+    public ResponseEntity<List<ProductCategoryResponse>> list(@CurrentCompany CompanyId companyId,
+                                                               @RequestParam(defaultValue = "false") boolean includeArchived) {
+        return ResponseEntity.ok(service.listCategories(companyId, includeArchived));
+    }
+}

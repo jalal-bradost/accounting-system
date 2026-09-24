@@ -1,0 +1,18 @@
+package com.bradox.delin.hr.service.domain.ports.output.platform;
+
+import com.bradox.delin.domain.valueobject.CompanyId;
+import com.bradox.delin.domain.valueobject.UserId;
+
+import java.util.Optional;
+import java.util.UUID;
+
+public interface PlatformUserLookupPort {
+
+    record UserInfo(UUID id, String displayName, String email) {}
+
+    boolean userExistsInCompany(CompanyId companyId, UserId userId);
+
+    Optional<UserInfo> findUser(CompanyId companyId, UserId userId);
+
+    boolean isUserLinkedToAnotherEmployee(CompanyId companyId, UserId userId, UUID excludeEmployeeId);
+}

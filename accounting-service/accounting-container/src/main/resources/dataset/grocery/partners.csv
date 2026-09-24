@@ -1,0 +1,31 @@
+partner_code,kind,display_name,legal_name,phone,tax_id,email,currency,is_vendor,is_customer,payable_account_code,receivable_account_code,credit_limit
+V-DAIRY,COMPANY,Al-Rafidain Dairy Wholesale,Al-Rafidain Dairy Trading Ltd,07701234567,,orders@rafidain-dairy.iq,IQD,true,false,430004,,0
+V-BEV,COMPANY,Baghdad Beverage Distributors,Baghdad Beverage Distributors,07707654321,,sales@bbd.iq,IQD,true,false,430004,,0
+V-DRY,COMPANY,Karkh Foodstuff Trading,Karkh Foodstuff Trading Co,07801230001,,info@karkhfood.iq,IQD,true,false,430004,,0
+V-CLEAN,COMPANY,Sama Hygiene Supplies,Sama Hygiene Supplies,07501230002,,sama@hygiene.iq,IQD,true,false,430004,,0
+V-PROD,COMPANY,Abu Ghraib Produce Market,Abu Ghraib Produce Market,07701112233,,produce@agmarket.iq,IQD,true,false,430004,,0
+V-SNACK,COMPANY,Dijlah Sweets & Snacks Dist.,Dijlah Snacks Trading Co,07809876543,,orders@dijlahsnacks.iq,IQD,true,false,430004,,0
+V-FROZEN,COMPANY,Tigris Frozen Foods Co,Tigris Frozen Foods,07712345678,,info@tigrisfrozen.iq,IQD,true,false,430004,,0
+V-BAKE,COMPANY,Al-Baraka Bakery Supplies,Al-Baraka Flour & Bakery,07509871234,,bakery@albaraka.iq,IQD,true,false,430004,,0
+V-BABY,COMPANY,Babylon Baby Care Agency,Babylon Baby Products Ltd,07901122334,,sales@babylonbaby.iq,IQD,true,false,430004,,0
+V-HOUSE,COMPANY,Al-Wurood Household Goods,Al-Wurood General Trading,07812233445,,house@alwurood.iq,IQD,true,false,430004,,0
+V-PERS,COMPANY,Tigris Personal Care Corp,Tigris Personal Care,07723344556,,care@tigrispers.iq,IQD,true,false,430004,,0
+V-CIG,COMPANY,Mesopotamia Tobacco Supply,Mesopotamia Tobacco Co,07514455667,,orders@mesotobacco.iq,IQD,true,false,430004,,0
+C-CASH,INDIVIDUAL,Cash Customer,,,,,,IQD,false,true,,430003,0
+C-CAFE,COMPANY,Cafe Al-Nahr,Cafe Al-Nahr,07705551212,,cafe.nahr@gmail.com,IQD,false,true,,430003,500000
+C-HOTEL,COMPANY,Palestine Hotel Purchasing,Palestine Hotel,07901234567,,purchasing@palestine-hotel.iq,IQD,false,true,,430003,2000000
+C-SHOP,COMPANY,Mini Market Al-Mansour,Mini Market Al-Mansour,07805550011,,,IQD,false,true,,430003,250000
+C-RESD,COMPANY,Al-Salam Restaurant,Al-Salam Restaurant Co,07703332211,,alsalam@rest.iq,IQD,false,true,,430003,750000
+C-SCHOOL,COMPANY,Baghdad Private School Cafeteria,Baghdad Private School,07804445566,,cafeteria@baghdadschool.iq,IQD,false,true,,430003,1000000
+C-GYM,COMPANY,Fitness Land Gym Bar,Fitness Land,07507778899,,bar@fitnessland.iq,IQD,false,true,,430003,300000
+C-BAKE,COMPANY,Samoon & Bakery Shop Al-Andalus,Al-Andalus Bakery,07718889900,,andalus@bakery.iq,IQD,false,true,,430003,400000
+C-TEA,COMPANY,Al-Waha Tea House,Al-Waha Tea House,07821112233,,teahouse@alwaha.iq,IQD,false,true,,430003,500000
+C-OFFICE,COMPANY,Dijlah Tech Solutions Office,Dijlah Tech,07732223344,,admin@dijlahtech.iq,IQD,false,true,,430003,600000
+C-MART,COMPANY,Zain Mini Market,Zain Mini Market,07523334455,,zainmarket@gmail.com,IQD,false,true,,430003,350000
+C-CLINIC,COMPANY,Al-Hikma Dental Clinic,Al-Hikma Clinic,07834445566,,clinic@alhikma.iq,IQD,false,true,,430003,200000
+C-MARKET2,COMPANY,Babylon Grocery,Babylon Grocery Store,07745556677,,babylongrocer@gmail.com,IQD,false,true,,430003,400000
+C-LUNCH,COMPANY,Al-Safa Snack Bar,Al-Safa Snack,07536667788,,safasnack@iq.com,IQD,false,true,,430003,250000
+C-CLUB,COMPANY,Youth Social Club Canteen,Youth Club,07847778899,,canteen@youthclub.iq,IQD,false,true,,430003,500000
+C-STORE3,COMPANY,Al-Rashed Variety Store,Al-Rashed Store,07758889900,,rashedstore@gmail.com,IQD,false,true,,430003,300000
+C-GARDEN,COMPANY,Al-Zawra Park Kiosk,Zawra Park Kiosk,07549990011,,kiosk@zawra.iq,IQD,false,true,,430003,200000
+C-STATION,COMPANY,Al-Aman Fuel Station Mart,Al-Aman Mart,07850001122,,mart@alaman.iq,IQD,false,true,,430003,500000

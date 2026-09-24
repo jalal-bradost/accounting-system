@@ -1,0 +1,98 @@
+# Authentication (JWT) and rule-based authorization layered on RBAC.
+# Keep enabled=false for local dev unless you configure a strong jwt.secret (≥32 bytes).
+app:
+  security:
+    enabled: true
+    seed-default-admin-password: admin
+    jwt:
+      secret: "dev-only-change-me-please-use-32b-minimum-secret!!"
+      issuer: delin
+      expiration-minutes: 720
+    authorization:
+      strict: true
+      deny-permission-codes: []
+      grant-all-user-ids: []
+  storage:
+    product-images:
+      location: ./data/product-images
+      public-base-path: /media/product-images
+      max-bytes: 5242880
+    partner-images:
+      location: ./data/partner-images
+      public-base-path: /media/partner-images
+      max-bytes: 5242880
+    company-logos:
+      location: ./data/company-logos
+      public-base-path: /media/company-logos
+      max-bytes: 5242880
+    employee-images:
+      location: ./data/employee-images
+      public-base-path: /media/employee-images
+      max-bytes: 5242880
+    chatter-attachments:
+      location: ./data/chatter-attachments
+      public-base-path: /media/chatter-attachments
+      max-bytes: 10485760
+  messaging:
+    enabled: false
+    exchange: accounting.system.events
+
+accounting:
+  seed:
+    # Always seed DEFAULT_COMPANY_ID chart of accounts and journals (idempotent)
+    default-company-chart: true
+    # Demo partners, products, PO/SO, vendor bill, customer invoice, and payments (idempotent; disable in production)
+    demo-business-data: false
+  # Company currencies: IQD base (Iraqi market default) + optional extras
+  currencies:
+    seed: true
+    base:
+      code: IQD
+      symbol: "IQD"
+      name: Iraqi dinar
+    extras:
+      - code: USD
+        symbol: "$"
+        name: United States dollar
+        # Units of this currency per 1 base unit (USD per 1 IQD ≈ 1/1310)
+        rate-per-usd: "0.000763358778"
+        active: true
+  cors:
+    # Comma-separated list of origins allowed to call /api/v1/**
+    # The Next.js dev server runs on http://localhost:3000 by default.
+    allowed-origins: http://localhost:3000
+
+inventory:
+  seed:
+    # Always seed UoMs, warehouse WH, and product category "All"
+    default-company: true
+
+hr:
+  seed:
+    # Demo departments and employees (idempotent; disable in production)
+    demo-data: false
+
+spring:
+  application:
+    name: delin
+  profiles:
+    default: dev
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        retry:
+          enabled: true
+          initial-interval: 1s
+          max-attempts: 4
+          max-interval: 10s
+          multiplier: 2.0
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 40MB

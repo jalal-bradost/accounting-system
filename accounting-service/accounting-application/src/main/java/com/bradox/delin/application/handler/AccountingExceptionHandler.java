@@ -1,0 +1,38 @@
+package com.bradox.delin.application.handler;
+
+import com.bradox.delin.domain.core.exception.AccountingDomainException;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+@RestControllerAdvice
+@Order(Ordered.HIGHEST_PRECEDENCE)
+public class AccountingExceptionHandler {
+
+    private final ExceptionMessageResolver messageResolver;
+
+    public AccountingExceptionHandler(ExceptionMessageResolver messageResolver) {
+        this.messageResolver = messageResolver;
+    }
+
+    @ExceptionHandler(AccountingDomainException.class)
+    public ResponseEntity<ErrorDTO> handleAccountingDomainException(AccountingDomainException ex) {
+        ErrorDTO dto = ErrorDTO.builder()
+                .code("ACCOUNTING_DOMAIN_ERROR")
+                .message(messageResolver.resolve(ex))
+                .build();
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(dto);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorDTO> handleIllegalArgumentException(IllegalArgumentException ex) {
+        ErrorDTO dto = ErrorDTO.builder()
+                .code(HttpStatus.BAD_REQUEST.getReasonPhrase())
+                .message(ex.getMessage())
+                .build();
+        return ResponseEntity.badRequest().body(dto);
+    }
+}
