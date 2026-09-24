@@ -1,4 +1,4 @@
-package $com.bradox.delin;
+package $com.bradox.erp;
 
 /**
  * Hello world!

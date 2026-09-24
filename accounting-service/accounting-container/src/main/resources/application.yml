@@ -6,7 +6,7 @@ app:
     seed-default-admin-password: admin
     jwt:
       secret: "dev-only-change-me-please-use-32b-minimum-secret!!"
-      issuer: delin
+      issuer: bradox-erp
       expiration-minutes: 720
     authorization:
       strict: true
@@ -74,7 +74,7 @@ hr:
 
 spring:
   application:
-    name: delin
+    name: bradox-erp
   profiles:
     default: dev
   autoconfigure:

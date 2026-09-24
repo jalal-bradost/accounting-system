@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>com.bradox.delin</groupId>
+        <groupId>com.bradox.erp</groupId>
         <artifactId>accounting-service</artifactId>
         <version>1.0-SNAPSHOT</version>
     </parent>
@@ -40,135 +40,135 @@
             <scope>runtime</scope>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>accounting-domain-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>accounting-application-service</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>accounting-application</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>accounting-dataaccess</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>infrastructure</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>accounting-messaging</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>purchase-messaging</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>sales-messaging</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>inventory-messaging</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>contacts-messaging</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>common-application</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>common-platform</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>common-dataaccess</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>contacts-application-service</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>contacts-application</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>contacts-dataaccess</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>hr-domain-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>hr-application-service</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>hr-application</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>hr-dataaccess</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>expense-domain-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>expense-application-service</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>expense-application</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>expense-dataaccess</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>inventory-application-service</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>inventory-application</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>inventory-dataaccess</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>purchase-application</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>purchase-dataaccess</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>sales-application</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>sales-dataaccess</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>pos-application</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.bradox.delin</groupId>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>pos-dataaccess</artifactId>
         </dependency>
         <dependency>
@@ -216,7 +216,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <mainClass>com.bradox.delin.DelinApplication</mainClass>
+                    <mainClass>com.bradox.erp.DelinApplication</mainClass>
                 </configuration>
             </plugin>
         </plugins>

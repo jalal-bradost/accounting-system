@@ -1,6 +1,6 @@
 # Database configuration
 
-This document describes how to run the Delin backend against H2 (local dev), PostgreSQL (optional dev/staging), or MySQL 8 (production).
+This document describes how to run the Bradox ERP backend against H2 (local dev), PostgreSQL (optional dev/staging), or MySQL 8 (production).
 
 ## Profiles
 
@@ -17,7 +17,7 @@ Activate a profile with SPRING_PROFILES_ACTIVE (dev, postgres, or prod).
 No external database required. The default dev profile uses in-memory H2 in PostgreSQL compatibility mode.
 
 ```bash
-cd delin-backend
+cd bradox-erp-backend
 mvn spring-boot:run -pl accounting-service/accounting-container
 ```
 
@@ -67,7 +67,7 @@ sudo mysql -e "CREATE USER 'accounting_user'@'127.0.0.1' IDENTIFIED BY 'your-pas
 sudo mysql -e "GRANT ALL PRIVILEGES ON accounting.* TO 'accounting_user'@'127.0.0.1';"
 sudo mysql -e "FLUSH PRIVILEGES;"
 
-cd delin-backend
+cd bradox-erp-backend
 mvn clean package -DskipTests -pl accounting-service/accounting-container -am
 
 export DB_HOST='127.0.0.1'
@@ -96,7 +96,7 @@ Override JWT secret in production (do not use the dev default).
 ## Building
 
 ```bash
-cd delin-backend
+cd bradox-erp-backend
 mvn clean test
 mvn clean package -DskipTests -pl accounting-service/accounting-container -am
 ```

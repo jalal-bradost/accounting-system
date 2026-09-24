@@ -6,7 +6,7 @@ The Spring Boot backend originally served two surfaces:
 2. **Thymeleaf MVC** under `/web/...` (`accounting-container` module)
 
 The Thymeleaf UI is being replaced by a Next.js 16 frontend that lives in the
-sibling project at `../delin-frontend`. The new client calls only
+sibling project at `../bradox-erp-frontend`. The new client calls only
 the JSON REST API and ships an Odoo-style modular shell so additional modules
 (inventory, sales, purchase, ...) can be added incrementally.
 
@@ -45,10 +45,10 @@ services already cover everything the new client needs.
 
 ## Frontend entry point
 
-Run the Next.js client from `delin-frontend`:
+Run the Next.js client from `bradox-erp-frontend`:
 
 ```bash
-cd delin-frontend
+cd bradox-erp-frontend
 npm install
 npm run dev
 ```
