@@ -1,0 +1,58 @@
+package com.bradox.erp.accounting.service.domain.create;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
+public class CreateJournalEntryCommand {
+    @NotNull
+    private final UUID companyId;
+    @NotNull
+    private final UUID journalId;
+    /** Optional: when omitted, server generates via sequence. */
+    private final String sequenceNumber;
+    @NotNull
+    private final LocalDateTime date;
+    private final String currencyCode;
+    /** Optional partner attached at the entry level (e.g. customer/vendor for the document). */
+    private final UUID partnerId;
+    @NotEmpty
+    @Valid
+    private final List<JournalItemCommand> items;
+
+    public CreateJournalEntryCommand(UUID companyId, UUID journalId, String sequenceNumber, LocalDateTime date,
+                                     String currencyCode, List<JournalItemCommand> items) {
+        this(companyId, journalId, sequenceNumber, date, currencyCode, null, items);
+    }
+
+    @JsonCreator
+    public CreateJournalEntryCommand(@JsonProperty("companyId") UUID companyId,
+                                     @JsonProperty("journalId") UUID journalId,
+                                     @JsonProperty("sequenceNumber") String sequenceNumber,
+                                     @JsonProperty("date") LocalDateTime date,
+                                     @JsonProperty("currencyCode") String currencyCode,
+                                     @JsonProperty("partnerId") UUID partnerId,
+                                     @JsonProperty("items") List<JournalItemCommand> items) {
+        this.companyId = companyId;
+        this.journalId = journalId;
+        this.sequenceNumber = sequenceNumber != null ? sequenceNumber : "";
+        this.date = date;
+        this.currencyCode = currencyCode;
+        this.partnerId = partnerId;
+        this.items = items != null ? items : List.of();
+    }
+
+    public UUID getCompanyId() { return companyId; }
+    public UUID getJournalId() { return journalId; }
+    public String getSequenceNumber() { return sequenceNumber; }
+    public LocalDateTime getDate() { return date; }
+    public String getCurrencyCode() { return currencyCode; }
+    public UUID getPartnerId() { return partnerId; }
+    public List<JournalItemCommand> getItems() { return items; }
+}

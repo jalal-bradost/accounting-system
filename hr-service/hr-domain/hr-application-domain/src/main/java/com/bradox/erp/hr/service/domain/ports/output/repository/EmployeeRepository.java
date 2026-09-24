@@ -1,0 +1,44 @@
+package com.bradox.erp.hr.service.domain.ports.output.repository;
+
+import com.bradox.erp.domain.valueobject.CompanyId;
+import com.bradox.erp.domain.valueobject.UserId;
+import com.bradox.erp.hr.domain.core.entity.Employee;
+import com.bradox.erp.hr.domain.core.valueobject.EmployeeId;
+import com.bradox.erp.hr.service.domain.dto.EmployeeDisplayMeta;
+import com.bradox.erp.hr.service.domain.dto.EmployeeImageMeta;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+public interface EmployeeRepository {
+
+    Employee save(Employee employee);
+
+    Optional<Employee> findById(EmployeeId id);
+
+    Optional<Employee> findByIdIncludingArchived(EmployeeId id);
+
+    Page<Employee> search(CompanyId companyId, String query, UUID departmentId,
+                          boolean includeArchived, Pageable pageable);
+
+    Optional<EmployeeImageMeta> findImageMeta(UUID employeeId);
+
+    Map<UUID, EmployeeImageMeta> findImageMetaByEmployeeIds(Collection<UUID> employeeIds);
+
+    Map<UUID, EmployeeDisplayMeta> findDisplayMetaByEmployeeIds(Collection<UUID> employeeIds);
+
+    void updateImage(UUID employeeId, String imageUrl, String contentType);
+
+    void clearImage(UUID employeeId);
+
+    Optional<Employee> findByUserId(CompanyId companyId, UserId userId);
+
+    List<Employee> findByCompanyId(CompanyId companyId);
+
+    long countByDepartmentId(UUID departmentId);
+}

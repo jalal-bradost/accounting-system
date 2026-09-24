@@ -1,0 +1,44 @@
+package com.bradox.erp.accounting.service.domain.ports.input.service;
+
+import com.bradox.erp.accounting.service.domain.customerinvoice.CreateCreditNoteFromInvoiceCommand;
+import com.bradox.erp.accounting.service.domain.customerinvoice.CreateCustomerInvoiceCommand;
+import com.bradox.erp.accounting.service.domain.customerinvoice.CustomerInvoiceResponse;
+import com.bradox.erp.accounting.service.domain.customerinvoice.CustomerPaymentResponse;
+import com.bradox.erp.accounting.service.domain.customerinvoice.RegisterCustomerPaymentCommand;
+import jakarta.validation.Valid;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+public interface CustomerInvoiceApplicationService {
+
+    boolean hasPostedInvoiceForSalesOrder(UUID salesOrderId);
+
+    /** Quantities reserved on draft customer invoices keyed by sales order line id. */
+    Map<UUID, BigDecimal> draftAllocatedQtyBySalesOrderLine(UUID salesOrderId);
+
+    /** Quantities reserved on draft customer credit notes keyed by sales order line id. */
+    Map<UUID, BigDecimal> draftCreditNoteAllocatedQtyBySalesOrderLine(UUID salesOrderId);
+
+    CustomerInvoiceResponse createCustomerInvoice(@Valid CreateCustomerInvoiceCommand command);
+
+    CustomerInvoiceResponse createCreditNoteFromInvoice(UUID invoiceId, @Valid CreateCreditNoteFromInvoiceCommand command);
+
+    List<CustomerInvoiceResponse> listCreditNotesForInvoice(UUID invoiceId);
+
+    List<CustomerInvoiceResponse> listPostedInvoicesForSalesOrder(UUID salesOrderId);
+
+    CustomerInvoiceResponse postCustomerInvoice(UUID invoiceId);
+
+    CustomerInvoiceResponse getCustomerInvoice(UUID invoiceId);
+
+    List<CustomerInvoiceResponse> listCustomerInvoices(UUID companyId);
+
+    List<CustomerPaymentResponse> listCustomerPayments(UUID companyId);
+
+    CustomerPaymentResponse registerCustomerPayment(@Valid RegisterCustomerPaymentCommand command);
+
+    CustomerPaymentResponse reverseCustomerPayment(UUID paymentId, String reason);
+}

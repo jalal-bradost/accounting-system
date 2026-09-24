@@ -1,0 +1,20 @@
+package com.bradox.erp.inventory.service.domain.ports.output.repository;
+
+import com.bradox.erp.domain.valueobject.CompanyId;
+import com.bradox.erp.inventory.domain.core.entity.ProductCategory;
+import com.bradox.erp.inventory.domain.core.valueobject.ProductCategoryId;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface ProductCategoryRepository {
+    ProductCategory save(ProductCategory category);
+    Optional<ProductCategory> findById(ProductCategoryId id);
+    Optional<ProductCategory> findByIdIncludingArchived(ProductCategoryId id);
+    List<ProductCategory> findByCompany(CompanyId companyId, boolean includeArchived);
+
+    void deleteById(ProductCategoryId id);
+
+    /** True when another category declares the given category as its parent. */
+    boolean hasChildren(ProductCategoryId id);
+}
