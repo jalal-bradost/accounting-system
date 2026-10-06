@@ -36,6 +36,33 @@ app:
   messaging:
     enabled: false
     exchange: accounting.system.events
+  ai:
+    enabled: false
+    provider: hybrid
+    ollama:
+      enabled: true
+      base-url: http://localhost:11434
+      model: qwen2.5:3b
+      connect-timeout-ms: 5000
+      read-timeout-ms: 120000
+    google:
+      enabled: false
+      api-key: ""
+      model: gemini-3.8-flash
+      base-url: https://generativelanguage.googleapis.com/v1beta/openai
+      connect-timeout-ms: 5000
+      read-timeout-ms: 120000
+    openai:
+      enabled: false
+      api-key: ""
+      model: gpt-4o-mini
+      base-url: https://api.openai.com/v1
+      connect-timeout-ms: 5000
+      read-timeout-ms: 120000
+    max-tool-rounds: 4
+    max-history-messages: 12
+    max-date-range-days: 366
+    write-operations-enabled: false
 
 accounting:
   seed:

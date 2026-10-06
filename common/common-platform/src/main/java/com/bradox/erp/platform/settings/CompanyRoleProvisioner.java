@@ -27,6 +27,7 @@ public class CompanyRoleProvisioner {
     static final List<String> PERMISSION_CATALOG = List.of(
             "platform.activity.read", "platform.activity.write",
             "platform.audit.read",
+            "platform.assistant.use",
             "platform.user.read", "platform.user.write",
             "platform.role.read", "platform.role.write",
             "platform.permission.read",
@@ -79,6 +80,7 @@ public class CompanyRoleProvisioner {
             "ADMIN", Set.copyOf(PERMISSION_CATALOG),
             "ACCOUNTANT", Set.of(
                     "platform.activity.read", "platform.activity.write", "platform.audit.read",
+                    "platform.assistant.use",
                     "contacts.partner.read", "contacts.payment-terms.read",
                     "hr.employee.read", "hr.employee.write", "hr.employee.archive",
                     "hr.department.read", "hr.department.write",
@@ -102,6 +104,7 @@ public class CompanyRoleProvisioner {
                     "accounting.vendor-payment.register"),
             "SALES", Set.of(
                     "platform.activity.read", "platform.activity.write",
+                    "platform.assistant.use",
                     "contacts.partner.read", "contacts.partner.write",
                     "hr.employee.read", "hr.employee.write", "hr.employee.archive",
                     "hr.department.read", "hr.department.write",
@@ -121,6 +124,7 @@ public class CompanyRoleProvisioner {
                     "accounting.customer-invoice.post", "accounting.customer-payment.register"),
             "PURCHASING", Set.of(
                     "platform.activity.read", "platform.activity.write",
+                    "platform.assistant.use",
                     "contacts.partner.read", "contacts.partner.write",
                     "hr.employee.read", "hr.employee.write", "hr.employee.archive",
                     "hr.department.read", "hr.department.write",
@@ -147,6 +151,7 @@ public class CompanyRoleProvisioner {
                     "inventory.quant.read", "inventory.valuation.read"),
             "READONLY", Set.of(
                     "platform.activity.read", "platform.audit.read",
+                    "platform.assistant.use",
                     "platform.company.read", "platform.permission.read",
                     "contacts.partner.read", "contacts.payment-terms.read",
                     "hr.employee.read", "hr.department.read",
