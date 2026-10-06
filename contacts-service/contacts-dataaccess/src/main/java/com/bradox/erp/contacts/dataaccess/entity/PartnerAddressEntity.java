@@ -3,6 +3,7 @@ package com.bradox.erp.contacts.dataaccess.entity;
 import com.bradox.erp.contacts.domain.core.valueobject.AddressType;
 import jakarta.persistence.*;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Entity
@@ -29,6 +30,8 @@ public class PartnerAddressEntity {
     @Column(length = 100) private String state;
     @Column(name = "postal_code", length = 20) private String postalCode;
     @Column(length = 100) private String country;
+    @Column(precision = 10, scale = 7) private BigDecimal latitude;
+    @Column(precision = 10, scale = 7) private BigDecimal longitude;
 
     public PartnerAddressEntity() {}
 
@@ -52,4 +55,8 @@ public class PartnerAddressEntity {
     public void setPostalCode(String v) { this.postalCode = v; }
     public String getCountry() { return country; }
     public void setCountry(String v) { this.country = v; }
+    public BigDecimal getLatitude() { return latitude; }
+    public void setLatitude(BigDecimal v) { this.latitude = v; }
+    public BigDecimal getLongitude() { return longitude; }
+    public void setLongitude(BigDecimal v) { this.longitude = v; }
 }

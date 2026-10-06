@@ -22,6 +22,9 @@ import java.util.stream.Collectors;
 @Component
 public class ContactsDataMapper {
 
+    /** Default credit limit for new customers (company currency, typically IQD). */
+    public static final BigDecimal DEFAULT_CUSTOMER_CREDIT_LIMIT = new BigDecimal("300000");
+
     public Partner createCommandToPartner(CreatePartnerCommand cmd, UUID id, CompanyId companyId) {
         return Partner.builder()
                 .id(new PartnerId(id))
@@ -32,7 +35,7 @@ public class ContactsDataMapper {
                 .parentId(cmd.getParentId() != null ? new PartnerId(cmd.getParentId()) : null)
                 .isCustomer(cmd.isCustomer())
                 .isVendor(cmd.isVendor())
-                .creditLimit(cmd.getCreditLimit() != null ? new Money(cmd.getCreditLimit()) : Money.ZERO)
+                .creditLimit(resolveCreateCreditLimit(cmd))
                 .paymentTermsId(cmd.getPaymentTermsId() != null ? new PaymentTermsId(cmd.getPaymentTermsId()) : null)
                 .receivableAccountId(cmd.getReceivableAccountId())
                 .payableAccountId(cmd.getPayableAccountId())
@@ -57,6 +60,8 @@ public class ContactsDataMapper {
                 .state(cmd.getState())
                 .postalCode(cmd.getPostalCode())
                 .country(cmd.getCountry())
+                .latitude(cmd.getLatitude())
+                .longitude(cmd.getLongitude())
                 .build();
     }
 
@@ -136,7 +141,8 @@ public class ContactsDataMapper {
                 a.getType(),
                 a.isDefaultForType(),
                 a.getStreet1(), a.getStreet2(), a.getCity(),
-                a.getState(), a.getPostalCode(), a.getCountry());
+                a.getState(), a.getPostalCode(), a.getCountry(),
+                a.getLatitude(), a.getLongitude());
     }
 
     public PartnerResponse.BankAccountResponse bankAccountToResponse(PartnerBankAccount b) {
@@ -154,5 +160,19 @@ public class ContactsDataMapper {
     private static Currency toCurrency(String code) {
         if (code == null || code.isBlank()) return null;
         return new Currency(code, "", 2);
+    }
+
+    /**
+     * Explicit credit limit wins. Otherwise customers default to {@link #DEFAULT_CUSTOMER_CREDIT_LIMIT};
+     * vendors-only stay at zero (unlimited / unused).
+     */
+    static Money resolveCreateCreditLimit(CreatePartnerCommand cmd) {
+        if (cmd.getCreditLimit() != null) {
+            return new Money(cmd.getCreditLimit());
+        }
+        if (cmd.isCustomer()) {
+            return new Money(DEFAULT_CUSTOMER_CREDIT_LIMIT);
+        }
+        return Money.ZERO;
     }
 }

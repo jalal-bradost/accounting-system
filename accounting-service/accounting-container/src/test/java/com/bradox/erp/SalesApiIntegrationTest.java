@@ -248,7 +248,7 @@ class SalesApiIntegrationTest {
     }
 
     @Test
-    void customer_return_auto_creates_draft_credit_note() throws Exception {
+    void customer_return_with_refund_posts_credit_note_in_same_step() throws Exception {
         UUID stockLoc = lookupLocationByCode("WH/STOCK");
         UUID supplier = lookupLocationByCode("VIRT/SUPPLIERS");
         UUID warehouse = lookupWarehouseByCode("WH");
@@ -312,7 +312,7 @@ class SalesApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
         assertThat(creditNotes).hasSize(1);
-        assertThat(creditNotes.get(0).get("state").asText()).isEqualTo("DRAFT");
+        assertThat(creditNotes.get(0).get("state").asText()).isEqualTo("POSTED");
         assertThat(creditNotes.get(0).get("moveType").asText()).isEqualTo("CREDIT_NOTE");
         assertThat(creditNotes.get(0).get("reversedInvoiceId").asText()).isEqualTo(invoiceId.toString());
     }
@@ -381,7 +381,7 @@ class SalesApiIntegrationTest {
     }
 
     @Test
-    void confirmed_so_qty_decrease_creates_return_and_credit_note() throws Exception {
+    void confirmed_so_qty_decrease_requires_return_and_credit_note_first() throws Exception {
         UUID stockLoc = lookupLocationByCode("WH/STOCK");
         UUID supplier = lookupLocationByCode("VIRT/SUPPLIERS");
         UUID warehouse = lookupWarehouseByCode("WH");
@@ -425,17 +425,24 @@ class SalesApiIntegrationTest {
         String amendBody = "{\"customerPartnerId\":\"" + custId + "\",\"currencyCode\":\"USD\",\"warehouseId\":\"" + warehouse
                 + "\",\"lines\":[{\"id\":\"" + lineId + "\",\"productId\":\"" + productId + "\",\"name\":\"Line\",\"uomId\":\"" + uomId
                 + "\",\"qtyOrdered\":10,\"unitPrice\":100,\"discountPercent\":0,\"taxIds\":[]}]}";
-        so = json.readTree(mockMvc.perform(put("/api/v1/sales/orders/" + soId)
+        // 20 delivered and invoiced: lowering to 10 is refused until the goods come back and are credited.
+        mockMvc.perform(put("/api/v1/sales/orders/" + soId)
                         .header("X-Company-Id", COMPANY_ID.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(amendBody))
+                .andExpect(status().isUnprocessableEntity());
+
+        UUID deliveryId = UUID.fromString(so.get("deliveryPickingIds").get(0).asText());
+        UUID deliveryMoveId = firstMoveId(deliveryId);
+        mockMvc.perform(post("/api/v1/sales/orders/" + soId + "/return")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"toRefund\":true,\"moveQuantities\":{\"" + deliveryMoveId + "\":10}}"))
+                .andExpect(status().isOk());
+        so = json.readTree(mockMvc.perform(get("/api/v1/sales/orders/" + soId)
+                        .header("X-Company-Id", COMPANY_ID.toString()))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
-        assertThat(so.get("state").asText()).isEqualTo("CONFIRMED");
-        assertThat(so.get("lines").get(0).get("qtyOrdered").decimalValue())
-                .isEqualByComparingTo(new BigDecimal("10"));
-        assertThat(so.get("returnPickingIds").size()).isGreaterThanOrEqualTo(1);
-
         so = validateOpenReturnPickings(so);
         assertThat(so.get("lines").get(0).get("qtyDelivered").decimalValue())
                 .isEqualByComparingTo(new BigDecimal("10"));
@@ -445,8 +452,22 @@ class SalesApiIntegrationTest {
                                 .header("X-Company-Id", COMPANY_ID.toString()))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
+        // Refund return: the credit note is posted with the return, and the order drops to 10.
         assertThat(creditNotes).hasSize(1);
-        assertThat(creditNotes.get(0).get("state").asText()).isEqualTo("DRAFT");
+        assertThat(creditNotes.get(0).get("state").asText()).isEqualTo("POSTED");
+        assertThat(so.get("lines").get(0).get("qtyOrdered").decimalValue())
+                .isEqualByComparingTo(new BigDecimal("10"));
+
+        so = json.readTree(mockMvc.perform(put("/api/v1/sales/orders/" + soId)
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(amendBody))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertThat(so.get("lines").get(0).get("qtyOrdered").decimalValue())
+                .isEqualByComparingTo(new BigDecimal("10"));
+        assertThat(so.get("lines").get(0).get("qtyInvoiced").decimalValue())
+                .isEqualByComparingTo(new BigDecimal("10"));
     }
 
     @Test
@@ -552,10 +573,7 @@ class SalesApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
         assertThat(creditNotes).hasSize(1);
-        UUID creditNoteId = UUID.fromString(creditNotes.get(0).get("id").asText());
-        mockMvc.perform(post("/api/v1/accounting/customer-invoices/" + creditNoteId + "/post")
-                        .header("X-Company-Id", COMPANY_ID.toString()))
-                .andExpect(status().isOk());
+        assertThat(creditNotes.get(0).get("state").asText()).isEqualTo("POSTED");
 
         String overpayBody = "{\"customerInvoiceId\":\"" + invoiceId + "\",\"paymentJournalId\":\"" + cashJournalId
                 + "\",\"paymentDate\":\"2026-05-04T12:00:00\",\"amount\":200,\"currencyCode\":\"USD\",\"reference\":\"PAY-OVER\"}";
@@ -572,6 +590,119 @@ class SalesApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(netPayBody))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void giftToggle_afterInvoice_enablesChargeInvoiceAndCommercialCreditNote() throws Exception {
+        UUID stockLoc = lookupLocationByCode("WH/STOCK");
+        UUID supplier = lookupLocationByCode("VIRT/SUPPLIERS");
+        UUID warehouse = lookupWarehouseByCode("WH");
+        UUID categoryId = lookupCategoryByName("All");
+        UUID uomId = lookupUomByName("Unit");
+        UUID giftProductId = createProduct("SO-GIFT-" + UUID.randomUUID().toString().substring(0, 6),
+                "Gift toggle product", categoryId, uomId, "10.00", "40.00");
+        UUID saleProductId = createProduct("SO-SALE-" + UUID.randomUUID().toString().substring(0, 6),
+                "Sale toggle product", categoryId, uomId, "10.00", "50.00");
+
+        UUID receiptGift = createPicking(warehouse, "INCOMING", supplier, stockLoc, giftProductId, uomId, "5", "10.00");
+        validatePicking(receiptGift);
+        UUID receiptSale = createPicking(warehouse, "INCOMING", supplier, stockLoc, saleProductId, uomId, "5", "10.00");
+        validatePicking(receiptSale);
+
+        UUID arAccountId = accountIdByCode("430003");
+        UUID custId = createCustomer(arAccountId);
+
+        // --- Gift → Sale: invoiced as gift, then uncheck gift → Create Invoice ---
+        String giftSoBody = "{\"customerPartnerId\":\"" + custId + "\",\"currencyCode\":\"USD\",\"warehouseId\":\"" + warehouse
+                + "\",\"lines\":[{\"productId\":\"" + giftProductId + "\",\"name\":\"Gift line\",\"uomId\":\"" + uomId
+                + "\",\"qtyOrdered\":2,\"unitPrice\":40,\"isGift\":true,\"discountPercent\":0,\"taxIds\":[]}]}";
+        JsonNode giftSo = json.readTree(mockMvc.perform(post("/api/v1/sales/orders")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(giftSoBody))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID giftSoId = UUID.fromString(giftSo.get("id").asText());
+        giftSo = confirmSalesOrder(giftSoId);
+        assertThat(giftSo.get("canCreateCustomerInvoice").asBoolean()).isFalse();
+        assertThat(giftSo.get("lines").get(0).get("isGift").asBoolean()).isTrue();
+
+        UUID giftLineId = UUID.fromString(giftSo.get("lines").get(0).get("id").asText());
+        String uncheckGiftBody = "{\"customerPartnerId\":\"" + custId + "\",\"currencyCode\":\"USD\",\"warehouseId\":\"" + warehouse
+                + "\",\"lines\":[{\"id\":\"" + giftLineId + "\",\"productId\":\"" + giftProductId
+                + "\",\"name\":\"Gift line\",\"uomId\":\"" + uomId
+                + "\",\"qtyOrdered\":2,\"unitPrice\":40,\"isGift\":false,\"discountPercent\":0,\"taxIds\":[]}]}";
+        giftSo = json.readTree(mockMvc.perform(put("/api/v1/sales/orders/" + giftSoId)
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(uncheckGiftBody))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertThat(giftSo.get("lines").get(0).get("isGift").asBoolean()).isFalse();
+        assertThat(giftSo.get("canCreateCustomerInvoice").asBoolean()).isTrue();
+
+        String chargeInvCmd = "{\"salesOrderId\":\"" + giftSoId + "\",\"invoiceDate\":\"2026-05-04\",\"dueDate\":\"2026-06-04\"}";
+        JsonNode chargeInv = json.readTree(mockMvc.perform(post("/api/v1/sales/customer-invoices/from-order")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(chargeInvCmd))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertThat(chargeInv.get("lines")).hasSize(1);
+        assertThat(chargeInv.get("lines").get(0).get("isGift").asBoolean()).isFalse();
+        assertThat(chargeInv.get("lines").get(0).get("qty").decimalValue())
+                .isEqualByComparingTo(new BigDecimal("2"));
+        UUID chargeInvId = UUID.fromString(chargeInv.get("id").asText());
+        mockMvc.perform(post("/api/v1/accounting/customer-invoices/" + chargeInvId + "/post")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk());
+
+        giftSo = json.readTree(mockMvc.perform(get("/api/v1/sales/orders/" + giftSoId)
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertThat(giftSo.get("canCreateCustomerInvoice").asBoolean()).isFalse();
+
+        // --- Sale → Gift: invoiced as charge, then check gift → Create Credit Note ---
+        String saleSoBody = "{\"customerPartnerId\":\"" + custId + "\",\"currencyCode\":\"USD\",\"warehouseId\":\"" + warehouse
+                + "\",\"lines\":[{\"productId\":\"" + saleProductId + "\",\"name\":\"Sale line\",\"uomId\":\"" + uomId
+                + "\",\"qtyOrdered\":2,\"unitPrice\":50,\"isGift\":false,\"discountPercent\":0,\"taxIds\":[]}]}";
+        JsonNode saleSo = json.readTree(mockMvc.perform(post("/api/v1/sales/orders")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(saleSoBody))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID saleSoId = UUID.fromString(saleSo.get("id").asText());
+        saleSo = confirmSalesOrder(saleSoId);
+        assertThat(saleSo.get("canCreateCustomerCreditNote").asBoolean()).isFalse();
+
+        UUID saleLineId = UUID.fromString(saleSo.get("lines").get(0).get("id").asText());
+        String makeGiftBody = "{\"customerPartnerId\":\"" + custId + "\",\"currencyCode\":\"USD\",\"warehouseId\":\"" + warehouse
+                + "\",\"lines\":[{\"id\":\"" + saleLineId + "\",\"productId\":\"" + saleProductId
+                + "\",\"name\":\"Sale line\",\"uomId\":\"" + uomId
+                + "\",\"qtyOrdered\":2,\"unitPrice\":50,\"isGift\":true,\"discountPercent\":0,\"taxIds\":[]}]}";
+        saleSo = json.readTree(mockMvc.perform(put("/api/v1/sales/orders/" + saleSoId)
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(makeGiftBody))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertThat(saleSo.get("lines").get(0).get("isGift").asBoolean()).isTrue();
+        assertThat(saleSo.get("canCreateCustomerCreditNote").asBoolean()).isTrue();
+
+        String cnCmd = "{\"salesOrderId\":\"" + saleSoId + "\",\"invoiceDate\":\"2026-05-05\",\"dueDate\":\"2026-06-05\"}";
+        JsonNode cn = json.readTree(mockMvc.perform(post("/api/v1/sales/customer-credit-notes/from-order")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cnCmd))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertThat(cn.get("moveType").asText()).isEqualTo("CREDIT_NOTE");
+        assertThat(cn.get("lines")).hasSize(1);
+        assertThat(cn.get("lines").get(0).get("isGift").asBoolean()).isFalse();
+        assertThat(cn.get("lines").get(0).get("qty").decimalValue())
+                .isEqualByComparingTo(new BigDecimal("2"));
     }
 
     @Test
@@ -619,10 +750,10 @@ class SalesApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
 
-        // First order in this test remains draft (quotation count); second was confirmed.
-        assertThat(dash.get("quotations").get("value").decimalValue()).isEqualByComparingTo(BigDecimal.ONE);
-        assertThat(dash.get("orders").get("value").decimalValue()).isGreaterThanOrEqualTo(new BigDecimal("2"));
-        assertThat(dash.get("revenue").get("value").decimalValue()).isGreaterThanOrEqualTo(new BigDecimal("280"));
+        // Draft quotation + one confirmed order (2 × 100) in period; revenue is net of returns.
+        assertThat(dash.get("quotations").get("value").decimalValue()).isGreaterThanOrEqualTo(BigDecimal.ONE);
+        assertThat(dash.get("orders").get("value").decimalValue()).isGreaterThanOrEqualTo(BigDecimal.ONE);
+        assertThat(dash.get("revenue").get("value").decimalValue()).isGreaterThanOrEqualTo(new BigDecimal("200"));
         assertThat(dash.get("averageOrder").get("value").decimalValue()).isGreaterThan(BigDecimal.ZERO);
         assertThat(dash.get("series").isArray()).isTrue();
         assertThat(dash.get("topOrders").isArray()).isTrue();
@@ -634,6 +765,107 @@ class SalesApiIntegrationTest {
         assertThat(dash.get("channels").isArray()).isTrue();
         assertThat(dash.get("paymentMethods").isArray()).isTrue();
         assertThat(dash.get("granularity").asText()).isEqualTo("DAY");
+    }
+
+    @Test
+    void sales_product_profit_estimated_and_realized() throws Exception {
+        // Realized profit is filtered by delivery validated_at (wall clock), so the report
+        // window must include today — not a hardcoded past month.
+        java.time.LocalDate today = java.time.LocalDate.now();
+        String from = today.withDayOfMonth(1).toString();
+        String to = today.withDayOfMonth(today.lengthOfMonth()).toString();
+        String orderDate = today.toString();
+
+        UUID stockLoc = lookupLocationByCode("WH/STOCK");
+        UUID supplier = lookupLocationByCode("VIRT/SUPPLIERS");
+        UUID warehouse = lookupWarehouseByCode("WH");
+        UUID categoryId = lookupCategoryByName("All");
+        UUID uomId = lookupUomByName("Unit");
+        UUID productId = createProduct("SO-PROF-" + UUID.randomUUID().toString().substring(0, 6),
+                "Profit Product", categoryId, uomId, "10.00", "100.00");
+
+        UUID receipt = createPicking(warehouse, "INCOMING", supplier, stockLoc, productId, uomId, "20", "10.00");
+        validatePicking(receipt);
+
+        UUID arAccountId = accountIdByCode("430003");
+        UUID custId = createCustomer(arAccountId);
+
+        String soBody = "{\"customerPartnerId\":\"" + custId + "\",\"currencyCode\":\"USD\",\"warehouseId\":\"" + warehouse
+                + "\",\"orderDate\":\"" + orderDate + "\",\"lines\":[{\"productId\":\"" + productId + "\",\"name\":\"Profit line\",\"uomId\":\"" + uomId
+                + "\",\"qtyOrdered\":2,\"unitPrice\":40,\"discountPercent\":0,\"taxIds\":[]}]}";
+        JsonNode so = json.readTree(mockMvc.perform(post("/api/v1/sales/orders")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(soBody))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        UUID soId = UUID.fromString(so.get("id").asText());
+
+        so = json.readTree(mockMvc.perform(post("/api/v1/sales/orders/" + soId + "/confirm")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertThat(so.get("state").asText()).isEqualTo("CONFIRMED");
+
+        JsonNode beforeDelivery = json.readTree(mockMvc.perform(get("/api/v1/sales/dashboard/product-profit")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .param("from", from)
+                        .param("to", to))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+
+        JsonNode estimatedRow = findProductProfitRow(beforeDelivery, productId);
+        assertThat(estimatedRow).isNotNull();
+        assertThat(estimatedRow.get("estimated").get("revenue").decimalValue())
+                .isEqualByComparingTo(new BigDecimal("80.0000"));
+        assertThat(estimatedRow.get("estimated").get("cost").decimalValue())
+                .isEqualByComparingTo(new BigDecimal("20.0000"));
+        assertThat(estimatedRow.get("estimated").get("profit").decimalValue())
+                .isEqualByComparingTo(new BigDecimal("60.0000"));
+        assertThat(estimatedRow.get("qtyDelivered").decimalValue())
+                .isEqualByComparingTo(BigDecimal.ZERO.setScale(4));
+
+        assertThat(so.has("deliveryPickingIds") && so.get("deliveryPickingIds").isArray()).isTrue();
+        for (JsonNode pickingIdNode : so.get("deliveryPickingIds")) {
+            UUID pickingId = UUID.fromString(pickingIdNode.asText());
+            mockMvc.perform(post("/api/v1/sales/deliveries/" + pickingId + "/validate")
+                            .header("X-Company-Id", COMPANY_ID.toString())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isOk());
+        }
+
+        JsonNode afterDelivery = json.readTree(mockMvc.perform(get("/api/v1/sales/dashboard/product-profit")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .param("from", from)
+                        .param("to", to))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+
+        JsonNode realizedRow = findProductProfitRow(afterDelivery, productId);
+        assertThat(realizedRow).isNotNull();
+        assertThat(realizedRow.get("qtyDelivered").decimalValue())
+                .isEqualByComparingTo(new BigDecimal("2.0000"));
+        assertThat(realizedRow.get("realized").get("revenue").decimalValue())
+                .isEqualByComparingTo(new BigDecimal("80.0000"));
+        assertThat(realizedRow.get("realized").get("cost").decimalValue())
+                .isEqualByComparingTo(new BigDecimal("20.0000"));
+        assertThat(realizedRow.get("realized").get("profit").decimalValue())
+                .isEqualByComparingTo(new BigDecimal("60.0000"));
+        assertThat(realizedRow.get("realized").get("marginPercent").decimalValue())
+                .isEqualByComparingTo(new BigDecimal("75.0"));
+    }
+
+    private JsonNode findProductProfitRow(JsonNode response, UUID productId) {
+        if (response == null || !response.has("products") || !response.get("products").isArray()) {
+            return null;
+        }
+        for (JsonNode row : response.get("products")) {
+            if (productId.toString().equals(row.get("productId").asText())) {
+                return row;
+            }
+        }
+        return null;
     }
 
     private JsonNode confirmSalesOrder(UUID soId) throws Exception {

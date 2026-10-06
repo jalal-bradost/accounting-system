@@ -11,10 +11,13 @@ public interface SalesDashboardQueryPort {
 
     long countQuotations(UUID companyId, LocalDate from, LocalDate to);
 
+    /** Confirmed order count with remaining net revenue (ordered qty net of returns through {@code to}). */
     long countConfirmedOrders(UUID companyId, LocalDate from, LocalDate to);
 
+    /** Confirmed sales revenue net of customer returns through {@code to}. */
     BigDecimal sumConfirmedRevenue(UUID companyId, LocalDate from, LocalDate to);
 
+    /** Confirmed order revenue facts (amounts net of customer returns through {@code to}). */
     List<ConfirmedOrderFact> listConfirmedOrderFacts(UUID companyId, LocalDate from, LocalDate to);
 
     List<SalesDashboardResponse.SalesRankedOrderRow> topQuotations(UUID companyId, LocalDate from, LocalDate to, int limit);

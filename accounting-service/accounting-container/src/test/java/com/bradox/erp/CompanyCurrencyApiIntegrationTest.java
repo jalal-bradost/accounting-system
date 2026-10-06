@@ -119,74 +119,50 @@ class CompanyCurrencyApiIntegrationTest {
     }
 
     @Test
-    void addingNewDatedRate_preservesPriorLines_andSwitchesEffectiveByDate() throws Exception {
-        // Use a freshly created currency so test order doesn't matter.
-        // The anchor line is dated "today" with rate 1.55; we add a future-dated line.
+    void ratesCanOnlyBeCreatedForToday_pastAndFutureAreRefused() throws Exception {
         UUID currencyId = createCurrency("AUD", "A$", "Australian dollar", "1.55");
         int historyBefore = listRates(currencyId).size();
 
-        addRate(currencyId, "2030-01-01", "1.60");
-
-        JsonNode history = listRates(currencyId);
-        assertThat(history.size()).isEqualTo(historyBefore + 1);
-        // Newest first
-        assertThat(history.get(0).get("effectiveDate").asText()).isEqualTo("2030-01-01");
-        assertThat(new BigDecimal(history.get(0).get("rate").asText()))
-                .isEqualByComparingTo(new BigDecimal("1.60"));
-        // Today's seeded anchor still present
-        boolean anchorStillThere = false;
-        for (JsonNode row : history) {
-            BigDecimal rate = new BigDecimal(row.get("rate").asText());
-            if (rate.compareTo(new BigDecimal("1.55")) == 0) {
-                anchorStillThere = true;
-                break;
-            }
+        for (String date : new String[] { java.time.LocalDate.now().minusDays(30).toString(),
+                java.time.LocalDate.now().plusDays(30).toString(), "2030-01-01" }) {
+            mockMvc.perform(
+                            post("/api/v1/companies/" + COMPANY_ID + "/currencies/" + currencyId + "/rates")
+                                    .header("X-Company-Id", COMPANY_ID.toString())
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content("{\"effectiveDate\":\"" + date + "\",\"rate\":\"1.60\"}"))
+                    .andExpect(status().is4xxClientError());
         }
-        assertThat(anchorStillThere)
-                .as("Adding a new dated line must not delete prior history")
-                .isTrue();
+        assertThat(listRates(currencyId)).as("history is unchanged by refused rates").hasSize(historyBefore);
+    }
 
-        // A pre-anchor date must not resolve to anything.
+    @Test
+    void addingTodaysRate_overwritesTodaysLineButKeepsHistory() throws Exception {
+        UUID currencyId = createCurrency("CAD", "C$", "Canadian dollar", "1.36");
+        String today = java.time.LocalDate.now().toString();
+        addRate(currencyId, today, "1.40");
+        addRate(currencyId, today, "1.42");
+        JsonNode history = listRates(currencyId);
+        long sameDay =
+                java.util.stream.StreamSupport.stream(history.spliterator(), false)
+                        .filter(n -> today.equals(n.get("effectiveDate").asText()))
+                        .count();
+        assertThat(sameDay).as("Same date should upsert into a single line").isEqualTo(1);
+
+        MvcResult eff =
+                mockMvc.perform(
+                                get("/api/v1/companies/" + COMPANY_ID + "/currencies/" + currencyId + "/rates/effective")
+                                        .header("X-Company-Id", COMPANY_ID.toString())
+                                        .param("date", today))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        assertThat(new BigDecimal(json.readTree(eff.getResponse().getContentAsString()).get("rate").asText()))
+                .isEqualByComparingTo(new BigDecimal("1.42"));
+        // History before today stays readable and unresolved dates stay unresolved.
         mockMvc.perform(
                         get("/api/v1/companies/" + COMPANY_ID + "/currencies/" + currencyId + "/rates/effective")
                                 .header("X-Company-Id", COMPANY_ID.toString())
                                 .param("date", "1999-01-01"))
                 .andExpect(status().isNotFound());
-
-        // A date well after the new line must hit it.
-        MvcResult newer =
-                mockMvc.perform(
-                                get("/api/v1/companies/" + COMPANY_ID + "/currencies/" + currencyId + "/rates/effective")
-                                        .header("X-Company-Id", COMPANY_ID.toString())
-                                        .param("date", "2031-06-15"))
-                        .andExpect(status().isOk())
-                        .andReturn();
-        assertThat(json.readTree(newer.getResponse().getContentAsString()).get("effectiveDate").asText())
-                .isEqualTo("2030-01-01");
-    }
-
-    @Test
-    void addingRateForExistingDate_overwritesSameDateLineButKeepsOthers() throws Exception {
-        UUID currencyId = createCurrency("CAD", "C$", "Canadian dollar", "1.36");
-        addRate(currencyId, "2025-03-01", "1.40");
-        addRate(currencyId, "2025-03-01", "1.42");
-        JsonNode history = listRates(currencyId);
-        long sameDay =
-                java.util.stream.StreamSupport.stream(history.spliterator(), false)
-                        .filter(n -> "2025-03-01".equals(n.get("effectiveDate").asText()))
-                        .count();
-        assertThat(sameDay).as("Same date should upsert into a single line").isEqualTo(1);
-
-        // Resolve on/after that day → 1.42 (latest write wins for same date)
-        MvcResult eff =
-                mockMvc.perform(
-                                get("/api/v1/companies/" + COMPANY_ID + "/currencies/" + currencyId + "/rates/effective")
-                                        .header("X-Company-Id", COMPANY_ID.toString())
-                                        .param("date", "2025-03-01"))
-                        .andExpect(status().isOk())
-                        .andReturn();
-        assertThat(new BigDecimal(json.readTree(eff.getResponse().getContentAsString()).get("rate").asText()))
-                .isEqualByComparingTo(new BigDecimal("1.42"));
     }
 
     @Test

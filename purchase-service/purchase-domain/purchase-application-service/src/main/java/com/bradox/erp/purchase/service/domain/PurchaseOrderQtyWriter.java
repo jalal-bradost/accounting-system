@@ -7,6 +7,7 @@ import com.bradox.erp.inventory.domain.core.valueobject.ProductType;
 import com.bradox.erp.inventory.service.domain.ports.input.UomApplicationService;
 import com.bradox.erp.inventory.service.domain.ports.output.StockMovePurchaseQueryPort;
 import com.bradox.erp.inventory.service.domain.ports.output.repository.ProductRepository;
+import com.bradox.erp.domain.valueobject.MonetaryScale;
 import com.bradox.erp.platform.activity.RecordActivityLogger;
 import com.bradox.erp.purchase.domain.core.entity.PurchaseOrder;
 import com.bradox.erp.purchase.domain.core.entity.PurchaseOrderLine;
@@ -141,7 +142,7 @@ public class PurchaseOrderQtyWriter {
     }
 
     private static String formatQty(BigDecimal v) {
-        return nz(v).stripTrailingZeros().toPlainString();
+        return MonetaryScale.toDisplayString(nz(v));
     }
 
     private void doApplyPostedBillQuantities(UUID purchaseOrderId,

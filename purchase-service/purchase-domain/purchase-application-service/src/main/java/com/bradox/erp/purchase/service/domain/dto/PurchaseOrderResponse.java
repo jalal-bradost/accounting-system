@@ -37,6 +37,8 @@ public class PurchaseOrderResponse {
     private Instant confirmedAt;
     private Instant cancelledAt;
     private boolean locked;
+    /** Optimistic-lock version; send it back on update to detect concurrent edits. */
+    private long rowVersion;
     /** True when the API would allow creating a vendor bill (confirmed + billable quantity on at least one line). */
     private boolean canCreateVendorBill;
     private boolean canCreateReturn;
@@ -102,6 +104,8 @@ public class PurchaseOrderResponse {
     public void setCancelledAt(Instant cancelledAt) { this.cancelledAt = cancelledAt; }
     public boolean isLocked() { return locked; }
     public void setLocked(boolean locked) { this.locked = locked; }
+    public long getRowVersion() { return rowVersion; }
+    public void setRowVersion(long rowVersion) { this.rowVersion = rowVersion; }
     public boolean isCanCreateVendorBill() { return canCreateVendorBill; }
     public void setCanCreateVendorBill(boolean canCreateVendorBill) { this.canCreateVendorBill = canCreateVendorBill; }
     public boolean isCanCreateReturn() { return canCreateReturn; }

@@ -13,7 +13,6 @@ public class VendorPayment {
     private UUID id;
     private UUID companyId;
     private UUID vendorPartnerId;
-    private UUID vendorBillId;
     private LocalDateTime paymentDate;
     private UUID bankJournalId;
     private BigDecimal amount;
@@ -24,6 +23,7 @@ public class VendorPayment {
     private UUID journalEntryId;
     private UUID reversalJournalEntryId;
     private String reference;
+    private boolean openingBalance;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -33,8 +33,6 @@ public class VendorPayment {
     public void setCompanyId(UUID companyId) { this.companyId = companyId; }
     public UUID getVendorPartnerId() { return vendorPartnerId; }
     public void setVendorPartnerId(UUID vendorPartnerId) { this.vendorPartnerId = vendorPartnerId; }
-    public UUID getVendorBillId() { return vendorBillId; }
-    public void setVendorBillId(UUID vendorBillId) { this.vendorBillId = vendorBillId; }
     public LocalDateTime getPaymentDate() { return paymentDate; }
     public void setPaymentDate(LocalDateTime paymentDate) { this.paymentDate = paymentDate; }
     public UUID getBankJournalId() { return bankJournalId; }
@@ -57,6 +55,8 @@ public class VendorPayment {
     public void setReversalJournalEntryId(UUID reversalJournalEntryId) { this.reversalJournalEntryId = reversalJournalEntryId; }
     public String getReference() { return reference; }
     public void setReference(String reference) { this.reference = reference; }
+    public boolean isOpeningBalance() { return openingBalance; }
+    public void setOpeningBalance(boolean openingBalance) { this.openingBalance = openingBalance; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

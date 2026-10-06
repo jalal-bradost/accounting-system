@@ -1,5 +1,6 @@
 package com.bradox.erp.dataaccess.entity;
 
+import com.bradox.erp.domain.core.ValueObject.CustomerPaymentKind;
 import com.bradox.erp.domain.core.ValueObject.CustomerPaymentState;
 import jakarta.persistence.*;
 
@@ -11,7 +12,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "acc_customer_payment", indexes = {
         @Index(name = "ix_acc_cp_company", columnList = "company_id"),
-        @Index(name = "ix_acc_cp_invoice", columnList = "customer_invoice_id"),
+        @Index(name = "ix_acc_cp_partner", columnList = "company_id,customer_partner_id"),
         @Index(name = "ix_acc_cp_company_state", columnList = "company_id,state")
 })
 public class AccCustomerPaymentEntity {
@@ -24,9 +25,6 @@ public class AccCustomerPaymentEntity {
 
     @Column(name = "customer_partner_id", nullable = false)
     private UUID customerPartnerId;
-
-    @Column(name = "customer_invoice_id", nullable = false)
-    private UUID customerInvoiceId;
 
     @Column(name = "payment_date", nullable = false)
     private LocalDateTime paymentDate;
@@ -47,6 +45,10 @@ public class AccCustomerPaymentEntity {
     @Column(nullable = false, length = 20)
     private CustomerPaymentState state = CustomerPaymentState.POSTED;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_kind", nullable = false, length = 16)
+    private CustomerPaymentKind paymentKind = CustomerPaymentKind.PAYMENT;
+
     @Column(name = "journal_entry_id")
     private UUID journalEntryId;
 
@@ -55,6 +57,9 @@ public class AccCustomerPaymentEntity {
 
     @Column(length = 255)
     private String reference;
+
+    @Column(name = "opening_balance", nullable = false)
+    private boolean openingBalance;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
@@ -70,8 +75,6 @@ public class AccCustomerPaymentEntity {
     public void setCompanyId(UUID companyId) { this.companyId = companyId; }
     public UUID getCustomerPartnerId() { return customerPartnerId; }
     public void setCustomerPartnerId(UUID customerPartnerId) { this.customerPartnerId = customerPartnerId; }
-    public UUID getCustomerInvoiceId() { return customerInvoiceId; }
-    public void setCustomerInvoiceId(UUID customerInvoiceId) { this.customerInvoiceId = customerInvoiceId; }
     public LocalDateTime getPaymentDate() { return paymentDate; }
     public void setPaymentDate(LocalDateTime paymentDate) { this.paymentDate = paymentDate; }
     public UUID getPaymentJournalId() { return paymentJournalId; }
@@ -84,12 +87,16 @@ public class AccCustomerPaymentEntity {
     public void setExchangeRateToCompany(BigDecimal exchangeRateToCompany) { this.exchangeRateToCompany = exchangeRateToCompany; }
     public CustomerPaymentState getState() { return state; }
     public void setState(CustomerPaymentState state) { this.state = state; }
+    public CustomerPaymentKind getPaymentKind() { return paymentKind; }
+    public void setPaymentKind(CustomerPaymentKind paymentKind) { this.paymentKind = paymentKind; }
     public UUID getJournalEntryId() { return journalEntryId; }
     public void setJournalEntryId(UUID journalEntryId) { this.journalEntryId = journalEntryId; }
     public UUID getReversalJournalEntryId() { return reversalJournalEntryId; }
     public void setReversalJournalEntryId(UUID reversalJournalEntryId) { this.reversalJournalEntryId = reversalJournalEntryId; }
     public String getReference() { return reference; }
     public void setReference(String reference) { this.reference = reference; }
+    public boolean isOpeningBalance() { return openingBalance; }
+    public void setOpeningBalance(boolean openingBalance) { this.openingBalance = openingBalance; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

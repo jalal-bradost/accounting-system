@@ -12,6 +12,7 @@
     <module>purchase-service</module>
     <module>sales-service</module>
     <module>pos-service</module>
+    <module>assistant-service</module>
     <module>infrastructure</module>
   </modules>
 
@@ -265,6 +266,16 @@
         <artifactId>h2</artifactId>
         <version>${h2.version}</version>
         <scope>runtime</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>assistant-application-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>assistant-application</artifactId>
+        <version>${project.version}</version>
       </dependency>
     </dependencies>
 

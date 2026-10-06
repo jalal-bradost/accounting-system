@@ -6,6 +6,7 @@ import com.bradox.erp.domain.core.ValueObject.JournalItemId;
 import com.bradox.erp.domain.core.entity.JournalEntry;
 import com.bradox.erp.domain.core.entity.JournalItem;
 import com.bradox.erp.domain.core.exception.AccountingDomainException;
+import com.bradox.erp.domain.valueobject.Money;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -43,8 +44,9 @@ public class AccountingDomainServiceImpl implements AccountingDomainService {
                         .label("Reversal of " + originalEntry.getSequenceNumber() + ": " + reason)
                         .debit(item.getCredit())
                         .credit(item.getDebit())
-                        .amountCurrency(item.getAmountCurrency())
+                        .amountCurrency(negate(item.getAmountCurrency()))
                         .currency(item.getCurrency())
+                        .partnerRef(item.getPartnerRef())
                         .build())
                 .toList();
 
@@ -57,7 +59,12 @@ public class AccountingDomainServiceImpl implements AccountingDomainService {
                 .currency(originalEntry.getCurrency())
                 .items(reversedItems)
                 .reversalOfEntryId(originalEntry.getId())
+                .partnerRef(originalEntry.getPartnerRef())
                 .status(JournalEntryStatus.DRAFT)
                 .build();
+    }
+
+    private static Money negate(Money m) {
+        return m == null || m.getAmount() == null ? m : new Money(m.getAmount().negate());
     }
 }

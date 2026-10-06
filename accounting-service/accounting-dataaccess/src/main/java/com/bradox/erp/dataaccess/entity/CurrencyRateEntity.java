@@ -31,7 +31,7 @@ public class CurrencyRateEntity {
     @Column(name = "effective_date", nullable = false)
     private LocalDate effectiveDate;
 
-    @Column(nullable = false, precision = 19, scale = 6)
+    @Column(nullable = false, precision = 19, scale = 12)
     private BigDecimal rate;
 
     public CurrencyRateEntity() {}

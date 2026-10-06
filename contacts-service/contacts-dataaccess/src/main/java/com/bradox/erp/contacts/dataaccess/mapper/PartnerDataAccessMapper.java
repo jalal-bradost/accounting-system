@@ -66,6 +66,8 @@ public class PartnerDataAccessMapper {
                         .state(a.getState())
                         .postalCode(a.getPostalCode())
                         .country(a.getCountry())
+                        .latitude(a.getLatitude())
+                        .longitude(a.getLongitude())
                         .build();
                 partner.addAddress(address);
             }
@@ -132,6 +134,8 @@ public class PartnerDataAccessMapper {
             addrEntity.setState(a.getState());
             addrEntity.setPostalCode(a.getPostalCode());
             addrEntity.setCountry(a.getCountry());
+            addrEntity.setLatitude(a.getLatitude());
+            addrEntity.setLongitude(a.getLongitude());
             entity.getAddresses().add(addrEntity);
         }
 

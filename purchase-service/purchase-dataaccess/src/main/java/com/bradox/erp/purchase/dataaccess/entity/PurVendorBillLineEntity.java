@@ -57,6 +57,10 @@ public class PurVendorBillLineEntity {
     @Column(name = "account_id", nullable = false)
     private UUID accountId;
 
+    /** Company-currency difference between the bill price and the receipt cost of the received part. */
+    @Column(name = "price_variance", nullable = false, precision = 19, scale = 4)
+    private BigDecimal priceVariance = BigDecimal.ZERO;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -91,6 +95,10 @@ public class PurVendorBillLineEntity {
     public BigDecimal getDiscountValue() { return discountValue; }
     public void setDiscountValue(BigDecimal discountValue) {
         this.discountValue = discountValue != null ? discountValue : BigDecimal.ZERO;
+    }
+    public BigDecimal getPriceVariance() { return priceVariance; }
+    public void setPriceVariance(BigDecimal priceVariance) {
+        this.priceVariance = priceVariance != null ? priceVariance : BigDecimal.ZERO;
     }
     public BigDecimal getDiscountPercent() { return discountPercent; }
     public void setDiscountPercent(BigDecimal discountPercent) {

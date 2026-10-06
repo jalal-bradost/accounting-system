@@ -25,6 +25,20 @@ public class CustomerInvoiceResponse {
     private BigDecimal exchangeRateToCompany;
     private BigDecimal orderDiscountAmount;
     private List<CustomerInvoiceLineResponse> lines = new ArrayList<>();
+    private boolean openingBalance;
+    /** Document total (lines + taxes − order discount), document currency. */
+    private BigDecimal amountTotal;
+    /** Active payment allocations (receipts for invoices, refunds for credit notes). */
+    private BigDecimal amountPaid;
+    /** Posted credit notes against this invoice (always zero for credit notes). */
+    private BigDecimal amountCredited;
+    /** amountTotal − amountPaid − amountCredited; only meaningful when POSTED. */
+    private BigDecimal amountResidual;
+    /** Invoices: money the customer paid beyond what is owed after credit notes, not yet refunded. */
+    private BigDecimal amountOverpaid;
+    /** Credit notes: how much can be paid back to the customer right now. */
+    private BigDecimal amountRefundable;
+    private List<CustomerPaymentAllocationResponse> paymentAllocations = new ArrayList<>();
 
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
@@ -56,4 +70,22 @@ public class CustomerInvoiceResponse {
     public void setOrderDiscountAmount(BigDecimal orderDiscountAmount) { this.orderDiscountAmount = orderDiscountAmount; }
     public List<CustomerInvoiceLineResponse> getLines() { return lines; }
     public void setLines(List<CustomerInvoiceLineResponse> lines) { this.lines = lines != null ? lines : new ArrayList<>(); }
+    public boolean isOpeningBalance() { return openingBalance; }
+    public void setOpeningBalance(boolean openingBalance) { this.openingBalance = openingBalance; }
+    public BigDecimal getAmountTotal() { return amountTotal; }
+    public void setAmountTotal(BigDecimal amountTotal) { this.amountTotal = amountTotal; }
+    public BigDecimal getAmountPaid() { return amountPaid; }
+    public void setAmountPaid(BigDecimal amountPaid) { this.amountPaid = amountPaid; }
+    public BigDecimal getAmountCredited() { return amountCredited; }
+    public void setAmountCredited(BigDecimal amountCredited) { this.amountCredited = amountCredited; }
+    public BigDecimal getAmountResidual() { return amountResidual; }
+    public void setAmountResidual(BigDecimal amountResidual) { this.amountResidual = amountResidual; }
+    public BigDecimal getAmountOverpaid() { return amountOverpaid; }
+    public void setAmountOverpaid(BigDecimal amountOverpaid) { this.amountOverpaid = amountOverpaid; }
+    public BigDecimal getAmountRefundable() { return amountRefundable; }
+    public void setAmountRefundable(BigDecimal amountRefundable) { this.amountRefundable = amountRefundable; }
+    public List<CustomerPaymentAllocationResponse> getPaymentAllocations() { return paymentAllocations; }
+    public void setPaymentAllocations(List<CustomerPaymentAllocationResponse> paymentAllocations) {
+        this.paymentAllocations = paymentAllocations != null ? paymentAllocations : new ArrayList<>();
+    }
 }

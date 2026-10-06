@@ -1,0 +1,44 @@
+name: Backend Deploy
+
+# Manual by default. Once the production secrets exist, add a push trigger:
+#   push:
+#     branches: [main]
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: backend-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy backend to production
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            # Fresh database dump before new code or migrations run; a failed backup stops the deploy.
+            # Keep this on one line: script_stop checks $? after every line, which breaks multi-line if/else.
+            export APP_NAME=${{ vars.APP_NAME || 'erp' }}
+            if [ -f /var/backups/${{ vars.APP_NAME || 'erp' }}/.installed ]; then /opt/${{ vars.APP_NAME || 'erp' }}/backend/ops/backup/backup-db.sh pre-deploy "$(git -C /opt/${{ vars.APP_NAME || 'erp' }}/backend rev-parse --short HEAD)"; else echo "Backups not installed yet; skipping pre-deploy dump."; fi
+            cd /opt/${{ vars.APP_NAME || 'erp' }}/backend
+            git fetch origin main
+            git reset --hard origin/main
+            cd /opt/${{ vars.APP_NAME || 'erp' }}
+            docker compose build backend
+            # Interrupted recreates leave rename leftovers like /<hash>_<app>-backend-1
+            # that block the next compose up. Clear every backend-named container, then
+            # start a fresh one from the image we just built.
+            docker compose stop backend || true
+            docker compose rm -f backend || true
+            docker ps -aq --filter "name=${{ vars.APP_NAME || 'erp' }}-backend" | xargs -r docker rm -f || true
+            docker compose up -d --no-deps backend
+            docker compose ps backend

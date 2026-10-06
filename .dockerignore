@@ -1,0 +1,13 @@
+**/target/
+**/.git/
+**/.idea/
+**/.DS_Store
+**/data/
+**/*.iml
+**/node_modules/
+docs/
+*.md
+!README.md
+.git
+.gitignore
+.github

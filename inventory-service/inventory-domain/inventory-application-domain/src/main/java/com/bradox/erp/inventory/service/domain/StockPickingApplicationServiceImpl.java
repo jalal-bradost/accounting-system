@@ -32,7 +32,9 @@ import com.bradox.erp.inventory.service.domain.dto.StockMoveCommand;
 import com.bradox.erp.inventory.service.domain.dto.StockPickingResponse;
 import com.bradox.erp.inventory.service.domain.dto.ValidatePickingCommand;
 import com.bradox.erp.inventory.service.domain.mapper.InventoryDataMapper;
+import com.bradox.erp.inventory.service.domain.ports.input.StockHoldApplicationService;
 import com.bradox.erp.inventory.service.domain.ports.input.StockPickingApplicationService;
+import com.bradox.erp.inventory.service.domain.ports.output.accounting.AccountLookupPort;
 import com.bradox.erp.inventory.service.domain.ports.output.accounting.JournalEntryPostingPort;
 import com.bradox.erp.inventory.service.domain.ports.output.repository.ProductCategoryRepository;
 import com.bradox.erp.inventory.service.domain.ports.output.messaging.InventoryEventPublisher;
@@ -74,6 +76,7 @@ import java.util.stream.Collectors;
 class StockPickingApplicationServiceImpl implements StockPickingApplicationService {
 
     private static final String MODEL_NAME = "inventory.stock.picking";
+    private static final String OPENING_BALANCE_EQUITY_CODE = "430019";
 
     private final StockPickingRepository pickingRepository;
     private final StockQuantRepository quantRepository;
@@ -84,11 +87,13 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
     private final InventoryDataMapper mapper;
     private final ValuationStrategyFactory valuationFactory;
     private final ObjectProvider<JournalEntryPostingPort> journalPostingProvider;
+    private final ObjectProvider<AccountLookupPort> accountLookupProvider;
     private final ObjectProvider<CompanyContext> companyContextProvider;
     private final AuditLogPort auditLogPort;
     private final ObjectProvider<PurchaseReceiveSyncPort> purchaseReceiveSyncProvider;
     private final ObjectProvider<SalesDeliverySyncPort> salesDeliverySyncProvider;
     private final InventoryEventPublisher inventoryEventPublisher;
+    private final ObjectProvider<StockHoldApplicationService> stockHoldProvider;
 
     StockPickingApplicationServiceImpl(StockPickingRepository pickingRepository,
                                        StockQuantRepository quantRepository,
@@ -99,11 +104,13 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
                                        InventoryDataMapper mapper,
                                        ValuationStrategyFactory valuationFactory,
                                        ObjectProvider<JournalEntryPostingPort> journalPostingProvider,
+                                       ObjectProvider<AccountLookupPort> accountLookupProvider,
                                        ObjectProvider<CompanyContext> companyContextProvider,
                                        AuditLogPort auditLogPort,
                                        ObjectProvider<PurchaseReceiveSyncPort> purchaseReceiveSyncProvider,
                                        ObjectProvider<SalesDeliverySyncPort> salesDeliverySyncProvider,
-                                       InventoryEventPublisher inventoryEventPublisher) {
+                                       InventoryEventPublisher inventoryEventPublisher,
+                                       ObjectProvider<StockHoldApplicationService> stockHoldProvider) {
         this.pickingRepository = pickingRepository;
         this.quantRepository = quantRepository;
         this.layerRepository = layerRepository;
@@ -113,11 +120,13 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
         this.mapper = mapper;
         this.valuationFactory = valuationFactory;
         this.journalPostingProvider = journalPostingProvider;
+        this.accountLookupProvider = accountLookupProvider;
         this.companyContextProvider = companyContextProvider;
         this.auditLogPort = auditLogPort;
         this.purchaseReceiveSyncProvider = purchaseReceiveSyncProvider;
         this.salesDeliverySyncProvider = salesDeliverySyncProvider;
         this.inventoryEventPublisher = inventoryEventPublisher;
+        this.stockHoldProvider = stockHoldProvider;
     }
 
     @Override
@@ -176,13 +185,16 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
             }
             Optional<StockQuant> quantOpt = quantRepository.findByProductLocation(
                     p.getCompanyId(), move.getProductId(), source.getId());
-            BigDecimal available = quantOpt.map(StockQuant::getAvailable).orElse(BigDecimal.ZERO);
+            BigDecimal free = quantOpt.map(StockQuant::getAvailable).orElse(BigDecimal.ZERO);
+            BigDecimal softBlocking = softHoldBlocking(p, move.getProductId().getId());
+            BigDecimal available = free.subtract(softBlocking).max(BigDecimal.ZERO);
             BigDecimal toReserve = demand.min(available);
             if (toReserve.signum() > 0) {
                 StockQuant quant = quantOpt.orElseGet(() -> ensureQuant(p.getCompanyId(), move.getProductId(), source.getId()));
                 quant.reserve(toReserve);
                 quantRepository.save(quant);
                 move.markAssigned(move.getReservedQuantity().add(toReserve));
+                convertSoftHoldAfterReserve(p, move.getProductId().getId(), toReserve);
             } else {
                 move.markAssigned(move.getReservedQuantity());
             }
@@ -219,6 +231,10 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
         List<StockValuationLayer> newLayers = new ArrayList<>();
         List<StockValuationLayer> updatedLayers = new ArrayList<>();
         List<StockMove> backorderCandidates = new ArrayList<>();
+        // Quants are updated per move in this loop, but SVL rows are flushed only at the end.
+        // Keep a running on-hand value so multi-move pickings of the same product (e.g. sale + gift)
+        // do not reuse a stale SUM(value) and inflate/deflate AVCO.
+        Map<UUID, Money> runningOnHandValueByProduct = new HashMap<>();
 
         for (StockMove move : picking.getMoves()) {
             if (move.getState() == MoveState.DONE || move.getState() == MoveState.CANCELLED) continue;
@@ -228,6 +244,13 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
             if (picked.signum() <= 0) {
                 move.cancel();
                 continue;
+            }
+            // A sales delivery move carries exactly what is left to deliver on its order line, so
+            // shipping more would deliver beyond the ordered quantity.
+            if (picking.getPickingType() == PickingType.OUTGOING && move.getSalesOrderLineId() != null
+                    && picked.compareTo(move.getDemandQuantity()) > 0) {
+                throw new InventoryDomainException("error.inventory.salesDeliveryExceedsOrdered", null,
+                        "Cannot deliver more than ordered; increase the order quantity first");
             }
             Product product = loadProduct(move.getProductId());
             ProductCategory category = product.getCategoryId() != null
@@ -254,7 +277,10 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
                 ValuationStrategy strategy = valuationFactory.forMethod(method);
                 Money providedUnitCost = providedUnitCost(move, product, picking.getPickingType());
                 BigDecimal onHandQty = quantRepository.sumOnHandInternal(picking.getCompanyId(), move.getProductId());
-                Money onHandValue = layerRepository.sumOnHandValue(picking.getCompanyId(), move.getProductId());
+                UUID productKey = move.getProductId().getId();
+                Money onHandValue = runningOnHandValueByProduct.computeIfAbsent(
+                        productKey,
+                        id -> layerRepository.sumOnHandValue(picking.getCompanyId(), move.getProductId()));
 
                 if (isReceiptForProduct(picking.getPickingType(), source, destination)) {
                     // Quant deltas were applied above; SVL has NOT been written yet. Roll
@@ -264,7 +290,12 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
                             picked, providedUnitCost, List.of());
                     result = strategy.valueIncoming(ctx);
                     if (result.newAverageCost() != null) {
-                        product.changeStandardCost(result.newAverageCost());
+                        Money newAvg = result.newAverageCost();
+                        // Never persist a negative running average (guards poisoned SVL ledgers).
+                        if (newAvg.getAmount().signum() < 0) {
+                            newAvg = Money.ZERO;
+                        }
+                        product.changeStandardCost(newAvg);
                         productRepository.save(product);
                     }
                 } else if (isDeliveryForProduct(picking.getPickingType(), source, destination)) {
@@ -307,9 +338,14 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
                         .build();
                 layer.validate();
                 newLayers.add(layer);
+                UUID productKey = move.getProductId().getId();
+                Money prior = runningOnHandValueByProduct.getOrDefault(productKey, Money.ZERO);
+                runningOnHandValueByProduct.put(
+                        productKey, new Money(prior.getAmount().add(layerValue.getAmount())));
 
                 addJournalLines(journalLines, picking.getPickingType(), product, category,
-                        result.totalValue(), source, destination);
+                        result.totalValue(), source, destination, picking.getReference(),
+                        picking.getCompanyId());
             }
 
             BigDecimal backorderQty = move.backorderQuantity();
@@ -467,6 +503,27 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
         }
         Map<UUID, BigDecimal> qtyOverrides = command != null && command.getMoveQuantities() != null
                 ? command.getMoveQuantities() : Map.of();
+        PickingType returnTypeOfOriginal = switch (original.getPickingType()) {
+            case INCOMING -> PickingType.OUTGOING;
+            case OUTGOING -> PickingType.INCOMING;
+            case INTERNAL -> PickingType.INTERNAL;
+        };
+        // What earlier (not cancelled) returns of this picking already cover, per product and order
+        // line: a picking can be returned at most once in total, even if "return" is clicked twice.
+        Map<String, BigDecimal> alreadyReturned = new HashMap<>();
+        for (StockPicking earlier : pickingRepository.findByBackorderOf(original.getId())) {
+            if (earlier.getPickingType() != returnTypeOfOriginal || earlier.getState() == PickingState.CANCELLED) {
+                continue;
+            }
+            for (StockMove em : earlier.getMoves()) {
+                if (em.getState() == MoveState.CANCELLED) {
+                    continue;
+                }
+                BigDecimal q = em.getState() == MoveState.DONE && em.getPickedQuantity() != null
+                        ? em.getPickedQuantity() : em.getDemandQuantity();
+                alreadyReturned.merge(returnKey(em), q != null ? q : BigDecimal.ZERO, BigDecimal::add);
+            }
+        }
         UUID newPickingId = UUID.randomUUID();
         List<StockMove> reversed = original.getMoves().stream()
                 .filter(m -> m.getState() == MoveState.DONE)
@@ -484,6 +541,15 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
                                 null,
                                 "Return quantity cannot exceed picked quantity");
                     }
+                    BigDecimal returnable = (m.getPickedQuantity() != null ? m.getPickedQuantity() : BigDecimal.ZERO)
+                            .subtract(alreadyReturned.getOrDefault(returnKey(m), BigDecimal.ZERO));
+                    if (qty.compareTo(returnable) > 0) {
+                        throw new InventoryDomainException(
+                                "error.inventory.alreadyReturned",
+                                null,
+                                "This picking has already been returned for that quantity");
+                    }
+                    alreadyReturned.merge(returnKey(m), qty, BigDecimal::add);
                     return StockMove.builder()
                             .id(new com.bradox.erp.inventory.domain.core.valueobject.StockMoveId(UUID.randomUUID()))
                             .productId(m.getProductId())
@@ -503,11 +569,7 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
                     "error.inventory.returnNoMoves", null, "Return picking has no moves");
         }
 
-        PickingType returnType = switch (original.getPickingType()) {
-            case INCOMING -> PickingType.OUTGOING;
-            case OUTGOING -> PickingType.INCOMING;
-            case INTERNAL -> PickingType.INTERNAL;
-        };
+        PickingType returnType = returnTypeOfOriginal;
 
         StockPicking returnPicking = StockPicking.builder()
                 .id(new StockPickingId(newPickingId))
@@ -530,6 +592,10 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
         auditLogPort.recordBusinessEvent(original.getCompanyId(), MODEL_NAME, newPickingId,
                 "Return picking created", Map.of("returnOf", pickingId));
         return mapper.pickingToResponse(saved);
+    }
+
+    private static String returnKey(StockMove m) {
+        return m.getProductId().getId() + "|" + m.getSalesOrderLineId() + "|" + m.getPurchaseOrderLineId();
     }
 
     @Override
@@ -563,7 +629,15 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
         CreateStockPickingCommand pickingCmd = new CreateStockPickingCommand();
         pickingCmd.setCompanyId(companyId.getId());
         pickingCmd.setPickingType(isIncrease ? PickingType.INCOMING : PickingType.OUTGOING);
-        pickingCmd.setReference(command.getReason() != null ? command.getReason() : "ADJ");
+        String reason = command.getReason() != null && !command.getReason().isBlank()
+                ? command.getReason()
+                : (command.isOpeningBalance() ? InventoryAdjustmentCommand.OPENING_STOCK_REASON : "ADJ");
+        if (command.isOpeningBalance()
+                && !reason.toLowerCase(java.util.Locale.ROOT)
+                .startsWith(InventoryAdjustmentCommand.OPENING_STOCK_REASON.toLowerCase(java.util.Locale.ROOT))) {
+            reason = InventoryAdjustmentCommand.OPENING_STOCK_REASON + ": " + reason;
+        }
+        pickingCmd.setReference(reason);
         pickingCmd.setSourceLocationId(isIncrease ? lossLocation.getId().getId() : location.getId().getId());
         pickingCmd.setDestinationLocationId(isIncrease ? location.getId().getId() : lossLocation.getId().getId());
         StockMoveCommand move = new StockMoveCommand();
@@ -577,7 +651,11 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
         }
         move.setUomId(product.getUomId().getId());
         move.setDemandQuantity(delta.abs());
-        move.setUnitCost(product.getStandardCost() != null ? product.getStandardCost().getAmount() : BigDecimal.ZERO);
+        BigDecimal unitCost = command.getUnitCost();
+        if (unitCost == null || unitCost.signum() <= 0) {
+            unitCost = product.getStandardCost() != null ? product.getStandardCost().getAmount() : BigDecimal.ZERO;
+        }
+        move.setUnitCost(unitCost);
         pickingCmd.setMoves(List.of(move));
 
         StockPickingResponse created = createPicking(pickingCmd);
@@ -632,6 +710,26 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
                         .build()));
     }
 
+    /** Soft holds that block this picking from assigning (own SO holds are excluded). */
+    private BigDecimal softHoldBlocking(StockPicking picking, UUID productId) {
+        StockHoldApplicationService holds = stockHoldProvider.getIfAvailable();
+        if (holds == null || picking.getWarehouseId() == null) return BigDecimal.ZERO;
+        UUID warehouseId = picking.getWarehouseId().getId();
+        // Exclude this picking's SO holds (if any) so they can convert to hard reserve.
+        UUID excludeSo = picking.getSalesOrderId() != null
+                ? picking.getSalesOrderId()
+                : UUID.fromString("00000000-0000-0000-0000-000000000000");
+        return holds.softHeldExceptSalesOrder(
+                picking.getCompanyId(), warehouseId, productId, excludeSo);
+    }
+
+    private void convertSoftHoldAfterReserve(StockPicking picking, UUID productId, BigDecimal reservedQty) {
+        if (picking.getSalesOrderId() == null || reservedQty == null || reservedQty.signum() <= 0) return;
+        StockHoldApplicationService holds = stockHoldProvider.getIfAvailable();
+        if (holds == null) return;
+        holds.reduceSalesOrderHold(picking.getCompanyId(), picking.getSalesOrderId(), productId, reservedQty);
+    }
+
     private boolean isReceiptForProduct(PickingType type, StockLocation source, StockLocation dest) {
         return type == PickingType.INCOMING || (!source.isInternal() && dest.isInternal());
     }
@@ -653,12 +751,16 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
                                  ProductCategory category,
                                  Money value,
                                  StockLocation source,
-                                 StockLocation destination) {
+                                 StockLocation destination,
+                                 String pickingReference,
+                                 CompanyId companyId) {
         UUID stockValuation = product.resolveStockValuationAccountId(category);
         UUID stockInput = product.resolveStockInputAccountId(category);
         UUID stockOutput = product.resolveStockOutputAccountId(category);
         UUID cogs = product.resolveCogsAccountId(category);
         String sku = product.getSku();
+        boolean opening = isOpeningStockReference(pickingReference);
+        UUID openingEquity = opening ? resolveOpeningBalanceEquity(companyId) : null;
 
         if (isReceiptForProduct(type, source, destination)) {
             require(stockValuation, "stock_valuation_account", product);
@@ -671,12 +773,21 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
                 lines.add(new JournalEntryPostingPort.JournalLine(stockOutput,
                         "Stock return " + sku, Money.ZERO, value));
             } else if (from == LocationType.INVENTORY_LOSS) {
-                // Inventory increase adjustment (Dr Inventory, Cr COGS)
-                require(cogs, "cogs_account", product);
-                lines.add(new JournalEntryPostingPort.JournalLine(stockValuation,
-                        "Stock ADJ+ " + sku, value, Money.ZERO));
-                lines.add(new JournalEntryPostingPort.JournalLine(cogs,
-                        "Stock ADJ+ " + sku, Money.ZERO, value));
+                if (opening) {
+                    // Opening stock increase: Dr Inventory, Cr Opening Balance Equity
+                    require(openingEquity, "opening_balance_equity", product);
+                    lines.add(new JournalEntryPostingPort.JournalLine(stockValuation,
+                            "Opening stock " + sku, value, Money.ZERO));
+                    lines.add(new JournalEntryPostingPort.JournalLine(openingEquity,
+                            "Opening stock " + sku, Money.ZERO, value));
+                } else {
+                    // Inventory increase adjustment (Dr Inventory, Cr COGS)
+                    require(cogs, "cogs_account", product);
+                    lines.add(new JournalEntryPostingPort.JournalLine(stockValuation,
+                            "Stock ADJ+ " + sku, value, Money.ZERO));
+                    lines.add(new JournalEntryPostingPort.JournalLine(cogs,
+                            "Stock ADJ+ " + sku, Money.ZERO, value));
+                }
             } else {
                 // Supplier receipt (and default external→internal): Dr Inventory, Cr Stock Input (GR/IR)
                 require(stockInput, "stock_input_account", product);
@@ -697,12 +808,21 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
                 lines.add(new JournalEntryPostingPort.JournalLine(stockValuation,
                         "Stock OUT " + sku, Money.ZERO, value));
             } else if (to == LocationType.INVENTORY_LOSS) {
-                // Inventory decrease / scrap: expense immediately (Dr COGS, Cr Inventory)
-                require(cogs, "cogs_account", product);
-                lines.add(new JournalEntryPostingPort.JournalLine(cogs,
-                        "Stock ADJ- " + sku, value, Money.ZERO));
-                lines.add(new JournalEntryPostingPort.JournalLine(stockValuation,
-                        "Stock ADJ- " + sku, Money.ZERO, value));
+                if (opening) {
+                    // Opening stock decrease: Dr Opening Balance Equity, Cr Inventory
+                    require(openingEquity, "opening_balance_equity", product);
+                    lines.add(new JournalEntryPostingPort.JournalLine(openingEquity,
+                            "Opening stock " + sku, value, Money.ZERO));
+                    lines.add(new JournalEntryPostingPort.JournalLine(stockValuation,
+                            "Opening stock " + sku, Money.ZERO, value));
+                } else {
+                    // Inventory decrease / scrap: expense immediately (Dr COGS, Cr Inventory)
+                    require(cogs, "cogs_account", product);
+                    lines.add(new JournalEntryPostingPort.JournalLine(cogs,
+                            "Stock ADJ- " + sku, value, Money.ZERO));
+                    lines.add(new JournalEntryPostingPort.JournalLine(stockValuation,
+                            "Stock ADJ- " + sku, Money.ZERO, value));
+                }
             } else if (to == LocationType.SUPPLIER) {
                 // Purchase return: reverse GR/IR (Dr Stock Input, Cr Inventory)
                 require(stockInput, "stock_input_account", product);
@@ -720,6 +840,23 @@ class StockPickingApplicationServiceImpl implements StockPickingApplicationServi
             }
         }
         // Internal transfer: no valuation impact for MVP.
+    }
+
+    private static boolean isOpeningStockReference(String reference) {
+        if (reference == null || reference.isBlank()) {
+            return false;
+        }
+        String lower = reference.trim().toLowerCase(java.util.Locale.ROOT);
+        String prefix = InventoryAdjustmentCommand.OPENING_STOCK_REASON.toLowerCase(java.util.Locale.ROOT);
+        return lower.equals(prefix) || lower.startsWith(prefix + ":") || lower.startsWith(prefix + " ");
+    }
+
+    private UUID resolveOpeningBalanceEquity(CompanyId companyId) {
+        AccountLookupPort lookup = accountLookupProvider.getIfAvailable();
+        if (lookup == null) {
+            return null;
+        }
+        return lookup.findAccountId(companyId, OPENING_BALANCE_EQUITY_CODE).orElse(null);
     }
 
     private void require(UUID id, String label, Product product) {

@@ -28,6 +28,7 @@ public class VendorBill {
     /** Allocated share of the purchase-order order-level discount (exact amount for this bill). */
     private BigDecimal orderDiscountAmount = BigDecimal.ZERO;
     private long rowVersion;
+    private boolean openingBalance;
     private Instant createdAt;
     private Instant updatedAt;
     private String createdBy;
@@ -66,6 +67,8 @@ public class VendorBill {
     public void setOrderDiscountAmount(BigDecimal orderDiscountAmount) {
         this.orderDiscountAmount = orderDiscountAmount != null ? orderDiscountAmount : BigDecimal.ZERO;
     }
+    public boolean isOpeningBalance() { return openingBalance; }
+    public void setOpeningBalance(boolean openingBalance) { this.openingBalance = openingBalance; }
     public long getRowVersion() { return rowVersion; }
     public void setRowVersion(long rowVersion) { this.rowVersion = rowVersion; }
     public Instant getCreatedAt() { return createdAt; }

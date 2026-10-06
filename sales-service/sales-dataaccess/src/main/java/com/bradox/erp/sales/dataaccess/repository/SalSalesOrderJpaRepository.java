@@ -26,10 +26,14 @@ public interface SalSalesOrderJpaRepository extends JpaRepository<SalSalesOrderE
             and (:state is null or o.state = :state)
             and (:customerId is null or o.customerPartnerId = :customerId)
             and (:q = '' or lower(o.name) like concat('%', lower(:q), '%'))
+            and (:filterDates = false or (o.orderDate >= :dateFrom and o.orderDate <= :dateTo))
             """)
     Page<SalSalesOrderEntity> search(@Param("companyId") UUID companyId,
                                       @Param("state") SalesOrderState state,
                                       @Param("customerId") UUID customerPartnerId,
                                       @Param("q") String q,
+                                      @Param("filterDates") boolean filterDates,
+                                      @Param("dateFrom") java.time.LocalDate dateFrom,
+                                      @Param("dateTo") java.time.LocalDate dateTo,
                                       Pageable pageable);
 }

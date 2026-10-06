@@ -32,6 +32,7 @@ public class CustomerInvoiceDataAccessMapper {
         domain.setSalesOrderId(entity.getSalesOrderId());
         domain.setExchangeRateToCompany(entity.getExchangeRateToCompany());
         domain.setOrderDiscountAmount(entity.getOrderDiscountAmount());
+        domain.setOpeningBalance(entity.isOpeningBalance());
         domain.setRowVersion(entity.getRowVersion());
         domain.setCreatedAt(entity.getCreatedAt());
         domain.setUpdatedAt(entity.getUpdatedAt());
@@ -56,6 +57,7 @@ public class CustomerInvoiceDataAccessMapper {
         line.setDiscountPercent(entity.getDiscountPercent());
         line.setRevenueAccountId(entity.getRevenueAccountId());
         line.setSalesOrderLineId(entity.getSalesOrderLineId());
+        line.setGift(entity.isGift());
         line.setCreatedAt(entity.getCreatedAt());
         line.setUpdatedAt(entity.getUpdatedAt());
         entity.getTaxSnapshots().size();
@@ -95,6 +97,7 @@ public class CustomerInvoiceDataAccessMapper {
         entity.setSalesOrderId(domain.getSalesOrderId());
         entity.setExchangeRateToCompany(domain.getExchangeRateToCompany());
         entity.setOrderDiscountAmount(domain.getOrderDiscountAmount());
+        entity.setOpeningBalance(domain.isOpeningBalance());
         if (existing == null) {
             entity.setRowVersion(domain.getRowVersion());
             entity.setCreatedAt(domain.getCreatedAt());
@@ -132,6 +135,7 @@ public class CustomerInvoiceDataAccessMapper {
         entity.setDiscountPercent(domain.getDiscountPercent());
         entity.setRevenueAccountId(domain.getRevenueAccountId());
         entity.setSalesOrderLineId(domain.getSalesOrderLineId());
+        entity.setGift(domain.isGift());
         entity.setCreatedAt(domain.getCreatedAt());
         entity.setUpdatedAt(domain.getUpdatedAt());
         for (CustomerInvoiceLineTax taxDomain : domain.getTaxSnapshots()) {

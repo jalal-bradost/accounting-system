@@ -9,11 +9,16 @@ import com.bradox.erp.platform.security.RequiresPermission;
 import com.bradox.erp.platform.web.CurrentCompany;
 import com.bradox.erp.sales.domain.core.SalesOrderState;
 import com.bradox.erp.sales.service.domain.SalesDashboardService;
+import com.bradox.erp.sales.service.domain.SalesProductProfitService;
 import com.bradox.erp.sales.service.domain.dto.CreateCustomerInvoiceFromSalesOrderCommand;
 import com.bradox.erp.sales.service.domain.dto.CreateSalesOrderCommand;
 import com.bradox.erp.sales.service.domain.dto.CreateSalesReturnCommand;
 import com.bradox.erp.sales.service.domain.dto.SalesDashboardResponse;
+import com.bradox.erp.sales.service.domain.dto.SalesProductProfitResponse;
+import com.bradox.erp.sales.service.domain.dto.SalesCorrectionCommand;
+import com.bradox.erp.sales.service.domain.dto.SalesCorrectionResult;
 import com.bradox.erp.sales.service.domain.dto.SalesOrderResponse;
+import com.bradox.erp.sales.service.domain.SalesCorrectionPreviewer;
 import com.bradox.erp.sales.service.domain.dto.SalesOrderSummaryResponse;
 import com.bradox.erp.sales.service.domain.ports.input.SalesApplicationService;
 import jakarta.validation.Valid;
@@ -34,11 +39,17 @@ public class SalesController {
 
     private final SalesApplicationService salesApplicationService;
     private final SalesDashboardService salesDashboardService;
+    private final SalesProductProfitService salesProductProfitService;
+    private final SalesCorrectionPreviewer correctionPreviewer;
 
     public SalesController(SalesApplicationService salesApplicationService,
-                           SalesDashboardService salesDashboardService) {
+                           SalesDashboardService salesDashboardService,
+                           SalesProductProfitService salesProductProfitService,
+                           SalesCorrectionPreviewer correctionPreviewer) {
         this.salesApplicationService = salesApplicationService;
         this.salesDashboardService = salesDashboardService;
+        this.salesProductProfitService = salesProductProfitService;
+        this.correctionPreviewer = correctionPreviewer;
     }
 
     @GetMapping("/dashboard")
@@ -48,6 +59,15 @@ public class SalesController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return ResponseEntity.ok(salesDashboardService.getDashboard(companyId.getId(), from, to));
+    }
+
+    @GetMapping("/dashboard/product-profit")
+    @RequiresPermission("sales.order.read")
+    public ResponseEntity<SalesProductProfitResponse> productProfit(
+            @CurrentCompany CompanyId companyId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ResponseEntity.ok(salesProductProfitService.getProductProfit(companyId.getId(), from, to));
     }
 
     @PostMapping("/orders")
@@ -74,6 +94,8 @@ public class SalesController {
             @RequestParam(required = false) String state,
             @RequestParam(required = false) UUID customerPartnerId,
             @RequestParam(required = false) String q,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate orderDateFrom,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate orderDateTo,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         SalesOrderState stateFilter = null;
@@ -82,7 +104,8 @@ public class SalesController {
         }
         var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         var result = salesApplicationService.searchSalesOrders(
-                companyId.getId(), stateFilter, customerPartnerId, q, pageable);
+                companyId.getId(), stateFilter, customerPartnerId, q,
+                orderDateFrom, orderDateTo, pageable);
         return ResponseEntity.ok(PageResponse.of(result, Function.identity()));
     }
 
@@ -108,6 +131,61 @@ public class SalesController {
     @RequiresPermission("sales.order.write")
     public ResponseEntity<SalesOrderResponse> cancel(@PathVariable UUID id) {
         return ResponseEntity.ok(salesApplicationService.cancelSalesOrder(id));
+    }
+
+    @PostMapping("/orders/{id}/returns")
+    @RequiresPermission("sales.order.write")
+    public ResponseEntity<SalesOrderResponse> returnGoods(@PathVariable UUID id,
+                                                         @RequestBody com.bradox.erp.sales.service.domain.dto.ReturnGoodsCommand body) {
+        return ResponseEntity.ok(salesApplicationService.returnGoods(id, body));
+    }
+
+    // Guided corrections of a confirmed order. With ?preview=true nothing is saved: the response shows
+    // exactly which invoices and credit notes would be posted.
+
+    @PostMapping("/orders/{id}/corrections/change-terms")
+    @RequiresPermission("sales.order.write")
+    public ResponseEntity<SalesCorrectionResult> changeTerms(@PathVariable UUID id,
+                                                             @RequestParam(defaultValue = "false") boolean preview,
+                                                             @RequestBody SalesCorrectionCommand body) {
+        return ResponseEntity.ok(correct(preview, () -> salesApplicationService.changeTerms(id, body)));
+    }
+
+    @PostMapping("/orders/{id}/corrections/reduce-quantities")
+    @RequiresPermission("sales.order.write")
+    public ResponseEntity<SalesCorrectionResult> reduceQuantities(@PathVariable UUID id,
+                                                                  @RequestParam(defaultValue = "false") boolean preview,
+                                                                  @RequestBody SalesCorrectionCommand body) {
+        return ResponseEntity.ok(correct(preview, () -> salesApplicationService.reduceQuantities(id, body)));
+    }
+
+    @PostMapping("/orders/{id}/corrections/cancel")
+    @RequiresPermission("sales.order.write")
+    public ResponseEntity<SalesCorrectionResult> cancelWithDocuments(@PathVariable UUID id,
+                                                                     @RequestParam(defaultValue = "false") boolean preview,
+                                                                     @RequestBody(required = false) SalesCorrectionCommand body) {
+        SalesCorrectionCommand cmd = body != null ? body : new SalesCorrectionCommand();
+        return ResponseEntity.ok(correct(preview, () -> salesApplicationService.cancelWithDocuments(id, cmd)));
+    }
+
+    @PostMapping("/orders/{id}/corrections/reassign-customer")
+    @RequiresPermission("sales.order.write")
+    public ResponseEntity<SalesCorrectionResult> reassignCustomer(@PathVariable UUID id,
+                                                                  @RequestParam(defaultValue = "false") boolean preview,
+                                                                  @RequestBody SalesCorrectionCommand body) {
+        return ResponseEntity.ok(correct(preview, () -> salesApplicationService.reassignCustomer(id, body)));
+    }
+
+    private SalesCorrectionResult correct(boolean preview, java.util.function.Supplier<SalesCorrectionResult> flow) {
+        return preview ? correctionPreviewer.preview(flow) : flow.get();
+    }
+
+    @PostMapping("/orders/{id}/close-remaining")
+    @RequiresPermission("sales.order.write")
+    public ResponseEntity<SalesOrderResponse> closeRemaining(@PathVariable UUID id,
+                                                            @RequestBody(required = false) java.util.Map<String, String> body) {
+        String reason = body != null ? body.get("reason") : null;
+        return ResponseEntity.ok(salesApplicationService.closeRemainingQuantities(id, reason));
     }
 
     @PostMapping("/orders/{id}/lock")

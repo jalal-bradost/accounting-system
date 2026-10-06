@@ -4,6 +4,8 @@ import com.bradox.erp.domain.core.entity.JournalEntry;
 import com.bradox.erp.domain.core.ValueObject.JournalEntryId;
 import com.bradox.erp.domain.core.ValueObject.JournalId;
 import com.bradox.erp.domain.valueobject.CompanyId;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -19,6 +21,8 @@ public interface JournalEntryRepository {
     Optional<JournalEntry> findById(JournalEntryId id);
 
     List<JournalEntry> findByCompanyId(CompanyId companyId);
+
+    Page<JournalEntry> searchByCompanyId(CompanyId companyId, Pageable pageable);
 
     List<JournalEntry> findByCompanyIdAndJournalIdAndDateBetween(
             CompanyId companyId, JournalId journalId, LocalDate from, LocalDate to);

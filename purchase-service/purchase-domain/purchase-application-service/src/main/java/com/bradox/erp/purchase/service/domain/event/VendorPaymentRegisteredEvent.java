@@ -9,5 +9,6 @@ public record VendorPaymentRegisteredEvent(
         UUID companyId,
         UUID vendorPaymentId,
         UUID vendorPartnerId,
+        /** Primary bill when registered against a single document; null for unallocated / multi-bill. */
         UUID vendorBillId
 ) {}

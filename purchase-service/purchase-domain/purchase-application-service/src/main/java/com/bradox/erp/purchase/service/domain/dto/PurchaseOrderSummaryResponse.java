@@ -15,7 +15,7 @@ public class PurchaseOrderSummaryResponse {
     private UUID vendorPartnerId;
     private String name;
     private PurchaseOrderState state;
-    /** NEW | UNPAID | PARTIAL_PAID | PAID | CANCELLED */
+    /** NEW | UNPAID | PARTIAL_PAID | PAID | TO_REFUND | CANCELLED */
     private String paymentStatus;
     private String currencyCode;
     private LocalDate orderDate;

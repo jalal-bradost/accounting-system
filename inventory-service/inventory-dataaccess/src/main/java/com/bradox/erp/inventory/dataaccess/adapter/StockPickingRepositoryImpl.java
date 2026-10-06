@@ -13,6 +13,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Optional;
 
 @Component
@@ -36,6 +37,11 @@ public class StockPickingRepositoryImpl implements StockPickingRepository {
     @Override
     public Optional<StockPicking> findById(StockPickingId id) {
         return jpa.findById(id.getId()).map(mapper::entityToDomain);
+    }
+
+    @Override
+    public List<StockPicking> findByBackorderOf(StockPickingId id) {
+        return jpa.findByBackorderOf(id.getId()).stream().map(mapper::entityToDomain).toList();
     }
 
     @Override

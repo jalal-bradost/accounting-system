@@ -29,6 +29,7 @@ public class CompanyApplicationService {
     private final AppUserJpaRepository appUserRepository;
     private final CompanyRoleProvisioner companyRoleProvisioner;
     private final ObjectProvider<BaseCurrencyChangeHandler> baseCurrencyChangeHandler;
+    private final ObjectProvider<CompanyErpBootstrapHandler> companyErpBootstrapHandler;
     private final CompanyLogoStorage logoStorage;
 
     public CompanyApplicationService(CompanyJpaRepository companyRepository,
@@ -37,6 +38,7 @@ public class CompanyApplicationService {
                                      AppUserJpaRepository appUserRepository,
                                      CompanyRoleProvisioner companyRoleProvisioner,
                                      ObjectProvider<BaseCurrencyChangeHandler> baseCurrencyChangeHandler,
+                                     ObjectProvider<CompanyErpBootstrapHandler> companyErpBootstrapHandler,
                                      CompanyLogoStorage logoStorage) {
         this.companyRepository = companyRepository;
         this.userRoleRepository = userRoleRepository;
@@ -44,6 +46,7 @@ public class CompanyApplicationService {
         this.appUserRepository = appUserRepository;
         this.companyRoleProvisioner = companyRoleProvisioner;
         this.baseCurrencyChangeHandler = baseCurrencyChangeHandler;
+        this.companyErpBootstrapHandler = companyErpBootstrapHandler;
         this.logoStorage = logoStorage;
     }
 
@@ -95,6 +98,10 @@ public class CompanyApplicationService {
         companyRepository.save(c);
         companyRoleProvisioner.provisionRoles(c.getId());
         companyRoleProvisioner.grantAdminToUser(c.getId(), creatorUserId);
+        CompanyErpBootstrapHandler bootstrap = companyErpBootstrapHandler.getIfAvailable();
+        if (bootstrap != null) {
+            bootstrap.bootstrap(c.getId());
+        }
         return CompanyResponse.from(c);
     }
 

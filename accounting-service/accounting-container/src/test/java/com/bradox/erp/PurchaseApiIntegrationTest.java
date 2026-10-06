@@ -117,7 +117,11 @@ class PurchaseApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
         JsonNode pay = json.readTree(payRes.getResponse().getContentAsString());
-        assertThat(pay.get("reconciliationId").asText()).isNotBlank();
+        assertThat(pay.get("allocatedAmount").decimalValue()).isEqualByComparingTo(apCredit);
+        assertThat(pay.get("unallocatedAmount").decimalValue()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(pay.get("allocations")).hasSize(1);
+        assertThat(pay.get("allocations").get(0).get("vendorBillId").asText()).isEqualTo(billId.toString());
+        assertThat(pay.get("allocations").get(0).get("state").asText()).isEqualTo("ACTIVE");
 
         MvcResult paysListRes = mockMvc.perform(get("/api/v1/purchase/vendor-payments")
                         .header("X-Company-Id", COMPANY_ID.toString()))
@@ -127,8 +131,14 @@ class PurchaseApiIntegrationTest {
         assertThat(paysArr.isArray()).isTrue();
         boolean payInList = false;
         for (JsonNode p : paysArr) {
-            if (billId.toString().equals(p.get("vendorBillId").asText())) {
-                payInList = true;
+            for (JsonNode alloc : p.get("allocations")) {
+                if (billId.toString().equals(alloc.get("vendorBillId").asText())
+                        && "ACTIVE".equals(alloc.get("state").asText())) {
+                    payInList = true;
+                    break;
+                }
+            }
+            if (payInList) {
                 break;
             }
         }
@@ -275,7 +285,7 @@ class PurchaseApiIntegrationTest {
     }
 
     @Test
-    void vendor_return_auto_creates_draft_credit_note() throws Exception {
+    void vendor_return_posts_credit_note_atomically() throws Exception {
         UUID apAccountId = accountIdByCode("430004");
         UUID vendorId = createVendor(apAccountId);
         UUID warehouse = lookupWarehouseByCode("WH");
@@ -328,7 +338,7 @@ class PurchaseApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
         assertThat(creditNotes).hasSize(1);
-        assertThat(creditNotes.get(0).get("state").asText()).isEqualTo("DRAFT");
+        assertThat(creditNotes.get(0).get("state").asText()).isEqualTo("POSTED");
         assertThat(creditNotes.get(0).get("moveType").asText()).isEqualTo("CREDIT_NOTE");
         assertThat(creditNotes.get(0).get("reversedBillId").asText()).isEqualTo(billId.toString());
     }
@@ -393,7 +403,7 @@ class PurchaseApiIntegrationTest {
     }
 
     @Test
-    void confirmed_po_qty_decrease_creates_return_and_credit_note() throws Exception {
+    void confirmed_po_qty_decrease_below_received_is_refused() throws Exception {
         UUID apAccountId = accountIdByCode("430004");
         UUID vendorId = createVendor(apAccountId);
         UUID warehouse = lookupWarehouseByCode("WH");
@@ -432,29 +442,19 @@ class PurchaseApiIntegrationTest {
                 + warehouse + "\",\"lines\":[{\"id\":\"" + lineId + "\",\"productId\":\"" + productId
                 + "\",\"name\":\"Line1\",\"uomId\":\"" + uomId
                 + "\",\"qtyOrdered\":10,\"unitPrice\":10,\"discountPercent\":0,\"taxIds\":[]}]}";
-        po = json.readTree(mockMvc.perform(put("/api/v1/purchase/orders/" + poId)
+        // 20 received and billed: lowering to 10 is refused until the goods are returned and credited.
+        mockMvc.perform(put("/api/v1/purchase/orders/" + poId)
                         .header("X-Company-Id", COMPANY_ID.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(amendBody))
+                .andExpect(status().isUnprocessableEntity());
+        po = json.readTree(mockMvc.perform(get("/api/v1/purchase/orders/" + poId)
+                        .header("X-Company-Id", COMPANY_ID.toString()))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
-        assertThat(po.get("state").asText()).isEqualTo("CONFIRMED");
         assertThat(po.get("lines").get(0).get("qtyOrdered").decimalValue())
-                .isEqualByComparingTo(new BigDecimal("10"));
-        assertThat(po.get("returnPickingIds").size()).isGreaterThanOrEqualTo(1);
-
-        po = validateOpenReturnPickings(po);
-        assertThat(po.get("lines").get(0).get("qtyReceived").decimalValue())
-                .isEqualByComparingTo(new BigDecimal("10"));
-
-        JsonNode creditNotes = json.readTree(mockMvc.perform(
-                        get("/api/v1/accounting/vendor-bills/" + billId + "/credit-notes")
-                                .header("X-Company-Id", COMPANY_ID.toString()))
-                .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString());
-        assertThat(creditNotes).hasSize(1);
-        assertThat(creditNotes.get(0).get("state").asText()).isEqualTo("DRAFT");
-        assertThat(creditNotes.get(0).get("moveType").asText()).isEqualTo("CREDIT_NOTE");
+                .isEqualByComparingTo(new BigDecimal("20"));
+        assertThat(po.get("returnPickingIds")).isEmpty();
     }
 
     @Test

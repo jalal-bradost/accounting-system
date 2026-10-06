@@ -18,6 +18,8 @@ public interface StockPickingJpaRepository extends JpaRepository<StockPickingEnt
 
     List<StockPickingEntity> findBySalesOrderId(UUID salesOrderId);
 
+    List<StockPickingEntity> findByBackorderOf(UUID backorderOf);
+
     @Query("""
             SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END
             FROM StockPickingEntity p

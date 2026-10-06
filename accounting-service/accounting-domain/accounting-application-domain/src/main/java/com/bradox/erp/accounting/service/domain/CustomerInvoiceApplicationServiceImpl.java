@@ -2,12 +2,18 @@ package com.bradox.erp.accounting.service.domain;
 
 import com.bradox.erp.domain.valueobject.DiscountMath;
 import com.bradox.erp.domain.valueobject.DiscountType;
+import com.bradox.erp.domain.valueobject.MonetaryScale;
 import com.bradox.erp.accounting.service.domain.CurrencyMath;
+import com.bradox.erp.accounting.service.domain.JournalEntryTiming;
 import com.bradox.erp.accounting.service.domain.create.CreateJournalEntryCommand;
 import com.bradox.erp.accounting.service.domain.create.CreateJournalEntryResponse;
 import com.bradox.erp.accounting.service.domain.create.JournalEntryResponse;
 import com.bradox.erp.accounting.service.domain.create.JournalItemCommand;
+import com.bradox.erp.accounting.service.domain.create.ReverseJournalEntryCommand;
+import com.bradox.erp.accounting.service.domain.customerinvoice.AllocateCustomerPaymentCommand;
+import com.bradox.erp.accounting.service.domain.customerinvoice.CorrectCustomerPaymentCommand;
 import com.bradox.erp.accounting.service.domain.customerinvoice.CreateCreditNoteFromInvoiceCommand;
+import com.bradox.erp.accounting.service.domain.customerinvoice.RefundCustomerCreditCommand;
 import com.bradox.erp.accounting.service.domain.customerinvoice.CustomerInvoiceLineTaxResponse;
 import com.bradox.erp.accounting.service.domain.customerinvoice.CreateCustomerInvoiceCommand;
 import com.bradox.erp.accounting.service.domain.customerinvoice.CustomerInvoiceLineCommand;
@@ -19,24 +25,19 @@ import com.bradox.erp.accounting.service.domain.customerinvoice.CustomerInvoiceL
 import com.bradox.erp.accounting.service.domain.ports.input.service.CustomerInvoiceApplicationService;
 import com.bradox.erp.accounting.service.domain.ports.output.SalesOrderInvoiceSyncPort;
 import com.bradox.erp.accounting.service.domain.ports.input.service.JournalEntryApplicationService;
-import com.bradox.erp.accounting.service.domain.ports.input.service.ReconciliationApplicationService;
 import com.bradox.erp.accounting.service.domain.ports.output.CurrencyConversionPort;
 import com.bradox.erp.accounting.service.domain.event.CustomerInvoicePostedEvent;
 import com.bradox.erp.accounting.service.domain.ports.output.messaging.AccountingEventPublisher;
 import com.bradox.erp.accounting.service.domain.ports.output.repository.AccountRepository;
 import com.bradox.erp.accounting.service.domain.ports.output.repository.CustomerInvoiceRepository;
-import com.bradox.erp.accounting.service.domain.ports.output.repository.CustomerPaymentRepository;
 import com.bradox.erp.accounting.service.domain.ports.output.repository.JournalRepository;
 import com.bradox.erp.contacts.service.domain.dto.PartnerResponse;
 import com.bradox.erp.contacts.service.domain.ports.input.PartnerApplicationService;
 import com.bradox.erp.domain.core.ValueObject.CustomerInvoiceMoveType;
 import com.bradox.erp.domain.core.ValueObject.CustomerInvoiceState;
-import com.bradox.erp.domain.core.ValueObject.JournalId;
-import com.bradox.erp.domain.core.ValueObject.JournalType;
 import com.bradox.erp.domain.core.entity.CustomerInvoice;
 import com.bradox.erp.domain.core.entity.CustomerInvoiceLine;
 import com.bradox.erp.domain.core.entity.CustomerInvoiceLineTax;
-import com.bradox.erp.domain.core.entity.CustomerPayment;
 import com.bradox.erp.domain.core.entity.Journal;
 import com.bradox.erp.domain.core.exception.AccountingDomainException;
 import com.bradox.erp.domain.valueobject.CompanyId;
@@ -44,6 +45,8 @@ import com.bradox.erp.platform.activity.RecordActivityLogger;
 import com.bradox.erp.platform.document.DocumentSequenceService;
 import com.bradox.erp.platform.web.CompanyContext;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -51,6 +54,7 @@ import org.springframework.validation.annotation.Validated;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -64,18 +68,16 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
 
     private static final String DEFAULT_AR_ACCOUNT_CODE = "430003";
     private static final String DEFAULT_REVENUE_ACCOUNT_CODE = "430005";
+    private static final String SALES_DISCOUNT_ACCOUNT_CODE = "430006";
+    private static final String GIFT_EXPENSE_ACCOUNT_CODE = "430008";
     private static final String SALE_JOURNAL_CODE = "430003";
-    private static final String EXCHANGE_GAIN_ACCOUNT_CODE = "430014";
-    private static final String EXCHANGE_LOSS_ACCOUNT_CODE = "430015";
 
     private final CustomerInvoiceRepository invoiceRepository;
-    private final CustomerPaymentRepository paymentRepository;
+    private final CustomerPaymentService customerPaymentService;
     private final PartnerApplicationService partnerApplicationService;
     private final JournalEntryApplicationService journalEntryApplicationService;
     private final JournalRepository journalRepository;
     private final AccountRepository accountRepository;
-    private final ReconciliationApplicationService reconciliationApplicationService;
-    private final com.bradox.erp.accounting.service.domain.ports.output.repository.JournalItemReconciliationPort journalItemReconciliationPort;
     private final PeriodPostingGuard periodPostingGuard;
     private final ObjectProvider<CompanyContext> companyContextProvider;
     private final ObjectProvider<SalesOrderInvoiceSyncPort> salesOrderInvoiceSyncPortProvider;
@@ -85,13 +87,11 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
     private final RecordActivityLogger activityLogger;
 
     public CustomerInvoiceApplicationServiceImpl(CustomerInvoiceRepository invoiceRepository,
-                                                 CustomerPaymentRepository paymentRepository,
+                                                 CustomerPaymentService customerPaymentService,
                                                  PartnerApplicationService partnerApplicationService,
                                                  JournalEntryApplicationService journalEntryApplicationService,
                                                  JournalRepository journalRepository,
                                                  AccountRepository accountRepository,
-                                                 ReconciliationApplicationService reconciliationApplicationService,
-                                                 com.bradox.erp.accounting.service.domain.ports.output.repository.JournalItemReconciliationPort journalItemReconciliationPort,
                                                  PeriodPostingGuard periodPostingGuard,
                                                  ObjectProvider<CompanyContext> companyContextProvider,
                                                  ObjectProvider<SalesOrderInvoiceSyncPort> salesOrderInvoiceSyncPortProvider,
@@ -100,13 +100,11 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
                                                  DocumentSequenceService documentSequenceService,
                                                  RecordActivityLogger activityLogger) {
         this.invoiceRepository = invoiceRepository;
-        this.paymentRepository = paymentRepository;
+        this.customerPaymentService = customerPaymentService;
         this.partnerApplicationService = partnerApplicationService;
         this.journalEntryApplicationService = journalEntryApplicationService;
         this.journalRepository = journalRepository;
         this.accountRepository = accountRepository;
-        this.reconciliationApplicationService = reconciliationApplicationService;
-        this.journalItemReconciliationPort = journalItemReconciliationPort;
         this.periodPostingGuard = periodPostingGuard;
         this.companyContextProvider = companyContextProvider;
         this.salesOrderInvoiceSyncPortProvider = salesOrderInvoiceSyncPortProvider;
@@ -127,17 +125,108 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
 
     @Override
     @Transactional(readOnly = true)
+    public Map<UUID, BigDecimal> remainingCreditableQtyByInvoiceLine(UUID invoiceId) {
+        CustomerInvoice source = invoiceRepository.findByIdWithLines(invoiceId)
+                .orElseThrow(() -> new AccountingDomainException("error.accounting.customerInvoiceNotFound", null, "Customer invoice not found"));
+        Map<UUID, BigDecimal> credited = creditedQtyBySourceInvoiceLine(source);
+        Map<UUID, BigDecimal> remaining = new LinkedHashMap<>();
+        for (CustomerInvoiceLine line : source.getLines()) {
+            BigDecimal left = line.getQty().subtract(credited.getOrDefault(line.getId(), BigDecimal.ZERO));
+            remaining.put(line.getId(), left.max(BigDecimal.ZERO).setScale(4, RoundingMode.HALF_UP));
+        }
+        return remaining;
+    }
+
+    @Override
+    @Transactional
+    public void deleteDraftCustomerInvoice(UUID invoiceId) {
+        CustomerInvoice inv = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new AccountingDomainException("error.accounting.customerInvoiceNotFound", null, "Customer invoice not found"));
+        if (inv.getState() != CustomerInvoiceState.DRAFT || inv.isOpeningBalance()) {
+            throw new AccountingDomainException("error.accounting.onlyDraftInvoiceCanBeDeleted", null,
+                    "Only draft invoices and credit notes can be deleted");
+        }
+        invoiceRepository.deleteById(invoiceId);
+        activityLogger.log(inv.getCompanyId(), RecordActivityLogger.MODEL_CUSTOMER_INVOICE, invoiceId,
+                "Draft deleted: " + (inv.getReference() != null ? inv.getReference() : invoiceId));
+    }
+
+    @Override
+    @Transactional
+    public int deleteDraftDocumentsForSalesOrder(UUID salesOrderId) {
+        if (salesOrderId == null) {
+            return 0;
+        }
+        int deleted = 0;
+        for (CustomerInvoice inv : invoiceRepository.findBySalesOrderIdWithLines(salesOrderId)) {
+            if (inv.getState() == CustomerInvoiceState.DRAFT && !inv.isOpeningBalance()) {
+                deleteDraftCustomerInvoice(inv.getId());
+                deleted++;
+            }
+        }
+        return deleted;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Map<UUID, BigDecimal> draftAllocatedQtyBySalesOrderLine(UUID salesOrderId) {
-        return draftAllocatedQtyBySalesOrderLine(salesOrderId, CustomerInvoiceMoveType.INVOICE);
+        return draftAllocatedQtyBySalesOrderLine(salesOrderId, CustomerInvoiceMoveType.INVOICE, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, BigDecimal> draftAllocatedChargeQtyBySalesOrderLine(UUID salesOrderId) {
+        return draftAllocatedQtyBySalesOrderLine(salesOrderId, CustomerInvoiceMoveType.INVOICE, Boolean.FALSE);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Map<UUID, BigDecimal> draftCreditNoteAllocatedQtyBySalesOrderLine(UUID salesOrderId) {
-        return draftAllocatedQtyBySalesOrderLine(salesOrderId, CustomerInvoiceMoveType.CREDIT_NOTE);
+        return draftAllocatedQtyBySalesOrderLine(salesOrderId, CustomerInvoiceMoveType.CREDIT_NOTE, null);
     }
 
-    private Map<UUID, BigDecimal> draftAllocatedQtyBySalesOrderLine(UUID salesOrderId, CustomerInvoiceMoveType moveType) {
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, BigDecimal> draftCreditNoteAllocatedChargeQtyBySalesOrderLine(UUID salesOrderId) {
+        return draftAllocatedQtyBySalesOrderLine(salesOrderId, CustomerInvoiceMoveType.CREDIT_NOTE, Boolean.FALSE);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PostedSoLineQtyNets postedQtyNetsBySalesOrderLine(UUID salesOrderId) {
+        if (salesOrderId == null) {
+            return new PostedSoLineQtyNets(Map.of(), Map.of());
+        }
+        Map<UUID, BigDecimal> charge = new LinkedHashMap<>();
+        Map<UUID, BigDecimal> gift = new LinkedHashMap<>();
+        for (CustomerInvoice inv : invoiceRepository.findBySalesOrderIdWithLines(salesOrderId)) {
+            if (inv.getState() != CustomerInvoiceState.POSTED) {
+                continue;
+            }
+            CustomerInvoiceMoveType type = inv.getMoveType() != null ? inv.getMoveType() : CustomerInvoiceMoveType.INVOICE;
+            boolean credit = type == CustomerInvoiceMoveType.CREDIT_NOTE;
+            for (CustomerInvoiceLine line : inv.getLines()) {
+                if (line.getSalesOrderLineId() == null || line.getQty() == null) {
+                    continue;
+                }
+                BigDecimal signed = credit ? line.getQty().negate() : line.getQty();
+                if (line.isGift()) {
+                    gift.merge(line.getSalesOrderLineId(), signed, BigDecimal::add);
+                } else {
+                    charge.merge(line.getSalesOrderLineId(), signed, BigDecimal::add);
+                }
+            }
+        }
+        charge.replaceAll((id, qty) -> qty.max(BigDecimal.ZERO).setScale(4, RoundingMode.HALF_UP));
+        gift.replaceAll((id, qty) -> qty.max(BigDecimal.ZERO).setScale(4, RoundingMode.HALF_UP));
+        return new PostedSoLineQtyNets(charge, gift);
+    }
+
+    /**
+     * @param giftFilter null = all lines; true = gift only; false = charge (non-gift) only
+     */
+    private Map<UUID, BigDecimal> draftAllocatedQtyBySalesOrderLine(
+            UUID salesOrderId, CustomerInvoiceMoveType moveType, Boolean giftFilter) {
         if (salesOrderId == null) {
             return Map.of();
         }
@@ -151,9 +240,13 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
                 continue;
             }
             for (CustomerInvoiceLine line : inv.getLines()) {
-                if (line.getSalesOrderLineId() != null) {
-                    allocated.merge(line.getSalesOrderLineId(), line.getQty(), BigDecimal::add);
+                if (line.getSalesOrderLineId() == null) {
+                    continue;
                 }
+                if (giftFilter != null && line.isGift() != giftFilter) {
+                    continue;
+                }
+                allocated.merge(line.getSalesOrderLineId(), line.getQty(), BigDecimal::add);
             }
         }
         return allocated;
@@ -164,23 +257,6 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
             return fromCommand;
         }
         return companyContextProvider.getObject().requireCompany().getId();
-    }
-
-    private UUID resolveLiquidityAccountForPaymentJournal(UUID companyId, UUID journalId) {
-        Journal j = journalRepository.findById(new JournalId(journalId))
-                .orElseThrow(() -> new AccountingDomainException("error.accounting.paymentJournalNotFound", null, "Payment journal not found"));
-        if (!j.getCompanyId().getId().equals(companyId)) {
-            throw new AccountingDomainException("error.accounting.journalCompanyMismatch", null, "Journal company mismatch");
-        }
-        if (j.getJournalType() != JournalType.CASH && j.getJournalType() != JournalType.BANK) {
-            throw new AccountingDomainException("error.accounting.paymentJournalCashOrBank", null, "Payment journal must be cash or bank");
-        }
-        return accountRepository.findByCompanyIdAndCode(new CompanyId(companyId), j.getCode())
-                .orElseThrow(() -> new AccountingDomainException(
-                        "error.accounting.liquidityAccountNotFoundForJournal",
-                        new Object[] { j.getCode() },
-                        "Liquidity account for journal code " + j.getCode() + " not found"))
-                .getId().getId();
     }
 
     @Override
@@ -235,6 +311,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
 
         int seq = 0;
         for (CustomerInvoiceLineCommand lc : command.getLines()) {
+            boolean gift = Boolean.TRUE.equals(lc.getIsGift());
             if (lc.getUnitPrice().compareTo(BigDecimal.ZERO) <= 0) {
                 throw new AccountingDomainException("error.accounting.lineUnitPricePositive", null, "Line unit price must be positive");
             }
@@ -245,23 +322,27 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
             line.setName(lc.getName());
             line.setQty(lc.getQty().setScale(4, RoundingMode.HALF_UP));
             line.setUnitPrice(lc.getUnitPrice().setScale(4, RoundingMode.HALF_UP));
-            line.setDiscountType(lc.getDiscountType());
-            line.setDiscountValue(lc.getDiscountValue() != null ? lc.getDiscountValue() : lc.getDiscountPercent());
+            line.setDiscountType(gift ? DiscountType.PERCENT : lc.getDiscountType());
+            line.setDiscountValue(gift ? BigDecimal.ZERO
+                    : (lc.getDiscountValue() != null ? lc.getDiscountValue() : lc.getDiscountPercent()));
             line.setDiscountPercent(DiscountMath.effectivePercent(
                     lc.getQty().multiply(lc.getUnitPrice()), line.getDiscountType(), line.getDiscountValue()));
             line.setSalesOrderLineId(lc.getSalesOrderLineId());
             line.setRevenueAccountId(revAcc);
+            line.setGift(gift);
             line.setCreatedAt(now);
             line.setUpdatedAt(now);
-            for (CustomerInvoiceLineTaxCommand ts : lc.getTaxSnapshots()) {
-                CustomerInvoiceLineTax te = new CustomerInvoiceLineTax();
-                te.setId(UUID.randomUUID());
-                te.setTaxId(ts.getTaxId());
-                te.setTaxName(ts.getTaxName());
-                te.setTaxBase(ts.getTaxBase().setScale(4, RoundingMode.HALF_UP));
-                te.setTaxAmount(ts.getTaxAmount().setScale(4, RoundingMode.HALF_UP));
-                te.setAccountId(ts.getAccountId());
-                line.getTaxSnapshots().add(te);
+            if (!gift) {
+                for (CustomerInvoiceLineTaxCommand ts : lc.getTaxSnapshots()) {
+                    CustomerInvoiceLineTax te = new CustomerInvoiceLineTax();
+                    te.setId(UUID.randomUUID());
+                    te.setTaxId(ts.getTaxId());
+                    te.setTaxName(ts.getTaxName());
+                    te.setTaxBase(ts.getTaxBase().setScale(4, RoundingMode.HALF_UP));
+                    te.setTaxAmount(ts.getTaxAmount().setScale(4, RoundingMode.HALF_UP));
+                    te.setAccountId(ts.getAccountId());
+                    line.getTaxSnapshots().add(te);
+                }
             }
             inv.getLines().add(line);
         }
@@ -350,6 +431,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
                     : srcLine.getDiscountValue());
             lc.setRevenueAccountId(srcLine.getRevenueAccountId());
             lc.setSalesOrderLineId(srcLine.getSalesOrderLineId());
+            lc.setIsGift(srcLine.isGift());
             for (CustomerInvoiceLineTax tax : srcLine.getTaxSnapshots()) {
                 CustomerInvoiceLineTaxCommand ts = new CustomerInvoiceLineTaxCommand();
                 ts.setTaxId(tax.getTaxId());
@@ -366,10 +448,15 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         }
         BigDecimal sourceSubtotal = BigDecimal.ZERO;
         for (CustomerInvoiceLine srcLine : source.getLines()) {
-            sourceSubtotal = sourceSubtotal.add(customerLineNet(srcLine));
+            if (!srcLine.isGift()) {
+                sourceSubtotal = sourceSubtotal.add(CustomerInvoiceMath.lineNet(srcLine));
+            }
         }
         BigDecimal cnSubtotal = BigDecimal.ZERO;
         for (CustomerInvoiceLineCommand lc : lines) {
+            if (Boolean.TRUE.equals(lc.getIsGift())) {
+                continue;
+            }
             cnSubtotal = cnSubtotal.add(DiscountMath.lineNet(
                     lc.getQty(), lc.getUnitPrice(), lc.getDiscountType(),
                     lc.getDiscountValue() != null ? lc.getDiscountValue() : lc.getDiscountPercent()));
@@ -394,32 +481,87 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         if (inv.getState() != CustomerInvoiceState.DRAFT) {
             throw new AccountingDomainException("error.accounting.invoiceNotDraft", null, "Invoice is not draft");
         }
+        if (inv.getSalesOrderId() != null && !inv.isOpeningBalance()) {
+            SalesOrderInvoiceSyncPort salesCheck = salesOrderInvoiceSyncPortProvider.getIfAvailable();
+            if (salesCheck != null) {
+                List<SalesOrderInvoiceSyncPort.DocumentLine> docLines = new ArrayList<>();
+                for (CustomerInvoiceLine line : inv.getLines()) {
+                    docLines.add(new SalesOrderInvoiceSyncPort.DocumentLine(
+                            line.getSalesOrderLineId(), line.getQty(), line.getUnitPrice(), line.isGift()));
+                }
+                salesCheck.assertDocumentFitsOrder(inv.getSalesOrderId(),
+                        inv.getMoveType() == CustomerInvoiceMoveType.CREDIT_NOTE, docLines);
+            }
+        }
 
         BigDecimal rate = resolveExchangeRate(
                 inv.getCompanyId(), inv.getCurrencyCode(), inv.getInvoiceDate(), inv.getExchangeRateToCompany());
         inv.setExchangeRateToCompany(rate);
 
-        // 100% discount / free invoices net to zero — ledger rejects debit=0 credit=0 lines.
-        // Credit notes reverse the invoice pattern: Dr Revenue/Tax, Cr AR.
+        // Gross revenue / gift expense with discounts on the Sales Discount account so discounts
+        // remain visible. Gift lines hit Gift Expense and never Accounts Receivable.
         boolean creditNote = inv.getMoveType() == CustomerInvoiceMoveType.CREDIT_NOTE;
         List<JournalItemCommand> items = new ArrayList<>();
         BigDecimal arTotalComp = BigDecimal.ZERO;
         BigDecimal arDoc = BigDecimal.ZERO;
 
+        UUID salesDiscountAccount = accountRepository
+                .findByCompanyIdAndCode(new CompanyId(inv.getCompanyId()), SALES_DISCOUNT_ACCOUNT_CODE)
+                .orElseThrow(() -> new AccountingDomainException(
+                        "error.accounting.salesDiscountAccountNotFound", null, "Sales discount account not found"))
+                .getId().getId();
+        UUID giftExpenseAccount = accountRepository
+                .findByCompanyIdAndCode(new CompanyId(inv.getCompanyId()), GIFT_EXPENSE_ACCOUNT_CODE)
+                .orElseThrow(() -> new AccountingDomainException(
+                        "error.accounting.giftExpenseAccountNotFound", null, "Gift expense account not found"))
+                .getId().getId();
+
         for (CustomerInvoiceLine line : inv.getLines()) {
-            BigDecimal lineNetDoc = customerLineNet(line).setScale(4, RoundingMode.HALF_UP);
+            BigDecimal grossDoc = CustomerInvoiceMath.lineGross(line).setScale(4, RoundingMode.HALF_UP);
+            BigDecimal grossComp = CurrencyMath.convertAtRate(grossDoc, rate);
+            BigDecimal discDoc = CustomerInvoiceMath.lineDiscount(line).setScale(4, RoundingMode.HALF_UP);
+            BigDecimal discComp = CurrencyMath.convertAtRate(discDoc, rate);
+            BigDecimal lineNetDoc = CustomerInvoiceMath.lineNet(line).setScale(4, RoundingMode.HALF_UP);
             BigDecimal lineNetComp = CurrencyMath.convertAtRate(lineNetDoc, rate);
 
+            if (line.isGift()) {
+                if (grossComp.signum() > 0) {
+                    if (creditNote) {
+                        items.add(new JournalItemCommand(line.getRevenueAccountId(), line.getName(), grossComp, BigDecimal.ZERO,
+                                inv.getCurrencyCode(), grossDoc, null));
+                        items.add(new JournalItemCommand(giftExpenseAccount, "Gift: " + line.getName(), BigDecimal.ZERO, grossComp,
+                                inv.getCurrencyCode(), grossDoc.negate(), null));
+                    } else {
+                        items.add(new JournalItemCommand(line.getRevenueAccountId(), line.getName(), BigDecimal.ZERO, grossComp,
+                                inv.getCurrencyCode(), grossDoc.negate(), null));
+                        items.add(new JournalItemCommand(giftExpenseAccount, "Gift: " + line.getName(), grossComp, BigDecimal.ZERO,
+                                inv.getCurrencyCode(), grossDoc, null));
+                    }
+                }
+                continue;
+            }
+
+            if (grossComp.signum() > 0) {
+                if (creditNote) {
+                    items.add(new JournalItemCommand(line.getRevenueAccountId(), line.getName(), grossComp, BigDecimal.ZERO,
+                            inv.getCurrencyCode(), grossDoc, null));
+                } else {
+                    items.add(new JournalItemCommand(line.getRevenueAccountId(), line.getName(), BigDecimal.ZERO, grossComp,
+                            inv.getCurrencyCode(), grossDoc.negate(), null));
+                }
+            }
+            if (discComp.signum() > 0) {
+                if (creditNote) {
+                    items.add(new JournalItemCommand(salesDiscountAccount, "Discount: " + line.getName(), BigDecimal.ZERO, discComp,
+                            inv.getCurrencyCode(), discDoc.negate(), null));
+                } else {
+                    items.add(new JournalItemCommand(salesDiscountAccount, "Discount: " + line.getName(), discComp, BigDecimal.ZERO,
+                            inv.getCurrencyCode(), discDoc, null));
+                }
+            }
             if (lineNetComp.signum() > 0) {
                 arTotalComp = arTotalComp.add(lineNetComp);
                 arDoc = arDoc.add(lineNetDoc);
-                if (creditNote) {
-                    items.add(new JournalItemCommand(line.getRevenueAccountId(), line.getName(), lineNetComp, BigDecimal.ZERO,
-                            inv.getCurrencyCode(), lineNetDoc, null));
-                } else {
-                    items.add(new JournalItemCommand(line.getRevenueAccountId(), line.getName(), BigDecimal.ZERO, lineNetComp,
-                            inv.getCurrencyCode(), lineNetDoc.negate(), null));
-                }
             }
             for (CustomerInvoiceLineTax ts : line.getTaxSnapshots()) {
                 BigDecimal taxDoc = ts.getTaxAmount().setScale(4, RoundingMode.HALF_UP);
@@ -441,29 +583,22 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         BigDecimal orderDiscDoc = inv.getOrderDiscountAmount() != null
                 ? inv.getOrderDiscountAmount().max(BigDecimal.ZERO)
                 : BigDecimal.ZERO;
-        if (orderDiscDoc.signum() > 0 && arDoc.signum() > 0 && !items.isEmpty()) {
+        if (orderDiscDoc.signum() > 0) {
             BigDecimal untaxedDoc = BigDecimal.ZERO;
             for (CustomerInvoiceLine line : inv.getLines()) {
-                untaxedDoc = untaxedDoc.add(customerLineNet(line));
+                if (!line.isGift()) {
+                    untaxedDoc = untaxedDoc.add(CustomerInvoiceMath.lineNet(line));
+                }
             }
             BigDecimal discDoc = orderDiscDoc.min(untaxedDoc);
             BigDecimal discComp = CurrencyMath.convertAtRate(discDoc, rate);
             if (discComp.signum() > 0) {
-                JournalItemCommand first = items.get(0);
                 if (creditNote) {
-                    items.set(0, new JournalItemCommand(
-                            first.getAccountId(), first.getLabel(),
-                            first.getDebit().subtract(discComp).max(BigDecimal.ZERO), first.getCredit(),
-                            first.getCurrencyCode(),
-                            first.getAmountCurrency() != null ? first.getAmountCurrency().subtract(discDoc) : discDoc.negate(),
-                            first.getPartnerId()));
+                    items.add(new JournalItemCommand(salesDiscountAccount, "Order discount", BigDecimal.ZERO, discComp,
+                            inv.getCurrencyCode(), discDoc.negate(), null));
                 } else {
-                    items.set(0, new JournalItemCommand(
-                            first.getAccountId(), first.getLabel(),
-                            first.getDebit(), first.getCredit().subtract(discComp).max(BigDecimal.ZERO),
-                            first.getCurrencyCode(),
-                            first.getAmountCurrency() != null ? first.getAmountCurrency().add(discDoc) : discDoc,
-                            first.getPartnerId()));
+                    items.add(new JournalItemCommand(salesDiscountAccount, "Order discount", discComp, BigDecimal.ZERO,
+                            inv.getCurrencyCode(), discDoc, null));
                 }
                 arTotalComp = arTotalComp.subtract(discComp).max(BigDecimal.ZERO);
                 arDoc = arDoc.subtract(discDoc).max(BigDecimal.ZERO);
@@ -539,6 +674,123 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
     }
 
     @Override
+    @Transactional
+    public CustomerInvoiceResponse createOpeningCustomerInvoice(UUID companyId, UUID partnerId, BigDecimal amount,
+                                                                String currency, LocalDate date, LocalDate dueDate,
+                                                                String reference, UUID openingJournalId,
+                                                                UUID openingEquityAccountId) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new AccountingDomainException("error.accounting.openingAmountPositive", null,
+                    "Opening invoice amount must be positive");
+        }
+        PartnerResponse customer = partnerApplicationService.getPartner(partnerId);
+        if (!customer.isCustomer()) {
+            throw new AccountingDomainException("error.accounting.partnerNotCustomer", null, "Partner is not a customer");
+        }
+        if (!companyId.equals(customer.getCompanyId())) {
+            throw new AccountingDomainException("error.accounting.customerCompanyMismatch", null, "Customer belongs to another company");
+        }
+        periodPostingGuard.assertDatePostable(companyId, date);
+        String currencyCode = currency != null ? currency.trim().toUpperCase() : null;
+        if (currencyCode == null || currencyCode.isBlank()) {
+            throw new AccountingDomainException("error.accounting.paymentCurrencyRequired", null, "Currency is required");
+        }
+        BigDecimal scaled = amount.setScale(4, RoundingMode.HALF_UP);
+        BigDecimal rate = resolveExchangeRate(companyId, currencyCode, date, null);
+        BigDecimal companyAmount = CurrencyMath.convertAtRate(scaled, rate);
+
+        Instant now = Instant.now();
+        CustomerInvoice inv = new CustomerInvoice();
+        inv.setId(UUID.randomUUID());
+        inv.setCompanyId(companyId);
+        inv.setCustomerPartnerId(partnerId);
+        inv.setInvoiceDate(date);
+        inv.setDueDate(dueDate != null ? dueDate : date);
+        inv.setReference(reference != null && !reference.isBlank()
+                ? reference.trim()
+                : documentSequenceService.next(companyId, "OB-INV"));
+        inv.setCurrencyCode(currencyCode);
+        inv.setMoveType(CustomerInvoiceMoveType.INVOICE);
+        inv.setExchangeRateToCompany(rate);
+        inv.setOrderDiscountAmount(BigDecimal.ZERO);
+        inv.setOpeningBalance(true);
+        inv.setState(CustomerInvoiceState.DRAFT);
+        inv.setCreatedAt(now);
+        inv.setUpdatedAt(now);
+        inv.setRowVersion(0L);
+
+        CustomerInvoiceLine line = new CustomerInvoiceLine();
+        line.setId(UUID.randomUUID());
+        line.setSequence(1);
+        line.setName("Opening balance");
+        line.setQty(BigDecimal.ONE.setScale(4, RoundingMode.HALF_UP));
+        line.setUnitPrice(scaled);
+        line.setDiscountType(DiscountType.PERCENT);
+        line.setDiscountValue(BigDecimal.ZERO);
+        line.setDiscountPercent(BigDecimal.ZERO);
+        line.setRevenueAccountId(openingEquityAccountId);
+        line.setGift(false);
+        line.setCreatedAt(now);
+        line.setUpdatedAt(now);
+        inv.getLines().add(line);
+
+        UUID receivableAccount = customer.getReceivableAccountId() != null
+                ? customer.getReceivableAccountId()
+                : accountRepository.findByCompanyIdAndCode(new CompanyId(companyId), DEFAULT_AR_ACCOUNT_CODE)
+                .orElseThrow(() -> new AccountingDomainException(
+                        "error.accounting.defaultArAccountNotFound", null, "Default AR account not found"))
+                .getId().getId();
+
+        List<JournalItemCommand> items = List.of(
+                new JournalItemCommand(receivableAccount, "Accounts receivable", companyAmount, BigDecimal.ZERO,
+                        currencyCode, scaled, partnerId),
+                new JournalItemCommand(openingEquityAccountId, "Opening balance", BigDecimal.ZERO, companyAmount,
+                        currencyCode, scaled.negate(), null));
+        CreateJournalEntryResponse created = journalEntryApplicationService.createJournalEntry(
+                new CreateJournalEntryCommand(companyId, openingJournalId, "",
+                        JournalEntryTiming.ofBusinessDate(date), currencyCode, partnerId, items));
+        journalEntryApplicationService.postJournalEntry(created.getJournalEntryId());
+
+        inv.setJournalEntryId(created.getJournalEntryId());
+        inv.setState(CustomerInvoiceState.POSTED);
+        inv.setUpdatedAt(Instant.now());
+        CustomerInvoice saved = invoiceRepository.save(inv);
+        customerPaymentService.syncForInvoices(List.of(saved.getId()));
+        activityLogger.log(saved.getCompanyId(), RecordActivityLogger.MODEL_CUSTOMER_INVOICE, saved.getId(),
+                "Opening balance invoice posted");
+        return toResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public void cancelOpeningCustomerInvoice(UUID invoiceId) {
+        CustomerInvoice inv = invoiceRepository.findByIdWithLines(invoiceId)
+                .orElseThrow(() -> new AccountingDomainException(
+                        "error.accounting.customerInvoiceNotFound", null, "Customer invoice not found"));
+        if (!inv.isOpeningBalance()) {
+            throw new AccountingDomainException("error.accounting.notOpeningInvoice", null,
+                    "Invoice is not an opening balance document");
+        }
+        if (inv.getState() == CustomerInvoiceState.CANCELLED) {
+            return;
+        }
+        if (inv.getState() != CustomerInvoiceState.POSTED) {
+            throw new AccountingDomainException("error.accounting.openingInvoiceNotPosted", null,
+                    "Only posted opening invoices can be cancelled");
+        }
+        if (inv.getJournalEntryId() != null) {
+            journalEntryApplicationService.reverseJournalEntry(
+                    new ReverseJournalEntryCommand(inv.getJournalEntryId(), "Opening balances replaced"));
+        }
+        inv.setState(CustomerInvoiceState.CANCELLED);
+        inv.setUpdatedAt(Instant.now());
+        invoiceRepository.save(inv);
+        customerPaymentService.syncForInvoices(List.of(inv.getId()));
+        activityLogger.log(inv.getCompanyId(), RecordActivityLogger.MODEL_CUSTOMER_INVOICE, inv.getId(),
+                "Opening balance invoice cancelled");
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<CustomerInvoiceResponse> listCreditNotesForInvoice(UUID invoiceId) {
         invoiceRepository.findById(invoiceId)
@@ -563,6 +815,40 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
 
     @Override
     @Transactional(readOnly = true)
+    public List<CustomerInvoiceResponse> listPostedDocumentsForSalesOrder(UUID salesOrderId) {
+        if (salesOrderId == null) {
+            return List.of();
+        }
+        return invoiceRepository.findBySalesOrderIdWithLines(salesOrderId).stream()
+                .filter(inv -> inv.getState() == CustomerInvoiceState.POSTED)
+                .map(this::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, List<CustomerInvoiceResponse>> listPostedDocumentsForSalesOrders(java.util.Collection<UUID> salesOrderIds) {
+        if (salesOrderIds == null || salesOrderIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, List<CustomerInvoiceResponse>> out = new LinkedHashMap<>();
+        for (CustomerInvoice inv : invoiceRepository.findBySalesOrderIdInWithLines(salesOrderIds)) {
+            if (inv.getState() != CustomerInvoiceState.POSTED || inv.getSalesOrderId() == null) {
+                continue;
+            }
+            out.computeIfAbsent(inv.getSalesOrderId(), k -> new ArrayList<>()).add(toResponse(inv));
+        }
+        return out;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, BigDecimal> sumPostedPaymentsByInvoiceIds(java.util.Collection<UUID> invoiceIds) {
+        return customerPaymentService.sumActiveAllocationsByInvoiceIds(invoiceIds);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public CustomerInvoiceResponse getCustomerInvoice(UUID invoiceId) {
         return invoiceRepository.findByIdWithLines(invoiceId)
                 .map(this::toResponse)
@@ -580,252 +866,85 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
 
     @Override
     @Transactional(readOnly = true)
-    public List<CustomerPaymentResponse> listCustomerPayments(UUID companyId) {
+    public Page<CustomerInvoiceResponse> searchCustomerInvoices(UUID companyId, String state, UUID salesOrderId, String q, Pageable pageable) {
         UUID cid = companyIdOrDefault(companyId);
-        return paymentRepository.findByCompanyIdOrderByPaymentDateDescCreatedAtDesc(cid).stream()
-                .map(this::toPaymentResponse)
-                .collect(Collectors.toList());
+        CustomerInvoiceState stateFilter = null;
+        if (state != null && !state.isBlank()) {
+            stateFilter = CustomerInvoiceState.valueOf(state.trim().toUpperCase(java.util.Locale.ROOT));
+        }
+        return invoiceRepository.search(cid, stateFilter, salesOrderId, q, pageable).map(this::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<CustomerPaymentResponse> searchCustomerPayments(UUID companyId, Pageable pageable) {
+        return customerPaymentService.search(companyIdOrDefault(companyId), pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CustomerPaymentResponse> listCustomerPayments(UUID companyId) {
+        return customerPaymentService.list(companyIdOrDefault(companyId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CustomerPaymentResponse getCustomerPayment(UUID paymentId) {
+        return customerPaymentService.get(paymentId);
     }
 
     @Override
     @Transactional
     public CustomerPaymentResponse registerCustomerPayment(RegisterCustomerPaymentCommand command) {
-        UUID companyId = companyIdOrDefault(command.getCompanyId());
-        CustomerInvoice inv = invoiceRepository.findById(command.getCustomerInvoiceId())
-                .orElseThrow(() -> new AccountingDomainException("error.accounting.customerInvoiceNotFound", null, "Customer invoice not found"));
-        if (!inv.getCompanyId().equals(companyId)) {
-            throw new AccountingDomainException("error.accounting.invoiceCompanyMismatch", null, "Invoice company mismatch");
-        }
-        if (inv.getState() != CustomerInvoiceState.POSTED || inv.getJournalEntryId() == null) {
-            throw new AccountingDomainException("error.accounting.invoiceMustBePostedBeforePayment", null, "Invoice must be posted before payment");
-        }
-        if (inv.getMoveType() == CustomerInvoiceMoveType.CREDIT_NOTE) {
-            throw new AccountingDomainException("error.accounting.cannotPayCreditNote", null, "Cannot register payment against a credit note");
-        }
+        return customerPaymentService.register(command);
+    }
 
-        periodPostingGuard.assertDatePostable(companyId, command.getPaymentDate().toLocalDate());
+    @Override
+    @Transactional
+    public CustomerPaymentResponse allocateCustomerPayment(UUID paymentId, AllocateCustomerPaymentCommand command) {
+        return customerPaymentService.allocate(paymentId, command);
+    }
 
-        BigDecimal docAmt = command.getAmount().setScale(4, RoundingMode.HALF_UP);
-        String paymentCurrency = command.getCurrencyCode() != null ? command.getCurrencyCode() : inv.getCurrencyCode();
-        ensurePaymentWithinOutstanding(inv, docAmt, paymentCurrency);
-
-        PartnerResponse customer = partnerApplicationService.getPartner(inv.getCustomerPartnerId());
-        UUID receivableAccount = customer.getReceivableAccountId() != null
-                ? customer.getReceivableAccountId()
-                : accountRepository.findByCompanyIdAndCode(new CompanyId(companyId), DEFAULT_AR_ACCOUNT_CODE)
-                .orElseThrow(() -> new AccountingDomainException("error.accounting.defaultArAccountNotFound", null, "Default AR account not found"))
-                .getId().getId();
-
-        UUID liquidityAccount = resolveLiquidityAccountForPaymentJournal(companyId, command.getPaymentJournalId());
-        Journal paymentJournal = journalRepository.findById(new JournalId(command.getPaymentJournalId()))
-                .orElseThrow(() -> new AccountingDomainException("error.accounting.paymentJournalNotFound", null, "Payment journal not found"));
-
-        BigDecimal invoiceRate = resolveExchangeRate(
-                companyId, inv.getCurrencyCode(), inv.getInvoiceDate(), inv.getExchangeRateToCompany());
-        BigDecimal paymentRate = resolveExchangeRate(
-                companyId, paymentCurrency, command.getPaymentDate().toLocalDate(), command.getExchangeRateToCompany());
-
-        BigDecimal arClearComp = CurrencyMath.convertAtRate(docAmt, invoiceRate);
-        BigDecimal liquidityComp = CurrencyMath.convertAtRate(docAmt, paymentRate);
-        BigDecimal fxDiff = arClearComp.subtract(liquidityComp).setScale(4, RoundingMode.HALF_UP);
-
-        String liqLabel = paymentJournal.getJournalType() == JournalType.CASH ? "Cash receipt" : "Bank receipt";
-        List<JournalItemCommand> items = new ArrayList<>();
-        items.add(new JournalItemCommand(liquidityAccount, liqLabel, liquidityComp, BigDecimal.ZERO,
-                paymentCurrency, docAmt, null));
-        items.add(new JournalItemCommand(receivableAccount,
-                "Payment " + (inv.getReference() != null ? inv.getReference() : ""),
-                BigDecimal.ZERO, arClearComp, paymentCurrency, docAmt.negate(), inv.getCustomerPartnerId()));
-        appendCustomerExchangeDifference(items, companyId, fxDiff);
-        CreateJournalEntryCommand jcmd = new CreateJournalEntryCommand(
-                companyId,
-                paymentJournal.getId().getId(),
-                "",
-                JournalEntryTiming.ensureTimed(command.getPaymentDate()),
-                paymentCurrency,
-                inv.getCustomerPartnerId(),
-                items);
-        CreateJournalEntryResponse payEntry = journalEntryApplicationService.createJournalEntry(jcmd);
-        journalEntryApplicationService.postJournalEntry(payEntry.getJournalEntryId());
-
-        JournalEntryResponse invEntry = journalEntryApplicationService.getJournalEntry(inv.getJournalEntryId());
-        UUID invArItem = invEntry.getItems().stream()
-                .filter(i -> receivableAccount.equals(i.getAccountId()) && i.getDebit().compareTo(BigDecimal.ZERO) > 0)
-                .map(JournalEntryResponse.JournalItemResponse::getId)
-                .findFirst()
-                .orElseThrow(() -> new AccountingDomainException("error.accounting.arLineNotFoundOnInvoiceEntry", null, "Could not find AR line on customer invoice entry"));
-        JournalEntryResponse paymentEntry = journalEntryApplicationService.getJournalEntry(payEntry.getJournalEntryId());
-        UUID payArItem = paymentEntry.getItems().stream()
-                .filter(i -> receivableAccount.equals(i.getAccountId()) && i.getCredit().compareTo(BigDecimal.ZERO) > 0)
-                .map(JournalEntryResponse.JournalItemResponse::getId)
-                .findFirst()
-                .orElseThrow(() -> new AccountingDomainException("error.accounting.arLineNotFoundOnPaymentEntry", null, "Could not find AR line on payment entry"));
-
-        UUID reconciliationId = UUID.randomUUID();
-        reconciliationApplicationService.reconcile(
-                new ReconciliationApplicationService.ReconcileCommand(
-                        List.of(invArItem, payArItem), reconciliationId));
-
-        Instant now = Instant.now();
-        CustomerPayment p = new CustomerPayment();
-        p.setId(UUID.randomUUID());
-        p.setCompanyId(companyId);
-        p.setCustomerPartnerId(inv.getCustomerPartnerId());
-        p.setCustomerInvoiceId(inv.getId());
-        p.setPaymentDate(command.getPaymentDate());
-        p.setPaymentJournalId(command.getPaymentJournalId());
-        p.setAmount(docAmt);
-        p.setCurrencyCode(paymentCurrency);
-        p.setExchangeRateToCompany(paymentRate);
-        p.setState(com.bradox.erp.domain.core.ValueObject.CustomerPaymentState.POSTED);
-        p.setJournalEntryId(payEntry.getJournalEntryId());
-        String paymentReference = command.getReference();
-        if (paymentReference == null || paymentReference.isBlank()) {
-            paymentReference = paymentEntry.getSequenceNumber();
-        }
-        p.setReference(paymentReference);
-        p.setCreatedAt(now);
-        p.setUpdatedAt(now);
-        paymentRepository.save(p);
-
-        activityLogger.log(companyId, RecordActivityLogger.MODEL_CUSTOMER_PAYMENT, p.getId(), "Payment registered");
-        activityLogger.log(companyId, RecordActivityLogger.MODEL_CUSTOMER_INVOICE, inv.getId(),
-                "Payment registered: " + docAmt.setScale(2, RoundingMode.HALF_UP) + " " + paymentCurrency);
-        if (inv.getSalesOrderId() != null) {
-            activityLogger.log(companyId, RecordActivityLogger.MODEL_SALES_ORDER, inv.getSalesOrderId(),
-                    "Customer payment registered: " + docAmt.setScale(2, RoundingMode.HALF_UP) + " " + paymentCurrency);
-        }
-
-        CustomerPaymentResponse r = new CustomerPaymentResponse();
-        r.setId(p.getId());
-        r.setCompanyId(companyId);
-        r.setCustomerPartnerId(p.getCustomerPartnerId());
-        r.setCustomerInvoiceId(inv.getId());
-        r.setPaymentDate(command.getPaymentDate());
-        r.setPaymentJournalId(command.getPaymentJournalId());
-        r.setAmount(docAmt);
-        r.setCurrencyCode(paymentCurrency);
-        r.setExchangeRateToCompany(paymentRate);
-        r.setJournalEntryId(payEntry.getJournalEntryId());
-        r.setReconciliationId(reconciliationId);
-        r.setReversalJournalEntryId(null);
-        r.setReference(paymentReference);
-        r.setState(com.bradox.erp.domain.core.ValueObject.CustomerPaymentState.POSTED.name());
-        return r;
+    @Override
+    @Transactional
+    public CustomerPaymentResponse deallocateCustomerPayment(UUID allocationId) {
+        return customerPaymentService.deallocate(allocationId);
     }
 
     @Override
     @Transactional
     public CustomerPaymentResponse reverseCustomerPayment(UUID paymentId, String reason) {
-        CustomerPayment p = paymentRepository.findById(paymentId)
-                .orElseThrow(() -> new AccountingDomainException("Customer payment not found"));
-        if (p.getState() != com.bradox.erp.domain.core.ValueObject.CustomerPaymentState.POSTED) {
-            throw new AccountingDomainException("Only posted payments can be reversed");
-        }
-        if (p.getJournalEntryId() == null) {
-            throw new AccountingDomainException("Payment has no journal entry to reverse");
-        }
-        JournalEntryResponse paymentEntry = journalEntryApplicationService.getJournalEntry(p.getJournalEntryId());
-        List<UUID> reconciliationIds = paymentEntry.getItems().stream()
-                .map(JournalEntryResponse.JournalItemResponse::getReconciliationId)
-                .filter(id -> id != null)
-                .distinct()
-                .toList();
-        if (!reconciliationIds.isEmpty()) {
-            List<UUID> itemIds = journalItemReconciliationPort.findItemIdsByReconciliationIds(reconciliationIds);
-            reconciliationApplicationService.unreconcile(
-                    new ReconciliationApplicationService.UnreconcileCommand(itemIds));
-        }
-        var reverseResp = journalEntryApplicationService.reverseJournalEntry(
-                new com.bradox.erp.accounting.service.domain.create.ReverseJournalEntryCommand(
-                        p.getJournalEntryId(),
-                        reason != null && !reason.isBlank() ? reason : "Payment reverse"));
-        p.setState(com.bradox.erp.domain.core.ValueObject.CustomerPaymentState.REVERSED);
-        p.setReversalJournalEntryId(reverseResp.getReversalJournalEntryId());
-        p.setUpdatedAt(Instant.now());
-        paymentRepository.save(p);
-        activityLogger.log(p.getCompanyId(), RecordActivityLogger.MODEL_CUSTOMER_PAYMENT, p.getId(),
-                "Payment reversed: " + (reason != null ? reason : ""));
-        return toPaymentResponse(p);
+        return customerPaymentService.reverse(paymentId, reason);
     }
 
-    private BigDecimal invoiceTotalDocumentCurrency(CustomerInvoice inv) {
-        BigDecimal total = BigDecimal.ZERO;
-        for (CustomerInvoiceLine line : inv.getLines()) {
-            BigDecimal lineNet = customerLineNet(line).setScale(4, RoundingMode.HALF_UP);
-            total = total.add(lineNet);
-            for (CustomerInvoiceLineTax ts : line.getTaxSnapshots()) {
-                total = total.add(ts.getTaxAmount().setScale(4, RoundingMode.HALF_UP));
-            }
-        }
-        BigDecimal orderDisc = inv.getOrderDiscountAmount() != null
-                ? inv.getOrderDiscountAmount().max(BigDecimal.ZERO)
-                : BigDecimal.ZERO;
-        return total.subtract(orderDisc).max(BigDecimal.ZERO).setScale(4, RoundingMode.HALF_UP);
+    @Override
+    @Transactional
+    public CustomerPaymentResponse correctCustomerPayment(UUID paymentId, CorrectCustomerPaymentCommand command) {
+        return customerPaymentService.correctPayment(paymentId, command);
     }
 
-    private static BigDecimal customerLineNet(CustomerInvoiceLine line) {
-        return DiscountMath.lineNet(line.getQty(), line.getUnitPrice(), line.getDiscountType(), line.getDiscountValue());
+    @Override
+    @Transactional
+    public CustomerPaymentResponse refundCustomerCredit(UUID invoiceId, RefundCustomerCreditCommand command) {
+        return customerPaymentService.refundCredit(invoiceId, command);
     }
 
-    private BigDecimal sumPaymentsForInvoice(UUID invoiceId, String invoiceCurrency) {
-        return paymentRepository.findByCustomerInvoiceId(invoiceId).stream()
-                .filter(p -> p.getState() == null
-                        || p.getState() == com.bradox.erp.domain.core.ValueObject.CustomerPaymentState.POSTED)
-                .filter(p -> invoiceCurrency.equalsIgnoreCase(p.getCurrencyCode()))
-                .map(CustomerPayment::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(4, RoundingMode.HALF_UP);
+    @Override
+    @Transactional
+    public BigDecimal keepCustomerCredit(UUID invoiceId) {
+        return customerPaymentService.keepCredit(invoiceId);
     }
 
-    private BigDecimal sumPostedCreditNotesForInvoice(UUID sourceInvoiceId, String invoiceCurrency) {
-        return invoiceRepository.findByReversedInvoiceIdWithLines(sourceInvoiceId).stream()
-                .filter(cn -> cn.getState() == CustomerInvoiceState.POSTED)
-                .filter(cn -> cn.getMoveType() == CustomerInvoiceMoveType.CREDIT_NOTE)
-                .filter(cn -> invoiceCurrency.equalsIgnoreCase(cn.getCurrencyCode()))
-                .map(this::invoiceTotalDocumentCurrency)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(4, RoundingMode.HALF_UP);
+    @Override
+    @Transactional
+    public BigDecimal applyCustomerCredit(UUID invoiceId) {
+        return customerPaymentService.applyCredit(invoiceId);
     }
 
-    private void ensurePaymentWithinOutstanding(CustomerInvoice inv, BigDecimal docAmt, String paymentCurrency) {
-        CustomerInvoice loaded = invoiceRepository.findByIdWithLines(inv.getId())
-                .orElseThrow(() -> new AccountingDomainException("error.accounting.customerInvoiceNotFound", null, "Customer invoice not found"));
-        String invoiceCurrency = loaded.getCurrencyCode();
-        BigDecimal invoiceTotal = invoiceTotalDocumentCurrency(loaded);
-        BigDecimal paid = sumPaymentsForInvoice(loaded.getId(), invoiceCurrency);
-        BigDecimal credited = sumPostedCreditNotesForInvoice(loaded.getId(), invoiceCurrency);
-        BigDecimal outstanding = invoiceTotal.subtract(paid).subtract(credited).setScale(4, RoundingMode.HALF_UP);
-        if (outstanding.signum() <= 0) {
-            throw new AccountingDomainException("error.accounting.invoiceFullyPaid", null, "Customer invoice is already fully paid");
-        }
-        if (!invoiceCurrency.equalsIgnoreCase(paymentCurrency)) {
-            return;
-        }
-        if (docAmt.compareTo(outstanding) > 0) {
-            throw new AccountingDomainException(
-                    "Payment amount exceeds outstanding balance of " + outstanding.toPlainString()
-                            + " " + invoiceCurrency);
-        }
-    }
-
-    private CustomerPaymentResponse toPaymentResponse(CustomerPayment p) {
-        CustomerPaymentResponse r = new CustomerPaymentResponse();
-        r.setId(p.getId());
-        r.setCompanyId(p.getCompanyId());
-        r.setCustomerPartnerId(p.getCustomerPartnerId());
-        r.setCustomerInvoiceId(p.getCustomerInvoiceId());
-        r.setPaymentDate(p.getPaymentDate());
-        r.setPaymentJournalId(p.getPaymentJournalId());
-        r.setAmount(p.getAmount());
-        r.setCurrencyCode(p.getCurrencyCode());
-        r.setExchangeRateToCompany(p.getExchangeRateToCompany());
-        r.setJournalEntryId(p.getJournalEntryId());
-        r.setReconciliationId(null);
-        r.setReversalJournalEntryId(p.getReversalJournalEntryId());
-        r.setReference(p.getReference());
-        r.setState(p.getState() != null ? p.getState().name() : com.bradox.erp.domain.core.ValueObject.CustomerPaymentState.POSTED.name());
-        return r;
+    @Override
+    @Transactional
+    public BigDecimal applyCustomerCreditUpTo(UUID invoiceId, BigDecimal limit) {
+        return customerPaymentService.applyCredit(invoiceId, limit);
     }
 
     private CustomerInvoiceResponse toResponse(CustomerInvoice inv) {
@@ -854,6 +973,7 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
             lr.setDiscountPercent(l.getDiscountPercent());
             lr.setRevenueAccountId(l.getRevenueAccountId());
             lr.setSalesOrderLineId(l.getSalesOrderLineId());
+            lr.setGift(l.isGift());
             for (CustomerInvoiceLineTax t : l.getTaxSnapshots()) {
                 CustomerInvoiceLineTaxResponse tr = new CustomerInvoiceLineTaxResponse();
                 tr.setTaxId(t.getTaxId());
@@ -869,6 +989,39 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
         r.setSalesOrderId(inv.getSalesOrderId());
         r.setExchangeRateToCompany(inv.getExchangeRateToCompany());
         r.setOrderDiscountAmount(inv.getOrderDiscountAmount());
+        r.setOpeningBalance(inv.isOpeningBalance());
+        if (inv.getState() == CustomerInvoiceState.POSTED) {
+            BigDecimal total = CustomerInvoiceMath.total(inv);
+            BigDecimal paid = customerPaymentService.sumActiveAllocationsByInvoiceIds(List.of(inv.getId()))
+                    .getOrDefault(inv.getId(), BigDecimal.ZERO);
+            BigDecimal credited = BigDecimal.ZERO;
+            if (inv.getMoveType() != CustomerInvoiceMoveType.CREDIT_NOTE) {
+                for (CustomerInvoice cn : invoiceRepository.findByReversedInvoiceIdWithLines(inv.getId())) {
+                    if (cn.getState() == CustomerInvoiceState.POSTED) {
+                        credited = credited.add(CustomerInvoiceMath.total(cn));
+                    }
+                }
+            }
+            r.setAmountTotal(total);
+            r.setAmountPaid(paid);
+            r.setAmountCredited(credited);
+            r.setAmountResidual(total.subtract(paid).subtract(credited).max(BigDecimal.ZERO));
+            if (inv.getMoveType() == CustomerInvoiceMoveType.CREDIT_NOTE) {
+                r.setAmountOverpaid(BigDecimal.ZERO);
+                r.setAmountRefundable(customerPaymentService.refundableOf(inv));
+            } else {
+                r.setAmountOverpaid(customerPaymentService.creditAvailableOn(inv));
+                r.setAmountRefundable(BigDecimal.ZERO);
+            }
+            r.setPaymentAllocations(customerPaymentService.allocationResponsesForInvoice(inv.getId()));
+        } else {
+            r.setAmountTotal(CustomerInvoiceMath.total(inv));
+            r.setAmountPaid(BigDecimal.ZERO);
+            r.setAmountCredited(BigDecimal.ZERO);
+            r.setAmountResidual(BigDecimal.ZERO);
+            r.setAmountOverpaid(BigDecimal.ZERO);
+            r.setAmountRefundable(BigDecimal.ZERO);
+        }
         return r;
     }
 
@@ -905,32 +1058,5 @@ public class CustomerInvoiceApplicationServiceImpl implements CustomerInvoiceApp
             }
         }
         return currencyConversionPort.exchangeRateToCompany(companyId, currencyCode, asOf);
-    }
-
-    private void appendCustomerExchangeDifference(List<JournalItemCommand> items, UUID companyId, BigDecimal fxDiff) {
-        if (fxDiff.signum() == 0) {
-            return;
-        }
-        if (fxDiff.signum() > 0) {
-            UUID lossAccount = accountRepository.findByCompanyIdAndCode(new CompanyId(companyId), EXCHANGE_LOSS_ACCOUNT_CODE)
-                    .orElseThrow(() -> new AccountingDomainException("error.accounting.exchangeLossAccountNotFound", null, "Exchange loss account not found"))
-                    .getId().getId();
-            items.add(new JournalItemCommand(lossAccount, "Exchange loss", fxDiff, BigDecimal.ZERO,
-                    null, null, null));
-        } else {
-            UUID gainAccount = accountRepository.findByCompanyIdAndCode(new CompanyId(companyId), EXCHANGE_GAIN_ACCOUNT_CODE)
-                    .orElseThrow(() -> new AccountingDomainException("error.accounting.exchangeGainAccountNotFound", null, "Exchange gain account not found"))
-                    .getId().getId();
-            items.add(new JournalItemCommand(gainAccount, "Exchange gain", BigDecimal.ZERO, fxDiff.abs(),
-                    null, null, null));
-        }
-    }
-
-    private static BigDecimal lineNet(BigDecimal qty, BigDecimal unitPrice, BigDecimal discountPercent) {
-        BigDecimal disc = discountPercent != null ? discountPercent : BigDecimal.ZERO;
-        BigDecimal factor = BigDecimal.ONE.subtract(
-                disc.max(BigDecimal.ZERO).min(new BigDecimal("100"))
-                        .divide(new BigDecimal("100"), 8, RoundingMode.HALF_UP));
-        return qty.multiply(unitPrice).multiply(factor);
     }
 }

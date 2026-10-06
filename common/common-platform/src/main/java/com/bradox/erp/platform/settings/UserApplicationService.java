@@ -62,15 +62,18 @@ public class UserApplicationService {
         userRepository.findByCompanyIdAndUsername(companyId, req.username()).ifPresent(u -> {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already exists");
         });
-        userRepository.findByCompanyIdAndEmail(companyId, req.email()).ifPresent(u -> {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
-        });
+        String email = blankToNull(req.email());
+        if (email != null) {
+            userRepository.findByCompanyIdAndEmail(companyId, email).ifPresent(u -> {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
+            });
+        }
 
         AppUserEntity u = new AppUserEntity();
         u.setId(UUID.randomUUID());
         u.setCompanyId(companyId);
         u.setUsername(req.username().trim());
-        u.setEmail(req.email().trim());
+        u.setEmail(email);
         u.setDisplayName(blankToNull(req.displayName()));
         u.setPasswordHash(passwordEncoder.encode(req.password()));
         u.setActive(true);

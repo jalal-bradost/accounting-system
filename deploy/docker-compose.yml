@@ -1,0 +1,101 @@
+# Lives in /opt/<app>/ next to .env, backend/ (this repo) and frontend/ (the frontend repo).
+# The folder name is the compose project name, so containers/volumes become <app>-mysql-1,
+# <app>_mysql_data, ... which is exactly what ops/backup expects (APP_NAME=<app>).
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-erp}
+      MYSQL_USER: ${DB_USERNAME:-erp}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+    networks:
+      - app
+
+  # Optional local Ollama. Prefer a dedicated GPU host over WireGuard
+  # (set APP_AI_OLLAMA_BASE_URL, e.g. http://10.50.0.2:11434 over a VPN).
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    profiles: ["local-ollama"]
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:-erp}
+      DB_USERNAME: ${DB_USERNAME:-erp}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+      ACCOUNTING_CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?set CORS_ALLOWED_ORIGINS, e.g. https://erp.example.com}
+      APP_SECURITY_JWT_SECRET: ${APP_SECURITY_JWT_SECRET:?set APP_SECURITY_JWT_SECRET}
+      APP_SECURITY_SEED_DEFAULT_ADMIN_PASSWORD: ${APP_SECURITY_SEED_DEFAULT_ADMIN_PASSWORD:?set APP_SECURITY_SEED_DEFAULT_ADMIN_PASSWORD}
+      APP_STORAGE_PRODUCT_IMAGES_LOCATION: /app/data/product-images
+      APP_STORAGE_PARTNER_IMAGES_LOCATION: /app/data/partner-images
+      APP_STORAGE_COMPANY_LOGOS_LOCATION: /app/data/company-logos
+      APP_STORAGE_EMPLOYEE_IMAGES_LOCATION: /app/data/employee-images
+      APP_STORAGE_CHATTER_ATTACHMENTS_LOCATION: /app/data/chatter-attachments
+      APP_AI_OLLAMA_ENABLED: ${APP_AI_OLLAMA_ENABLED:-true}
+      APP_AI_OLLAMA_BASE_URL: ${APP_AI_OLLAMA_BASE_URL:-http://ollama:11434}
+      APP_AI_OLLAMA_MODEL: ${APP_AI_OLLAMA_MODEL:-qwen2.5:3b}
+      APP_AI_OLLAMA_READ_TIMEOUT_MS: ${APP_AI_OLLAMA_READ_TIMEOUT_MS:-300000}
+      JAVA_OPTS: ${BACKEND_JAVA_OPTS:--Xms256m -Xmx1024m}
+    volumes:
+      - backend_data:/app/data
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks:
+      - app
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:?set NEXT_PUBLIC_API_BASE_URL, e.g. https://erp.example.com}
+        NEXT_PUBLIC_MAPBOX_TOKEN: ${NEXT_PUBLIC_MAPBOX_TOKEN:-}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - app
+
+volumes:
+  mysql_data:
+  backend_data:
+  ollama_data:
+
+networks:
+  app:
+    name: ${APP_NAME:-erp}_net

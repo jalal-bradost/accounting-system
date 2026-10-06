@@ -36,3 +36,11 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+### Runtime data ###
+**/data/
+.env
+.env.*
+# keep the documented example
+!.env.example
+!**/.env.example

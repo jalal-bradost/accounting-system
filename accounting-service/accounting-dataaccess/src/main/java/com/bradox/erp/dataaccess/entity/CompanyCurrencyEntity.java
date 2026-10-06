@@ -34,7 +34,7 @@ public class CompanyCurrencyEntity {
     @Column(name = "last_rate_updated")
     private LocalDate lastRateUpdated;
 
-    @Column(name = "rate_per_base", nullable = false, precision = 19, scale = 6)
+    @Column(name = "rate_per_base", nullable = false, precision = 19, scale = 12)
     private BigDecimal ratePerBase;
 
     @Column(name = "base_currency", nullable = false)

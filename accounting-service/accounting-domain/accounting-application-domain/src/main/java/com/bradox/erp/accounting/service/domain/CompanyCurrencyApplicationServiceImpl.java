@@ -131,13 +131,18 @@ class CompanyCurrencyApplicationServiceImpl implements CompanyCurrencyApplicatio
         if (effectiveDate == null) {
             throw new IllegalArgumentException("Effective date is required");
         }
+        // Rates can only be created for today; history stays readable. One day of tolerance covers
+        // a browser and a server that are in different time zones around midnight.
+        LocalDate today = LocalDate.now();
+        if (effectiveDate.isBefore(today.minusDays(1)) || effectiveDate.isAfter(today.plusDays(1))) {
+            throw new IllegalArgumentException("Rates can only be added for today's date");
+        }
 
         RateLine line = companyCurrencyRepository.upsertRate(currencyId, effectiveDate, rate);
 
         // Refresh the denormalized "current rate" / "last rate updated" cache. The
         // current rate is the most recent line whose effective_date ≤ today, while
         // the displayed "last rate updated" is the highest-dated line in history.
-        LocalDate today = LocalDate.now();
         BigDecimal currentRate =
                 companyCurrencyRepository
                         .findEffectiveRate(currencyId, today)

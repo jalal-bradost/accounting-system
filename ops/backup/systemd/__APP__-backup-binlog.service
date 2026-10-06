@@ -1,0 +1,12 @@
+[Unit]
+Description=__APP__ MySQL binlog copy
+Requires=docker.service
+After=docker.service
+
+[Service]
+Environment=APP_NAME=__APP__
+Type=oneshot
+ExecStart=__COMPOSE_DIR__/backend/ops/backup/backup-binlog.sh
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=15min

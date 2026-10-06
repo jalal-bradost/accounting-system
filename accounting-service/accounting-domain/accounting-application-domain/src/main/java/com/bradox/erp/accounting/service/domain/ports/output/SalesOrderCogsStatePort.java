@@ -19,7 +19,7 @@ public interface SalesOrderCogsStatePort {
             BigDecimal qtyInvoiced,
             BigDecimal qtyCogsCleared) {}
 
-    record OrderState(UUID companyId, List<LineState> lines) {}
+    record OrderState(UUID companyId, java.time.LocalDate orderDate, List<LineState> lines) {}
 
     Optional<OrderState> findOrder(UUID salesOrderId);
 

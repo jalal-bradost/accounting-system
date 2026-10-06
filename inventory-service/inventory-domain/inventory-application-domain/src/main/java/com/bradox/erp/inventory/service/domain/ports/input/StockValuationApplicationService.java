@@ -5,7 +5,9 @@ import com.bradox.erp.inventory.service.domain.dto.StockQuantResponse;
 import com.bradox.erp.inventory.service.domain.dto.ValuationLayerResponse;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public interface StockValuationApplicationService {
@@ -22,9 +24,16 @@ public interface StockValuationApplicationService {
     /** On-hand qty for a product in a POS / sales warehouse. */
     BigDecimal totalOnHandForWarehouse(CompanyId companyId, UUID productId, UUID warehouseId);
 
+    /** Product → on-hand qty for every stocked product in the warehouse. */
+    Map<UUID, BigDecimal> onHandByWarehouse(CompanyId companyId, UUID warehouseId);
+
     /** Stock valuation layers for a product (chronological). */
     List<ValuationLayerResponse> layersByProduct(CompanyId companyId, UUID productId);
 
     /** Total inventory value for a product (sum of remaining-value across positive layers). */
     BigDecimal valuationOf(CompanyId companyId, UUID productId);
+
+    /** On-hand qty + valuation for many products in one round-trip. */
+    List<Map<String, Object>> bulkValuation(CompanyId companyId, Collection<UUID> productIds);
 }
+

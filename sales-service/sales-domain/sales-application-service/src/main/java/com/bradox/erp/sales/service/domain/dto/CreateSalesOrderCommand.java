@@ -17,6 +17,7 @@ public class CreateSalesOrderCommand {
     private UUID companyId;
     @NotNull
     private UUID customerPartnerId;
+    /** UNPAID | PAID — field collection intent applied on office confirm when PAID. */
     private String name;
     @NotNull
     private String currencyCode;
@@ -27,6 +28,8 @@ public class CreateSalesOrderCommand {
     private LocalDate validityDate;
     private String incoterm;
     private String notes;
+    /** Version the client last saw (from the response); a mismatch on update means someone else saved first. */
+    private Long rowVersion;
     private DiscountType orderDiscountType;
     private BigDecimal orderDiscountValue;
     /** Legacy input: treated as a PERCENT discount when {@code orderDiscountValue} is absent. */
@@ -58,6 +61,8 @@ public class CreateSalesOrderCommand {
     public void setIncoterm(String incoterm) { this.incoterm = incoterm; }
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+    public Long getRowVersion() { return rowVersion; }
+    public void setRowVersion(Long rowVersion) { this.rowVersion = rowVersion; }
     public DiscountType getOrderDiscountType() { return orderDiscountType; }
     public void setOrderDiscountType(DiscountType orderDiscountType) { this.orderDiscountType = orderDiscountType; }
     public BigDecimal getOrderDiscountValue() { return orderDiscountValue; }

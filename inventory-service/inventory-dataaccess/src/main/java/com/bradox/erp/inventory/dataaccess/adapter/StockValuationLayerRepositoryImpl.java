@@ -13,8 +13,12 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 @Component
 public class StockValuationLayerRepositoryImpl implements StockValuationLayerRepository {
@@ -60,6 +64,18 @@ public class StockValuationLayerRepositoryImpl implements StockValuationLayerRep
     public Money sumOnHandValue(CompanyId companyId, ProductId productId) {
         BigDecimal sum = jpa.sumOnHandValue(companyId.getId(), productId.getId());
         return new Money(sum != null ? sum : BigDecimal.ZERO);
+    }
+
+    @Override
+    public Map<UUID, BigDecimal> sumOnHandValueByProductIds(CompanyId companyId, Collection<UUID> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, BigDecimal> out = new HashMap<>();
+        for (Object[] row : jpa.sumOnHandValueByProductIds(companyId.getId(), productIds)) {
+            out.put((UUID) row[0], row[1] != null ? (BigDecimal) row[1] : BigDecimal.ZERO);
+        }
+        return out;
     }
 
     @Override

@@ -18,7 +18,7 @@ public class SalesOrderSummaryResponse {
     private SalesOrderState state;
     private SalesOrderDeliveryStatus deliveryStatus;
     private SalesOrderInvoiceStatus invoiceStatus;
-    /** NEW | UNPAID | PARTIAL_PAID | PAID | CANCELLED */
+    /** NEW | UNPAID | PARTIAL_PAID | PAID | TO_REFUND | CANCELLED */
     private String paymentStatus;
     private String currencyCode;
     private LocalDate orderDate;
@@ -26,6 +26,8 @@ public class SalesOrderSummaryResponse {
     private BigDecimal amountPaid;
     private BigDecimal amountDue;
     private Instant createdAt;
+    /** When the order was confirmed/submitted; null for drafts. */
+    private Instant confirmedAt;
 
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
@@ -53,6 +55,8 @@ public class SalesOrderSummaryResponse {
     public void setAmountPaid(BigDecimal amountPaid) { this.amountPaid = amountPaid; }
     public BigDecimal getAmountDue() { return amountDue; }
     public void setAmountDue(BigDecimal amountDue) { this.amountDue = amountDue; }
+    public Instant getConfirmedAt() { return confirmedAt; }
+    public void setConfirmedAt(Instant confirmedAt) { this.confirmedAt = confirmedAt; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 }

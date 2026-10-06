@@ -12,7 +12,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "pur_vendor_payment", indexes = {
         @Index(name = "ix_pur_vp_company", columnList = "company_id,state"),
-        @Index(name = "ix_pur_vp_bill", columnList = "vendor_bill_id")
+        @Index(name = "ix_pur_vp_partner", columnList = "company_id,vendor_partner_id")
 })
 public class PurVendorPaymentEntity {
 
@@ -24,9 +24,6 @@ public class PurVendorPaymentEntity {
 
     @Column(name = "vendor_partner_id", nullable = false)
     private UUID vendorPartnerId;
-
-    @Column(name = "vendor_bill_id", nullable = false)
-    private UUID vendorBillId;
 
     @Column(name = "payment_date", nullable = false)
     private LocalDateTime paymentDate;
@@ -60,6 +57,9 @@ public class PurVendorPaymentEntity {
     @Column(length = 255)
     private String reference;
 
+    @Column(name = "opening_balance", nullable = false)
+    private boolean openingBalance;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -74,8 +74,6 @@ public class PurVendorPaymentEntity {
     public void setCompanyId(UUID companyId) { this.companyId = companyId; }
     public UUID getVendorPartnerId() { return vendorPartnerId; }
     public void setVendorPartnerId(UUID vendorPartnerId) { this.vendorPartnerId = vendorPartnerId; }
-    public UUID getVendorBillId() { return vendorBillId; }
-    public void setVendorBillId(UUID vendorBillId) { this.vendorBillId = vendorBillId; }
     public LocalDateTime getPaymentDate() { return paymentDate; }
     public void setPaymentDate(LocalDateTime paymentDate) { this.paymentDate = paymentDate; }
     public UUID getBankJournalId() { return bankJournalId; }
@@ -98,6 +96,8 @@ public class PurVendorPaymentEntity {
     public void setReversalJournalEntryId(UUID reversalJournalEntryId) { this.reversalJournalEntryId = reversalJournalEntryId; }
     public String getReference() { return reference; }
     public void setReference(String reference) { this.reference = reference; }
+    public boolean isOpeningBalance() { return openingBalance; }
+    public void setOpeningBalance(boolean openingBalance) { this.openingBalance = openingBalance; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

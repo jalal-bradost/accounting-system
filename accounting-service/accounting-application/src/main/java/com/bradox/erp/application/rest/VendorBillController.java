@@ -47,6 +47,18 @@ public class VendorBillController {
         return ResponseEntity.ok(purchaseApplicationService.listVendorBills(companyId.getId()));
     }
 
+    @GetMapping("/search")
+    @RequiresPermission("accounting.vendor-bill.read")
+    public ResponseEntity<com.bradox.erp.platform.application.dto.PageResponse<VendorBillSummaryResponse>> search(
+            @CurrentCompany CompanyId companyId,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "0") int page,
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "50") int size) {
+        var result = purchaseApplicationService.searchVendorBills(
+                companyId.getId(), org.springframework.data.domain.PageRequest.of(page, size));
+        return ResponseEntity.ok(com.bradox.erp.platform.application.dto.PageResponse.of(
+                result, java.util.function.Function.identity()));
+    }
+
     @GetMapping("/{id}")
     @RequiresPermission("accounting.vendor-bill.read")
     public ResponseEntity<VendorBillResponse> get(@PathVariable UUID id) {
@@ -70,6 +82,26 @@ public class VendorBillController {
     @RequiresPermission("accounting.vendor-bill.read")
     public ResponseEntity<List<VendorBillResponse>> listCreditNotes(@PathVariable UUID id) {
         return ResponseEntity.ok(purchaseApplicationService.listCreditNotesForBill(id));
+    }
+
+    @PostMapping("/{id}/credit/refund")
+    @RequiresPermission("accounting.vendor-payment.register")
+    public ResponseEntity<com.bradox.erp.purchase.service.domain.dto.VendorPaymentResponse> refundCredit(
+            @PathVariable UUID id,
+            @RequestBody com.bradox.erp.purchase.service.domain.dto.RefundVendorCreditCommand cmd) {
+        return ResponseEntity.ok(purchaseApplicationService.refundVendorCredit(id, cmd));
+    }
+
+    @PostMapping("/{id}/credit/keep")
+    @RequiresPermission("accounting.vendor-payment.register")
+    public ResponseEntity<java.util.Map<String, java.math.BigDecimal>> keepCredit(@PathVariable UUID id) {
+        return ResponseEntity.ok(java.util.Map.of("keptAmount", purchaseApplicationService.keepVendorCredit(id)));
+    }
+
+    @PostMapping("/{id}/apply-credit")
+    @RequiresPermission("accounting.vendor-payment.register")
+    public ResponseEntity<java.util.Map<String, java.math.BigDecimal>> applyCredit(@PathVariable UUID id) {
+        return ResponseEntity.ok(java.util.Map.of("appliedAmount", purchaseApplicationService.applyVendorCredit(id)));
     }
 
     @PostMapping("/{id}/credit-note")

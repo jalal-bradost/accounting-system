@@ -7,6 +7,7 @@ import com.bradox.erp.inventory.domain.core.valueobject.ProductType;
 import com.bradox.erp.inventory.service.domain.ports.input.UomApplicationService;
 import com.bradox.erp.inventory.service.domain.ports.output.StockMoveSalesQueryPort;
 import com.bradox.erp.inventory.service.domain.ports.output.repository.ProductRepository;
+import com.bradox.erp.domain.valueobject.MonetaryScale;
 import com.bradox.erp.platform.activity.RecordActivityLogger;
 import com.bradox.erp.platform.settings.CompanyDocumentPolicyService;
 import com.bradox.erp.sales.domain.core.SalInvoicePolicy;
@@ -125,9 +126,9 @@ public class SalesOrderQtyWriter {
                 label = "[" + p.get().getSku() + "] " + p.get().getName();
             }
             blocks.add("• " + label + ":\n  Delivered Quantity: "
-                    + oldQty.stripTrailingZeros().toPlainString()
+                    + MonetaryScale.toDisplayString(oldQty)
                     + " → "
-                    + newQty.stripTrailingZeros().toPlainString());
+                    + MonetaryScale.toDisplayString(newQty));
         }
         if (blocks.isEmpty()) {
             return;
@@ -196,9 +197,9 @@ public class SalesOrderQtyWriter {
                 label = "[" + p.get().getSku() + "] " + p.get().getName();
             }
             blocks.add("• " + label + ":\n  Invoiced Quantity: "
-                    + oldQty.stripTrailingZeros().toPlainString()
+                    + MonetaryScale.toDisplayString(oldQty)
                     + " → "
-                    + newQty.stripTrailingZeros().toPlainString());
+                    + MonetaryScale.toDisplayString(newQty));
         }
         if (blocks.isEmpty()) {
             return;

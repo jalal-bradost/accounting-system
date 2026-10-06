@@ -28,6 +28,7 @@ public class SalesOrderLineCommand {
     private BigDecimal qtyOrdered;
     /** When null, resolved from pricelist / product list price. */
     private BigDecimal unitPrice;
+    private Boolean isGift;
     private DiscountType discountType;
     private BigDecimal discountValue;
     /** Legacy input: treated as a PERCENT discount when {@code discountValue} is absent. */
@@ -50,6 +51,8 @@ public class SalesOrderLineCommand {
     public void setQtyOrdered(BigDecimal qtyOrdered) { this.qtyOrdered = qtyOrdered; }
     public BigDecimal getUnitPrice() { return unitPrice; }
     public void setUnitPrice(BigDecimal unitPrice) { this.unitPrice = unitPrice; }
+    public Boolean getIsGift() { return isGift; }
+    public void setIsGift(Boolean isGift) { this.isGift = isGift; }
     public DiscountType getDiscountType() { return discountType; }
     public void setDiscountType(DiscountType discountType) { this.discountType = discountType; }
     public BigDecimal getDiscountValue() { return discountValue; }

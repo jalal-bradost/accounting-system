@@ -37,6 +37,9 @@ class FlywayMigrationIntegrationTest {
         assertTrue(tables.contains("sal_sales_order"));
         assertTrue(tables.contains("pur_purchase_order"));
         assertTrue(tables.contains("pos_order"));
+        assertTrue(tables.contains("acc_customer_payment_allocation"));
+        assertTrue(tables.contains("pur_vendor_payment_allocation"));
+        assertTrue(tables.contains("inv_stock_hold"));
         assertTrue(tables.contains("flyway_schema_history"));
     }
 }

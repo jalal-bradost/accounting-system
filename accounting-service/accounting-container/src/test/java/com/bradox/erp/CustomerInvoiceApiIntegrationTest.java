@@ -79,7 +79,11 @@ class CustomerInvoiceApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
         JsonNode pay = json.readTree(payRes.getResponse().getContentAsString());
-        assertThat(pay.get("reconciliationId").asText()).isNotBlank();
+        assertThat(pay.get("allocatedAmount").decimalValue()).isEqualByComparingTo(arDebit);
+        assertThat(pay.get("unallocatedAmount").decimalValue()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(pay.get("allocations")).hasSize(1);
+        assertThat(pay.get("allocations").get(0).get("customerInvoiceId").asText()).isEqualTo(invoiceId.toString());
+        assertThat(pay.get("allocations").get(0).get("state").asText()).isEqualTo("ACTIVE");
 
         MvcResult listPayRes = mockMvc.perform(get("/api/v1/accounting/customer-invoices/payments")
                         .header("X-Company-Id", COMPANY_ID.toString()))
@@ -90,8 +94,14 @@ class CustomerInvoiceApiIntegrationTest {
         assertThat(pays.size()).isPositive();
         boolean found = false;
         for (JsonNode payRow : pays) {
-            if (invoiceId.toString().equals(payRow.get("customerInvoiceId").asText())) {
-                found = true;
+            for (JsonNode alloc : payRow.get("allocations")) {
+                if (invoiceId.toString().equals(alloc.get("customerInvoiceId").asText())
+                        && "ACTIVE".equals(alloc.get("state").asText())) {
+                    found = true;
+                    break;
+                }
+            }
+            if (found) {
                 break;
             }
         }

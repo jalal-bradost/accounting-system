@@ -3,27 +3,31 @@ package com.bradox.erp.purchase.service.domain;
 import com.bradox.erp.accounting.service.domain.CurrencyMath;
 import com.bradox.erp.accounting.service.domain.JournalEntryTiming;
 import com.bradox.erp.accounting.service.domain.ports.input.service.JournalEntryApplicationService;
-import com.bradox.erp.accounting.service.domain.ports.input.service.ReconciliationApplicationService;
 import com.bradox.erp.accounting.service.domain.ports.output.AccountingReferenceLookupPort;
 import com.bradox.erp.accounting.service.domain.ports.output.CurrencyConversionPort;
 import com.bradox.erp.accounting.service.domain.create.CreateJournalEntryCommand;
 import com.bradox.erp.accounting.service.domain.create.CreateJournalEntryResponse;
-import com.bradox.erp.accounting.service.domain.create.JournalEntryResponse;
 import com.bradox.erp.accounting.service.domain.create.JournalItemCommand;
 import com.bradox.erp.accounting.service.domain.partnerstatement.PartnerStatementLineResponse;
 import com.bradox.erp.accounting.service.domain.partnerstatement.PartnerStatementSectionResponse;
 import com.bradox.erp.contacts.service.domain.dto.PartnerResponse;
 import com.bradox.erp.contacts.service.domain.ports.input.PartnerApplicationService;
 import com.bradox.erp.domain.core.ValueObject.JournalType;
+import com.bradox.erp.domain.settlement.OrderSettlement;
+import com.bradox.erp.domain.settlement.OrderSettlementCalculator;
+import com.bradox.erp.domain.settlement.SettlementDoc;
 import com.bradox.erp.domain.valueobject.CompanyId;
 import com.bradox.erp.domain.valueobject.DiscountMath;
 import com.bradox.erp.domain.valueobject.DiscountType;
+import com.bradox.erp.domain.valueobject.MonetaryScale;
 import com.bradox.erp.inventory.domain.core.entity.Product;
 import com.bradox.erp.inventory.domain.core.entity.ProductCategory;
 import com.bradox.erp.inventory.domain.core.entity.ProductPackaging;
 import com.bradox.erp.inventory.domain.core.entity.StockLocation;
 import com.bradox.erp.inventory.domain.core.entity.Warehouse;
 import com.bradox.erp.inventory.domain.core.valueobject.LocationType;
+import com.bradox.erp.inventory.domain.core.valueobject.MoveState;
+import com.bradox.erp.inventory.domain.core.valueobject.PickingState;
 import com.bradox.erp.inventory.domain.core.valueobject.PickingType;
 import com.bradox.erp.inventory.domain.core.valueobject.ProductId;
 import com.bradox.erp.inventory.domain.core.valueobject.ProductPackagingId;
@@ -70,12 +74,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
@@ -91,6 +90,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -100,13 +100,14 @@ import java.util.stream.Collectors;
 public class PurchaseApplicationServiceImpl implements PurchaseApplicationService {
 
     private static final String DEFAULT_AP_ACCOUNT_CODE = "430004";
-    private static final String EXCHANGE_GAIN_ACCOUNT_CODE = "430014";
-    private static final String EXCHANGE_LOSS_ACCOUNT_CODE = "430015";
+    private static final String PURCHASE_DISCOUNT_ACCOUNT_CODE = "430007";
+    private static final String PURCHASE_PRICE_VARIANCE_ACCOUNT_CODE = "430026";
 
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final FiscalTaxRepository fiscalTaxRepository;
     private final VendorBillRepository vendorBillRepository;
     private final VendorPaymentRepository vendorPaymentRepository;
+    private final VendorPaymentService vendorPaymentService;
     private final PartnerApplicationService partnerApplicationService;
     private final ProductRepository productRepository;
     private final ProductPackagingRepository productPackagingRepository;
@@ -118,8 +119,6 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     private final StockMovePurchaseQueryPort stockMovePurchaseQueryPort;
     private final JournalEntryApplicationService journalEntryApplicationService;
     private final AccountingReferenceLookupPort accountingReferenceLookupPort;
-    private final ReconciliationApplicationService reconciliationApplicationService;
-    private final com.bradox.erp.accounting.service.domain.ports.output.repository.JournalItemReconciliationPort journalItemReconciliationPort;
     private final com.bradox.erp.accounting.service.domain.PeriodPostingGuard periodPostingGuard;
     private final ObjectProvider<CompanyContext> companyContextProvider;
     private final PurchaseEventPublisher purchaseEventPublisher;
@@ -128,12 +127,12 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     private final DocumentSequenceService documentSequenceService;
     private final RecordActivityLogger activityLogger;
     private final CompanyDocumentPolicyService companyDocumentPolicyService;
-    private final TransactionTemplate afterCommitTx;
 
     public PurchaseApplicationServiceImpl(PurchaseOrderRepository purchaseOrderRepository,
                                           FiscalTaxRepository fiscalTaxRepository,
                                           VendorBillRepository vendorBillRepository,
                                           VendorPaymentRepository vendorPaymentRepository,
+                                          VendorPaymentService vendorPaymentService,
                                           PartnerApplicationService partnerApplicationService,
                                           ProductRepository productRepository,
                                           ProductPackagingRepository productPackagingRepository,
@@ -145,8 +144,6 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                                           StockMovePurchaseQueryPort stockMovePurchaseQueryPort,
                                           JournalEntryApplicationService journalEntryApplicationService,
                                           AccountingReferenceLookupPort accountingReferenceLookupPort,
-                                          ReconciliationApplicationService reconciliationApplicationService,
-                                          com.bradox.erp.accounting.service.domain.ports.output.repository.JournalItemReconciliationPort journalItemReconciliationPort,
                                           com.bradox.erp.accounting.service.domain.PeriodPostingGuard periodPostingGuard,
                                           ObjectProvider<CompanyContext> companyContextProvider,
                                           PurchaseEventPublisher purchaseEventPublisher,
@@ -154,12 +151,12 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                                           PurchaseOrderQtyWriter purchaseOrderQtyWriter,
                                           DocumentSequenceService documentSequenceService,
                                           RecordActivityLogger activityLogger,
-                                          CompanyDocumentPolicyService companyDocumentPolicyService,
-                                          PlatformTransactionManager transactionManager) {
+                                          CompanyDocumentPolicyService companyDocumentPolicyService) {
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.fiscalTaxRepository = fiscalTaxRepository;
         this.vendorBillRepository = vendorBillRepository;
         this.vendorPaymentRepository = vendorPaymentRepository;
+        this.vendorPaymentService = vendorPaymentService;
         this.partnerApplicationService = partnerApplicationService;
         this.productRepository = productRepository;
         this.productPackagingRepository = productPackagingRepository;
@@ -171,8 +168,6 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         this.stockMovePurchaseQueryPort = stockMovePurchaseQueryPort;
         this.journalEntryApplicationService = journalEntryApplicationService;
         this.accountingReferenceLookupPort = accountingReferenceLookupPort;
-        this.reconciliationApplicationService = reconciliationApplicationService;
-        this.journalItemReconciliationPort = journalItemReconciliationPort;
         this.periodPostingGuard = periodPostingGuard;
         this.companyContextProvider = companyContextProvider;
         this.purchaseEventPublisher = purchaseEventPublisher;
@@ -181,34 +176,11 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         this.documentSequenceService = documentSequenceService;
         this.activityLogger = activityLogger;
         this.companyDocumentPolicyService = companyDocumentPolicyService;
-        this.afterCommitTx = new TransactionTemplate(transactionManager);
-        this.afterCommitTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     private UUID companyIdOrDefault(UUID fromCommand) {
         if (fromCommand != null) return fromCommand;
         return companyContextProvider.getObject().requireCompany().getId();
-    }
-
-    private void runAfterCommit(Runnable action) {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    afterCommitTx.executeWithoutResult(status -> action.run());
-                }
-            });
-        } else {
-            action.run();
-        }
-    }
-
-    private UUID resolveLiquidityAccountForPaymentJournal(UUID companyId, UUID journalId) {
-        JournalType journalType = accountingReferenceLookupPort.resolveJournalType(companyId, journalId);
-        if (journalType != JournalType.CASH && journalType != JournalType.BANK) {
-            throw new PurchaseDomainException("error.purchase.paymentJournalCashOrBank", null, "Payment journal must be cash or bank");
-        }
-        return accountingReferenceLookupPort.resolveLiquidityAccountIdForJournal(companyId, journalId);
     }
 
     @Override
@@ -309,6 +281,11 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     @Transactional
     public PurchaseOrderResponse updatePurchaseOrder(UUID id, CreatePurchaseOrderCommand command) {
         PurchaseOrder o = loadOrder(id);
+        if (command.getRowVersion() != null && command.getRowVersion() != o.getRowVersion()) {
+            throw new org.springframework.dao.OptimisticLockingFailureException(
+                    "Purchase order " + id + " was changed by someone else (version " + o.getRowVersion()
+                            + ", client had " + command.getRowVersion() + ")");
+        }
         PurchaseOrderRules.ensureCanUpdate(o.getState());
         if (o.isLocked()) {
             throw new PurchaseDomainException(
@@ -397,7 +374,8 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         recalcTotals(o);
         PurchaseOrder saved = purchaseOrderRepository.save(o);
         purchaseOrderRepository.flush();
-        return toResponse(saved);
+        // Re-read so the response carries the version after this save (the client sends it back).
+        return toResponse(loadOrder(saved.getId()));
     }
 
     private PurchaseOrderResponse amendConfirmedPurchaseOrder(PurchaseOrder o, CreatePurchaseOrderCommand command) {
@@ -405,24 +383,35 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 .collect(Collectors.toMap(PurchaseOrderLine::getId, PurchaseOrderLine::getQtyOrdered, (a, b) -> a, LinkedHashMap::new));
         BigDecimal untaxedBefore = o.getAmountUntaxed() != null ? o.getAmountUntaxed() : BigDecimal.ZERO;
         UUID companyId = o.getCompanyId();
-        boolean hasPostedDocs = vendorBillRepository.findByPurchaseOrderId(o.getId()).stream()
+        Map<UUID, String> lineTermsBefore = new LinkedHashMap<>();
+        for (PurchaseOrderLine line : o.getLines()) {
+            lineTermsBefore.put(line.getId(), lineTermsSignature(line));
+        }
+        boolean anyReceived = o.getLines().stream().anyMatch(l -> nz(l.getQtyReceived()).signum() > 0);
+        boolean anyBilled = o.getLines().stream().anyMatch(l -> nz(l.getQtyInvoiced()).signum() > 0);
+        boolean hasPostedDocs = anyReceived || vendorBillRepository.findByPurchaseOrderId(o.getId()).stream()
                 .anyMatch(b -> b.getState() == VendorBillState.POSTED);
+        if (anyBilled && orderDiscountChanged(o, command)) {
+            throw new PurchaseDomainException(
+                    "error.purchase.orderDiscountLockedAfterBilling", null,
+                    "The order discount cannot change after billing; credit the bill first");
+        }
         if (hasPostedDocs) {
             if (command.getVendorPartnerId() != null && !command.getVendorPartnerId().equals(o.getVendorPartnerId())) {
                 throw new PurchaseDomainException(
-                        "error.purchase.cannotChangeVendorAfterBilling", null,
-                        "Cannot change vendor after posted bills exist");
+                        "error.purchase.cannotChangeVendorAfterDocuments", null,
+                        "Cannot change vendor after goods were received or bills posted");
             }
             if (command.getCurrencyCode() != null && !command.getCurrencyCode().equalsIgnoreCase(o.getCurrencyCode())) {
                 throw new PurchaseDomainException(
-                        "error.purchase.cannotChangeCurrencyAfterBilling", null,
-                        "Cannot change currency after posted bills exist");
+                        "error.purchase.cannotChangeCurrencyAfterDocuments", null,
+                        "Cannot change currency after goods were received or bills posted");
             }
             if (command.getWarehouseId() != null && o.getWarehouseId() != null
                     && !command.getWarehouseId().equals(o.getWarehouseId())) {
                 throw new PurchaseDomainException(
-                        "error.purchase.cannotChangeWarehouseAfterBilling", null,
-                        "Cannot change warehouse after posted bills exist");
+                        "error.purchase.cannotChangeWarehouseAfterDocuments", null,
+                        "Cannot change warehouse after goods were received or bills posted");
             }
         } else {
             PartnerResponse vendor = partnerApplicationService.getPartner(command.getVendorPartnerId());
@@ -435,9 +424,16 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                         "error.purchase.vendorCompanyMismatch", null, "Vendor belongs to another company");
             }
             o.setVendorPartnerId(command.getVendorPartnerId());
+            boolean currencyChanged = command.getCurrencyCode() != null
+                    && !command.getCurrencyCode().equalsIgnoreCase(o.getCurrencyCode());
             o.setCurrencyCode(command.getCurrencyCode());
             o.setWarehouseId(command.getWarehouseId());
             o.setDestLocationId(command.getDestLocationId());
+            if (currencyChanged && command.getExchangeRateToCompany() == null) {
+                // Nothing was received or billed yet: the rate follows the new currency, not the old one.
+                o.setExchangeRateToCompany(resolveExchangeRate(
+                        companyId, o.getCurrencyCode(), command.getOrderDate() != null ? command.getOrderDate() : o.getOrderDate(), null));
+            }
         }
 
         Instant now = Instant.now();
@@ -476,6 +472,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                             "error.purchase.cannotChangeProductOnConfirmedLine", null,
                             "Cannot change product on a confirmed order line");
                 }
+                assertLineAmendmentAllowed(line, lc);
                 keptIds.add(line.getId());
             } else {
                 line = new PurchaseOrderLine();
@@ -534,6 +531,15 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         }
         // Keep sequence order
         o.getLines().sort(Comparator.comparingInt(PurchaseOrderLine::getSequence));
+        Map<UUID, String> lineTermsAfter = new LinkedHashMap<>();
+        for (PurchaseOrderLine line : o.getLines()) {
+            lineTermsAfter.put(line.getId(), lineTermsSignature(line));
+        }
+        if (!lineTermsAfter.equals(lineTermsBefore) && hasDraftBillDocuments(o.getId())) {
+            throw new PurchaseDomainException(
+                    "error.purchase.draftBillBlocksAmendment", null,
+                    "A draft bill or credit note exists for this order; post or cancel it before changing lines");
+        }
         recalcTotals(o);
         PurchaseOrder saved = purchaseOrderRepository.save(o);
         purchaseOrderRepository.flush();
@@ -542,8 +548,9 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     }
 
     /**
-     * After a confirmed-order amendment: create draft return/receipt pickings for
-     * qty changes. Receipt/return validation and vendor bills stay manual actions.
+     * After a confirmed-order amendment: make the open receipts match what is still to be received
+     * (ordered - received) at the current price. Quantities below received are refused before this
+     * point, so no return is ever created here. Receipt validation and bills stay manual actions.
      */
     private PurchaseOrderResponse syncDocumentsAfterAmendment(PurchaseOrder saved) {
         if (saved.getWarehouseId() == null) {
@@ -551,16 +558,99 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         }
         purchaseOrderQtyWriter.updateQtyReceivedJoiningCurrentTransaction(saved.getId());
         PurchaseOrder o = loadOrder(saved.getId());
-
-        createReturnPickingForExcess(o);
-        o = loadOrder(o.getId());
-
-        createReceiptPickingForRemaining(o);
+        syncOpenReceipts(o, false);
         return getPurchaseOrder(o.getId());
     }
 
+    /**
+     * Open (not done, not cancelled) incoming pickings must carry exactly the remaining demand per
+     * line at the current cost. When they already do nothing changes; otherwise they are cancelled
+     * and replaced by one receipt, so an amendment never leaves two receipts for the same goods.
+     *
+     * @param trimOnly only remove open demand beyond what is left to receive (after a receipt was
+     *                 validated some other way); never add demand that is not already open.
+     */
+    private void syncOpenReceipts(PurchaseOrder o, boolean trimOnly) {
+        Map<UUID, StockMoveCommand> wanted = new LinkedHashMap<>();
+        for (StockMoveCommand mc : buildRemainingIncomingMoves(o)) {
+            wanted.put(mc.getPurchaseOrderLineId(), mc);
+        }
+        List<UUID> openPickings = new ArrayList<>();
+        Map<UUID, BigDecimal> openQty = new LinkedHashMap<>();
+        Map<UUID, BigDecimal> openCost = new LinkedHashMap<>();
+        for (UUID pickingId : stockMovePurchaseQueryPort.findPickingIdsByPurchaseOrderId(o.getId())) {
+            StockPickingResponse p = stockPickingApplicationService.getPicking(pickingId);
+            if (p.getState() == PickingState.DONE || p.getState() == PickingState.CANCELLED) {
+                continue;
+            }
+            openPickings.add(pickingId);
+            for (StockPickingResponse.MoveResponse m : p.getMoves()) {
+                if (m.getPurchaseOrderLineId() == null || m.getState() == MoveState.DONE
+                        || m.getState() == MoveState.CANCELLED) {
+                    continue;
+                }
+                openQty.merge(m.getPurchaseOrderLineId(), nz(m.getDemandQuantity()), BigDecimal::add);
+                openCost.put(m.getPurchaseOrderLineId(), nz(m.getUnitCost()));
+            }
+        }
+        Map<UUID, BigDecimal> cap = new LinkedHashMap<>();
+        if (trimOnly) {
+            boolean excess = false;
+            for (Map.Entry<UUID, BigDecimal> e : openQty.entrySet()) {
+                StockMoveCommand w = wanted.get(e.getKey());
+                BigDecimal want = w != null ? nz(w.getDemandQuantity()) : BigDecimal.ZERO;
+                if (e.getValue().compareTo(want) > 0) {
+                    excess = true;
+                }
+                cap.put(e.getKey(), e.getValue().min(want));
+            }
+            if (!excess) {
+                return;
+            }
+        } else {
+            boolean same = wanted.keySet().equals(openQty.keySet());
+            for (Map.Entry<UUID, StockMoveCommand> e : wanted.entrySet()) {
+                if (!same) {
+                    break;
+                }
+                BigDecimal q = nz(openQty.get(e.getKey()));
+                BigDecimal cost = nz(openCost.get(e.getKey()));
+                same = q.compareTo(nz(e.getValue().getDemandQuantity())) == 0
+                        && cost.setScale(4, RoundingMode.HALF_UP).compareTo(
+                                nz(e.getValue().getUnitCost()).setScale(4, RoundingMode.HALF_UP)) == 0;
+            }
+            if (same) {
+                return;
+            }
+        }
+        for (UUID pickingId : openPickings) {
+            stockPickingApplicationService.cancelPicking(pickingId);
+        }
+        createReceiptPicking(o, trimOnly ? cap : null);
+    }
+
+    /** Cancels every receipt and return of the order that is not done or already cancelled. */
+    private void cancelOpenPickings(UUID purchaseOrderId) {
+        for (UUID pickingId : stockMovePurchaseQueryPort.findNonTerminalPickingIdsByPurchaseOrderId(purchaseOrderId)) {
+            stockPickingApplicationService.cancelPicking(pickingId);
+        }
+    }
+
     private void createReceiptPickingForRemaining(PurchaseOrder o) {
-        List<StockMoveCommand> moves = buildRemainingIncomingMoves(o);
+        createReceiptPicking(o, null);
+    }
+
+    /** One receipt for the remaining quantities, or for {@code stockQtyByLine} (stock units) when given. */
+    private void createReceiptPicking(PurchaseOrder o, Map<UUID, BigDecimal> stockQtyByLine) {
+        List<StockMoveCommand> moves = new ArrayList<>();
+        for (StockMoveCommand mc : buildRemainingIncomingMoves(o)) {
+            BigDecimal qty = stockQtyByLine == null ? mc.getDemandQuantity()
+                    : nz(stockQtyByLine.get(mc.getPurchaseOrderLineId())).min(mc.getDemandQuantity());
+            if (qty.signum() > 0) {
+                mc.setDemandQuantity(qty);
+                moves.add(mc);
+            }
+        }
         if (moves.isEmpty()) {
             return;
         }
@@ -591,35 +681,6 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         stockPickingApplicationService.createPicking(cmd);
     }
 
-    private void createReturnPickingForExcess(PurchaseOrder o) {
-        List<StockMoveCommand> moves = buildExcessReturnMoves(o);
-        if (moves.isEmpty()) {
-            return;
-        }
-        UUID warehouseId = o.getWarehouseId();
-        Warehouse wh = warehouseRepository.findById(new WarehouseId(warehouseId))
-                .orElseThrow(() -> new PurchaseDomainException("Warehouse not found: " + warehouseId));
-        StockLocation supplier = findSupplierVirtual(o.getCompanyId());
-        UUID sourceLoc = o.getDestLocationId() != null
-                ? o.getDestLocationId()
-                : wh.getStockLocationId() != null ? wh.getStockLocationId().getId() : null;
-        if (sourceLoc == null) {
-            throw new PurchaseDomainException("error.purchase.destinationStockLocationUnresolved", null, "Destination stock location could not be resolved");
-        }
-        CreateStockPickingCommand cmd = new CreateStockPickingCommand();
-        cmd.setCompanyId(o.getCompanyId());
-        cmd.setWarehouseId(warehouseId);
-        cmd.setPickingType(PickingType.OUTGOING);
-        cmd.setSourceLocationId(sourceLoc);
-        cmd.setDestinationLocationId(supplier.getId().getId());
-        cmd.setPartnerId(o.getVendorPartnerId());
-        cmd.setOrigin("RETURN OF " + o.getName());
-        cmd.setReference(o.getName() != null ? o.getName() + "-RET" : null);
-        cmd.setPurchaseOrderId(o.getId());
-        cmd.setMoves(moves);
-        stockPickingApplicationService.createPicking(cmd);
-    }
-
     private List<StockMoveCommand> buildRemainingIncomingMoves(PurchaseOrder o) {
         BigDecimal rateToCompany = resolveExchangeRate(
                 o.getCompanyId(), o.getCurrencyCode(), o.getOrderDate(), o.getExchangeRateToCompany());
@@ -635,25 +696,6 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 continue;
             }
             moves.add(buildPurchaseStockMove(line, product, remaining, rateToCompany));
-        }
-        return moves;
-    }
-
-    private List<StockMoveCommand> buildExcessReturnMoves(PurchaseOrder o) {
-        BigDecimal rateToCompany = resolveExchangeRate(
-                o.getCompanyId(), o.getCurrencyCode(), o.getOrderDate(), o.getExchangeRateToCompany());
-        List<StockMoveCommand> moves = new ArrayList<>();
-        for (PurchaseOrderLine line : o.getLines()) {
-            Product product = productRepository.findById(new ProductId(line.getProductId()))
-                    .orElseThrow(() -> new PurchaseDomainException("Product not found: " + line.getProductId()));
-            if (product.getProductType() == ProductType.SERVICE) {
-                continue;
-            }
-            BigDecimal excess = line.getQtyReceived().subtract(line.getQtyOrdered());
-            if (excess.signum() <= 0) {
-                continue;
-            }
-            moves.add(buildPurchaseStockMove(line, product, excess, rateToCompany));
         }
         return moves;
     }
@@ -708,10 +750,29 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                                                                    Pageable pageable) {
         UUID cid = companyIdOrDefault(companyId);
         String qNorm = q != null && !q.isBlank() ? q.trim() : "";
-        return purchaseOrderRepository.search(cid, state, vendorPartnerId, qNorm, pageable).map(this::toSummary);
+        var page = purchaseOrderRepository.search(cid, state, vendorPartnerId, qNorm, pageable);
+        List<UUID> orderIds = page.getContent().stream().map(PurchaseOrder::getId).toList();
+        List<VendorBill> allBills = vendorBillRepository.findByPurchaseOrderIdIn(orderIds);
+        Map<UUID, List<VendorBill>> billsByOrder = new LinkedHashMap<>();
+        for (VendorBill b : allBills) {
+            if (b.getPurchaseOrderId() != null) {
+                billsByOrder.computeIfAbsent(b.getPurchaseOrderId(), k -> new ArrayList<>()).add(b);
+            }
+        }
+        List<UUID> billIds = allBills.stream()
+                .filter(b -> b.getState() == VendorBillState.POSTED)
+                .map(VendorBill::getId)
+                .toList();
+        Map<UUID, BigDecimal> settledByBill = vendorPaymentService.sumActiveAllocationsByBillIds(billIds);
+        return page.map(o -> toSummary(o, billsByOrder.getOrDefault(o.getId(), List.of()), settledByBill));
     }
 
     private PurchaseOrderSummaryResponse toSummary(PurchaseOrder o) {
+        return toSummary(o, null, null);
+    }
+
+    private PurchaseOrderSummaryResponse toSummary(
+            PurchaseOrder o, List<VendorBill> bills, Map<UUID, BigDecimal> settledByBill) {
         PurchaseOrderSummaryResponse r = new PurchaseOrderSummaryResponse();
         r.setId(o.getId());
         r.setCompanyId(o.getCompanyId());
@@ -720,70 +781,91 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         r.setState(o.getState());
         r.setCurrencyCode(o.getCurrencyCode());
         r.setOrderDate(o.getOrderDate());
-        r.setAmountTotal(o.getAmountTotal());
         r.setCreatedAt(o.getCreatedAt());
-        applyPurchasePaymentStatus(r, o);
+        if (bills != null && settledByBill != null) {
+            applyPurchasePaymentStatus(r, o, bills, settledByBill);
+        } else {
+            applyPurchasePaymentStatus(r, o);
+        }
         return r;
     }
 
     /**
-     * List statuses: New / Unpaid / Partial Paid / Paid / Cancelled (+ amounts).
-     * New = unpaid with due date today or later (or no due date); Unpaid = overdue unpaid.
+     * List statuses: New / Unpaid / Partial Paid / Paid / To refund / Cancelled (+ amounts).
+     * Total is net billed once posted bills/credit notes exist; otherwise the order total.
+     * Paid is net of refunds; amountDue (balance) may be negative when a refund is owed.
      */
-    private record OrderPaymentFields(String paymentStatus, BigDecimal amountPaid, BigDecimal amountDue) {}
+    private record OrderPaymentFields(
+            String paymentStatus, BigDecimal amountTotal, BigDecimal amountPaid, BigDecimal amountDue) {}
 
     private void applyPurchasePaymentStatus(PurchaseOrderSummaryResponse r, PurchaseOrder o) {
-        OrderPaymentFields f = computePurchasePaymentFields(o);
+        List<VendorBill> bills = vendorBillRepository.findByPurchaseOrderId(o.getId());
+        List<UUID> billIds = bills.stream()
+                .filter(b -> b.getState() == VendorBillState.POSTED)
+                .map(VendorBill::getId)
+                .toList();
+        Map<UUID, BigDecimal> settledByBill = vendorPaymentService.sumActiveAllocationsByBillIds(billIds);
+        applyPurchasePaymentStatus(r, o, bills, settledByBill);
+    }
+
+    private void applyPurchasePaymentStatus(
+            PurchaseOrderSummaryResponse r,
+            PurchaseOrder o,
+            List<VendorBill> bills,
+            Map<UUID, BigDecimal> settledByBill) {
+        OrderPaymentFields f = computePurchasePaymentFields(o, bills, settledByBill);
         r.setPaymentStatus(f.paymentStatus());
+        r.setAmountTotal(f.amountTotal());
         r.setAmountPaid(f.amountPaid());
         r.setAmountDue(f.amountDue());
     }
 
     private OrderPaymentFields computePurchasePaymentFields(PurchaseOrder o) {
-        if (o.getState() == PurchaseOrderState.CANCELLED) {
-            return new OrderPaymentFields("CANCELLED", BigDecimal.ZERO, BigDecimal.ZERO);
-        }
-        List<VendorBill> bills = vendorBillRepository.findByPurchaseOrderId(o.getId()).stream()
-                .filter(b -> b.getMoveType() == null || b.getMoveType() == VendorBillMoveType.BILL)
+        List<VendorBill> bills = vendorBillRepository.findByPurchaseOrderId(o.getId());
+        List<UUID> billIds = bills.stream()
                 .filter(b -> b.getState() == VendorBillState.POSTED)
+                .map(VendorBill::getId)
                 .toList();
-        if (bills.isEmpty()) {
-            return new OrderPaymentFields("NEW", BigDecimal.ZERO,
-                    o.getAmountTotal() != null ? o.getAmountTotal() : BigDecimal.ZERO);
-        }
-        BigDecimal total = BigDecimal.ZERO;
-        BigDecimal paid = BigDecimal.ZERO;
-        BigDecimal credited = BigDecimal.ZERO;
-        LocalDate earliestDue = null;
-        for (VendorBill bill : bills) {
-            bill.getLines().size();
-            for (VendorBillLine line : bill.getLines()) {
-                line.getTaxSnapshots().size();
+        Map<UUID, BigDecimal> settledByBill = vendorPaymentService.sumActiveAllocationsByBillIds(billIds);
+        return computePurchasePaymentFields(o, bills, settledByBill);
+    }
+
+    private OrderPaymentFields computePurchasePaymentFields(
+            PurchaseOrder o, List<VendorBill> bills, Map<UUID, BigDecimal> settledByBill) {
+        boolean cancelled = o.getState() == PurchaseOrderState.CANCELLED;
+        List<SettlementDoc> docs = new ArrayList<>();
+        if (!cancelled) {
+            for (VendorBill bill : bills) {
+                if (bill.getState() != VendorBillState.POSTED) {
+                    continue;
+                }
+                VendorBillMoveType type = bill.getMoveType() != null ? bill.getMoveType() : VendorBillMoveType.BILL;
+                if (type == VendorBillMoveType.DEBIT_NOTE) {
+                    continue;
+                }
+                bill.getLines().size();
+                for (VendorBillLine line : bill.getLines()) {
+                    line.getTaxSnapshots().size();
+                }
+                BigDecimal total = billTotalDocumentCurrency(bill);
+                BigDecimal settled = settledByBill.getOrDefault(bill.getId(), BigDecimal.ZERO)
+                        .setScale(4, RoundingMode.HALF_UP);
+                SettlementDoc.Kind kind = type == VendorBillMoveType.CREDIT_NOTE
+                        ? SettlementDoc.Kind.CREDIT_NOTE
+                        : SettlementDoc.Kind.INVOICE;
+                docs.add(new SettlementDoc(kind, total, settled, bill.getDueDate()));
             }
-            String cur = bill.getCurrencyCode();
-            total = total.add(billTotalDocumentCurrency(bill));
-            paid = paid.add(sumPostedPaymentsForBill(bill.getId(), cur));
-            credited = credited.add(sumPostedCreditNotesForBill(bill.getId(), cur));
-            if (bill.getDueDate() != null && (earliestDue == null || bill.getDueDate().isBefore(earliestDue))) {
-                earliestDue = bill.getDueDate();
-            }
         }
-        total = total.setScale(4, RoundingMode.HALF_UP);
-        paid = paid.setScale(4, RoundingMode.HALF_UP);
-        credited = credited.setScale(4, RoundingMode.HALF_UP);
-        BigDecimal due = total.subtract(paid).subtract(credited).max(BigDecimal.ZERO).setScale(4, RoundingMode.HALF_UP);
-        BigDecimal eps = new BigDecimal("0.005");
-        String status;
-        if (paid.compareTo(eps) <= 0) {
-            boolean overdue = earliestDue != null && earliestDue.isBefore(LocalDate.now());
-            status = overdue ? "UNPAID" : "NEW";
-        } else if (paid.add(eps).compareTo(total.subtract(credited)) >= 0) {
-            status = "PAID";
-            due = BigDecimal.ZERO;
-        } else {
-            status = "PARTIAL_PAID";
-        }
-        return new OrderPaymentFields(status, paid, due);
+        OrderSettlement s = OrderSettlementCalculator.compute(
+                cancelled,
+                o.getAmountTotal(),
+                docs,
+                LocalDate.now());
+        return new OrderPaymentFields(
+                s.status().name(),
+                s.total(),
+                s.paidNet(),
+                s.balance());
     }
 
     private boolean computeCanCreateVendorBill(PurchaseOrder po) {
@@ -1039,21 +1121,17 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                     "error.purchase.orderLocked", null, "Purchase order is locked; unlock before cancelling");
         }
         if (o.getState() == PurchaseOrderState.CONFIRMED) {
-            if (vendorBillRepository.findByPurchaseOrderId(o.getId()).stream()
-                    .anyMatch(b -> b.getState() == VendorBillState.POSTED)) {
-                throw new PurchaseDomainException("error.purchase.cannotCancelPostedVendorBills", null, "Cannot cancel: posted vendor bills exist for this order");
-            }
-            for (UUID pickingId : stockMovePurchaseQueryPort.findNonTerminalPickingIdsByPurchaseOrderId(o.getId())) {
-                stockPickingApplicationService.cancelPicking(pickingId);
-            }
-            if (stockMovePurchaseQueryPort.existsDonePickingForPurchaseOrder(o.getId())) {
+            // Net quantities: fully returned goods and fully credited bills no longer block.
+            if (o.getLines().stream().anyMatch(l -> nz(l.getQtyReceived()).signum() > 0)) {
                 throw new PurchaseDomainException(
                         "error.purchase.cannotCancelReceivedGoods", null,
-                        "Cannot cancel: goods have been received (return or cancel receipts first)");
+                        "Cannot cancel: goods have been received; return them first");
             }
-            if (stockMovePurchaseQueryPort.existsNonTerminalPickingForPurchaseOrder(o.getId())) {
-                throw new PurchaseDomainException("error.purchase.cannotCancelOpenPickings", null, "Cannot cancel: open pickings exist (confirm/cancel pickings first)");
+            if (o.getLines().stream().anyMatch(l -> nz(l.getQtyInvoiced()).signum() > 0)) {
+                throw new PurchaseDomainException("error.purchase.cannotCancelPostedVendorBills", null, "Cannot cancel: posted vendor bills exist for this order");
             }
+            cancelDraftBills(o.getId());
+            cancelOpenPickings(o.getId());
         }
         o.setState(PurchaseOrderState.CANCELLED);
         o.setCancelledAt(Instant.now());
@@ -1062,6 +1140,703 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         activityLogger.logFieldChange(saved.getCompanyId(), RecordActivityLogger.MODEL_PURCHASE_ORDER, saved.getId(),
                 "Purchase Order", "Cancelled", "Status");
         return toResponse(saved);
+    }
+
+
+    // ---------------------------------------------------------------- guided corrections
+
+    /** Corrections need a confirmed, unlocked order with no draft bill or credit note in the way. */
+    private void assertCorrectable(PurchaseOrder o) {
+        if (o.getState() != PurchaseOrderState.CONFIRMED) {
+            throw new PurchaseDomainException("error.purchase.correctionRequiresConfirmed", null,
+                    "Only confirmed purchase orders can be corrected");
+        }
+        if (o.isLocked()) {
+            throw new PurchaseDomainException(
+                    "error.purchase.orderLocked", null, "Purchase order is locked; unlock before amending");
+        }
+        if (hasDraftBillDocuments(o.getId())) {
+            throw new PurchaseDomainException(
+                    "error.purchase.draftBillBlocksAmendment", null,
+                    "A draft bill or credit note exists for this order; post or cancel it before changing lines");
+        }
+    }
+
+    private Set<UUID> postedBillDocumentIds(UUID purchaseOrderId) {
+        Set<UUID> ids = new java.util.HashSet<>();
+        for (VendorBill b : vendorBillRepository.findByPurchaseOrderId(purchaseOrderId)) {
+            if (b.getState() == VendorBillState.POSTED) {
+                ids.add(b.getId());
+            }
+        }
+        return ids;
+    }
+
+    /** The order afterwards plus every bill and credit note posted since {@code before}. */
+    private PurchaseCorrectionResult correctionResult(UUID purchaseOrderId, Set<UUID> before) {
+        PurchaseCorrectionResult result = new PurchaseCorrectionResult();
+        result.setOrder(getPurchaseOrder(purchaseOrderId));
+        List<VendorBill> created = new ArrayList<>();
+        for (VendorBill b : vendorBillRepository.findByPurchaseOrderId(purchaseOrderId)) {
+            if (b.getState() == VendorBillState.POSTED && !before.contains(b.getId())) {
+                created.add(b);
+            }
+        }
+        created.sort(Comparator.comparing(VendorBill::getCreatedAt, Comparator.nullsFirst(Comparator.naturalOrder())));
+        for (VendorBill b : created) {
+            b.getLines().size();
+            for (VendorBillLine l : b.getLines()) {
+                l.getTaxSnapshots().size();
+            }
+            result.getDocuments().add(toBillResponse(b));
+        }
+        return result;
+    }
+
+    /** Bills the given quantity per order line at the order's current terms and posts it. */
+    private void rebill(PurchaseOrder o, Map<UUID, BigDecimal> lineQuantities) {
+        Map<UUID, BigDecimal> positive = new LinkedHashMap<>();
+        lineQuantities.forEach((k, v) -> {
+            if (nz(v).signum() > 0) {
+                positive.put(k, v);
+            }
+        });
+        if (positive.isEmpty()) {
+            return;
+        }
+        CreateVendorBillFromPoCommand cmd = new CreateVendorBillFromPoCommand();
+        cmd.setCompanyId(o.getCompanyId());
+        cmd.setPurchaseOrderId(o.getId());
+        cmd.setBillDate(LocalDate.now());
+        cmd.setDueDate(LocalDate.now());
+        cmd.setLineQuantities(positive);
+        VendorBillResponse bill = createVendorBillFromPo(cmd);
+        postVendorBill(bill.getId());
+    }
+
+    private List<PurchaseOrderLineTax> buildCorrectionLineTaxes(UUID companyId, List<UUID> taxIds) {
+        List<PurchaseOrderLineTax> taxes = new ArrayList<>();
+        int seq = 10;
+        for (UUID taxId : taxIds) {
+            FiscalTax tax = fiscalTaxRepository.findById(taxId)
+                    .orElseThrow(() -> new PurchaseDomainException("Tax not found: " + taxId));
+            if (!tax.getCompanyId().equals(companyId) || !tax.isActive()) {
+                throw new PurchaseDomainException("error.purchase.invalidTax", new Object[] { taxId }, "Invalid tax: " + taxId);
+            }
+            if (tax.getScope() != FiscalTaxScope.PURCHASE && tax.getScope() != FiscalTaxScope.BOTH) {
+                throw new PurchaseDomainException("error.purchase.invalidTaxScope", new Object[] { taxId }, "Tax scope not valid for purchase: " + taxId);
+            }
+            PurchaseOrderLineTax lt = new PurchaseOrderLineTax();
+            lt.setId(UUID.randomUUID());
+            lt.setTaxId(taxId);
+            lt.setSequence(seq);
+            taxes.add(lt);
+            seq += 10;
+        }
+        return taxes;
+    }
+
+    private void saveCorrectedOrder(PurchaseOrder o, Map<UUID, BigDecimal> qtyOrderedBefore,
+                                    BigDecimal untaxedBefore, String message, String reason) {
+        o.setUpdatedAt(Instant.now());
+        recalcTotals(o);
+        PurchaseOrder saved = purchaseOrderRepository.save(o);
+        purchaseOrderRepository.flush();
+        postPurchaseAmendmentTracking(saved, qtyOrderedBefore, untaxedBefore);
+        activityLogger.log(saved.getCompanyId(), RecordActivityLogger.MODEL_PURCHASE_ORDER, saved.getId(),
+                message + (reason != null && !reason.isBlank() ? ": " + reason.trim() : ""));
+    }
+
+    private static boolean lineTermsChange(PurchaseOrderLine pol, PurchaseCorrectionCommand.Line cl) {
+        if (cl.getUnitPrice() != null && !sameAmount(cl.getUnitPrice(), pol.getUnitPrice())) {
+            return true;
+        }
+        if (cl.getDiscountType() != null && cl.getDiscountType() != pol.getDiscountType()) {
+            return true;
+        }
+        if (cl.getDiscountValue() != null && !sameAmount(cl.getDiscountValue(), pol.getDiscountValue())) {
+            return true;
+        }
+        if (cl.getTaxIds() != null) {
+            Set<UUID> current = new java.util.HashSet<>();
+            for (PurchaseOrderLineTax t : pol.getTaxes()) {
+                current.add(t.getTaxId());
+            }
+            return !current.equals(new java.util.HashSet<>(cl.getTaxIds()));
+        }
+        return false;
+    }
+
+    @Override
+    @Transactional
+    public PurchaseCorrectionResult changeTerms(UUID id, PurchaseCorrectionCommand command) {
+        PurchaseOrder o = loadOrder(id);
+        assertCorrectable(o);
+        Set<UUID> before = postedBillDocumentIds(id);
+        Map<UUID, PurchaseOrderLine> byId = new LinkedHashMap<>();
+        for (PurchaseOrderLine line : o.getLines()) {
+            byId.put(line.getId(), line);
+        }
+        boolean orderDiscountChanged = false;
+        if (command.getOrderDiscountType() != null || command.getOrderDiscountValue() != null) {
+            DiscountType t = command.getOrderDiscountType() != null ? command.getOrderDiscountType() : o.getOrderDiscountType();
+            orderDiscountChanged = t != o.getOrderDiscountType()
+                    || (command.getOrderDiscountValue() != null && !sameAmount(command.getOrderDiscountValue(), o.getOrderDiscountValue()));
+        }
+        // What is billed must be credited at the old terms and billed again at the new ones.
+        Map<UUID, BigDecimal> affected = new LinkedHashMap<>();
+        boolean anyChange = orderDiscountChanged;
+        for (PurchaseCorrectionCommand.Line cl : command.getLines()) {
+            PurchaseOrderLine pol = byId.get(cl.getPurchaseOrderLineId());
+            if (pol == null) {
+                throw new PurchaseDomainException("error.purchase.documentLineNotOnOrder", null,
+                        "The document has a line that no longer exists on the purchase order");
+            }
+            if (!lineTermsChange(pol, cl)) {
+                continue;
+            }
+            anyChange = true;
+            if (nz(pol.getQtyInvoiced()).signum() > 0) {
+                affected.put(pol.getId(), pol.getQtyInvoiced());
+            }
+        }
+        if (!anyChange) {
+            throw new PurchaseDomainException("error.purchase.correctionNothingToChange", null, "Nothing to change");
+        }
+        if (orderDiscountChanged) {
+            for (PurchaseOrderLine pol : o.getLines()) {
+                if (nz(pol.getQtyInvoiced()).signum() > 0) {
+                    affected.put(pol.getId(), pol.getQtyInvoiced());
+                }
+            }
+        }
+        creditQuantities(o, affected);
+
+        o = loadOrder(id);
+        Map<UUID, BigDecimal> qtyOrderedBefore = new LinkedHashMap<>();
+        BigDecimal untaxedBefore = nz(o.getAmountUntaxed());
+        Map<UUID, PurchaseCorrectionCommand.Line> changes = new LinkedHashMap<>();
+        for (PurchaseCorrectionCommand.Line cl : command.getLines()) {
+            changes.put(cl.getPurchaseOrderLineId(), cl);
+        }
+        for (PurchaseOrderLine line : o.getLines()) {
+            qtyOrderedBefore.put(line.getId(), nz(line.getQtyOrdered()));
+            PurchaseCorrectionCommand.Line cl = changes.get(line.getId());
+            if (cl == null) {
+                continue;
+            }
+            if (cl.getUnitPrice() != null) {
+                line.setUnitPrice(cl.getUnitPrice());
+            }
+            if (cl.getDiscountType() != null) {
+                line.setDiscountType(cl.getDiscountType());
+            }
+            if (cl.getDiscountValue() != null) {
+                line.setDiscountValue(cl.getDiscountValue());
+            }
+            if (cl.getTaxIds() != null) {
+                line.getTaxes().clear();
+                line.getTaxes().addAll(buildCorrectionLineTaxes(o.getCompanyId(), cl.getTaxIds()));
+            }
+            line.setUpdatedAt(Instant.now());
+        }
+        if (orderDiscountChanged) {
+            if (command.getOrderDiscountType() != null) {
+                o.setOrderDiscountType(command.getOrderDiscountType());
+            }
+            if (command.getOrderDiscountValue() != null) {
+                o.setOrderDiscountValue(command.getOrderDiscountValue());
+            }
+        }
+        saveCorrectedOrder(o, qtyOrderedBefore, untaxedBefore,
+                "Prices, discounts or taxes corrected after receipt or billing", command.getReason());
+        if (o.getWarehouseId() != null) {
+            // The part still to be received is valued at the new price.
+            syncOpenReceipts(loadOrder(id), false);
+        }
+        rebill(loadOrder(id), affected);
+        rematchVendorCredit(id, before);
+        return correctionResult(id, before);
+    }
+
+    /**
+     * Money already paid on the credited bills moves to the bills that replaced them: the credit is
+     * released from the old bills and applied to the new ones, never more than was released.
+     */
+    private void rematchVendorCredit(UUID purchaseOrderId, Set<UUID> before) {
+        List<VendorBill> bills = vendorBillRepository.findByPurchaseOrderId(purchaseOrderId).stream()
+                .filter(b -> b.getState() == VendorBillState.POSTED)
+                .filter(b -> b.getMoveType() == null || b.getMoveType() == VendorBillMoveType.BILL)
+                .sorted(Comparator.comparing(VendorBill::getCreatedAt, Comparator.nullsFirst(Comparator.naturalOrder())))
+                .toList();
+        BigDecimal released = BigDecimal.ZERO;
+        for (VendorBill b : bills) {
+            if (before.contains(b.getId()) && vendorPaymentService.creditAvailableOn(b).signum() > 0) {
+                released = released.add(vendorPaymentService.keepCredit(b.getId()));
+            }
+        }
+        for (VendorBill b : bills) {
+            if (released.signum() <= 0) {
+                break;
+            }
+            if (!before.contains(b.getId())) {
+                released = released.subtract(vendorPaymentService.applyCredit(b.getId(), released));
+            }
+        }
+    }
+
+    @Override
+    @Transactional
+    public PurchaseCorrectionResult reduceQuantities(UUID id, PurchaseCorrectionCommand command) {
+        PurchaseOrder o = loadOrder(id);
+        assertCorrectable(o);
+        Set<UUID> before = postedBillDocumentIds(id);
+        Map<UUID, PurchaseOrderLine> byId = new LinkedHashMap<>();
+        for (PurchaseOrderLine line : o.getLines()) {
+            byId.put(line.getId(), line);
+        }
+        Map<UUID, BigDecimal> target = new LinkedHashMap<>();
+        Map<UUID, BigDecimal> toCredit = new LinkedHashMap<>();
+        for (PurchaseCorrectionCommand.Line cl : command.getLines()) {
+            PurchaseOrderLine pol = byId.get(cl.getPurchaseOrderLineId());
+            if (pol == null || cl.getQty() == null) {
+                throw new PurchaseDomainException("error.purchase.documentLineNotOnOrder", null,
+                        "The document has a line that no longer exists on the purchase order");
+            }
+            BigDecimal t = cl.getQty();
+            if (t.signum() < 0 || t.compareTo(nz(pol.getQtyOrdered())) > 0) {
+                throw new PurchaseDomainException("error.purchase.reduceOnlyLowers", null,
+                        "Reduce quantities can only lower a line; increase it by editing the order");
+            }
+            if (t.compareTo(nz(pol.getQtyReceived())) < 0) {
+                throw new PurchaseDomainException("error.purchase.qtyBelowReceived",
+                        new Object[] { MonetaryScale.toDisplayString(nz(pol.getQtyReceived())) },
+                        "Quantity cannot be below the received quantity; return the goods first");
+            }
+            target.put(pol.getId(), t);
+            BigDecimal excess = nz(pol.getQtyInvoiced()).subtract(t);
+            if (excess.signum() > 0) {
+                toCredit.put(pol.getId(), excess);
+            }
+        }
+        creditQuantities(o, toCredit);
+
+        o = loadOrder(id);
+        Map<UUID, BigDecimal> qtyOrderedBefore = new LinkedHashMap<>();
+        BigDecimal untaxedBefore = nz(o.getAmountUntaxed());
+        for (PurchaseOrderLine line : o.getLines()) {
+            qtyOrderedBefore.put(line.getId(), nz(line.getQtyOrdered()));
+            BigDecimal t = target.get(line.getId());
+            if (t != null) {
+                line.setQtyOrdered(t);
+                line.setUpdatedAt(Instant.now());
+            }
+        }
+        saveCorrectedOrder(o, qtyOrderedBefore, untaxedBefore, "Quantities reduced after billing", command.getReason());
+        if (o.getWarehouseId() != null) {
+            syncOpenReceipts(loadOrder(id), false);
+        }
+        return correctionResult(id, before);
+    }
+
+    @Override
+    @Transactional
+    public PurchaseCorrectionResult cancelWithDocuments(UUID id, PurchaseCorrectionCommand command) {
+        PurchaseOrder o = loadOrder(id);
+        if (o.getState() != PurchaseOrderState.CONFIRMED) {
+            PurchaseCorrectionResult r = new PurchaseCorrectionResult();
+            r.setOrder(cancelPurchaseOrder(id));
+            return r;
+        }
+        assertCorrectable(o);
+        Set<UUID> before = postedBillDocumentIds(id);
+        String reason = command != null ? command.getReason() : null;
+        // 1. Everything received goes back, refunded (credits the received and billed part).
+        ReturnGoodsCommand ret = new ReturnGoodsCommand();
+        for (PurchaseOrderLine line : o.getLines()) {
+            if (nz(line.getQtyReceived()).signum() > 0) {
+                ReturnGoodsCommand.Line rl = new ReturnGoodsCommand.Line();
+                rl.setPurchaseOrderLineId(line.getId());
+                rl.setQty(line.getQtyReceived());
+                ret.getLines().add(rl);
+            }
+        }
+        if (!ret.getLines().isEmpty()) {
+            ret.setRefund(true);
+            ret.setReason(reason);
+            returnGoods(id, ret);
+        }
+        // 2. Whatever is still billed (billed before receipt, services) is credited.
+        o = loadOrder(id);
+        Map<UUID, BigDecimal> toCredit = new LinkedHashMap<>();
+        for (PurchaseOrderLine line : o.getLines()) {
+            if (nz(line.getQtyInvoiced()).signum() > 0) {
+                toCredit.put(line.getId(), line.getQtyInvoiced());
+            }
+        }
+        creditQuantities(o, toCredit);
+        // 3. Nothing received or billed is left: cancel (open receipts and drafts go with it).
+        cancelPurchaseOrder(id);
+        activityLogger.log(o.getCompanyId(), RecordActivityLogger.MODEL_PURCHASE_ORDER, id,
+                "Cancelled with its documents" + (reason != null && !reason.isBlank() ? ": " + reason.trim() : ""));
+        return correctionResult(id, before);
+    }
+
+    @Override
+    @Transactional
+    public PurchaseCorrectionResult reassignVendor(UUID id, PurchaseCorrectionCommand command) {
+        PurchaseOrder o = loadOrder(id);
+        assertCorrectable(o);
+        if (command.getVendorPartnerId() == null || command.getVendorPartnerId().equals(o.getVendorPartnerId())) {
+            throw new PurchaseDomainException("error.purchase.correctionNothingToChange", null, "Nothing to change");
+        }
+        if (o.getLines().stream().anyMatch(l -> nz(l.getQtyReceived()).signum() > 0)) {
+            throw new PurchaseDomainException("error.purchase.reassignAfterReceipt", null,
+                    "Goods were already received from this vendor; return them first");
+        }
+        PartnerResponse vendor = partnerApplicationService.getPartner(command.getVendorPartnerId());
+        if (!vendor.isVendor()) {
+            throw new PurchaseDomainException("error.purchase.partnerNotVendor", null, "Partner is not a vendor");
+        }
+        if (!vendor.getCompanyId().equals(o.getCompanyId())) {
+            throw new PurchaseDomainException("error.purchase.vendorCompanyMismatch", null, "Vendor belongs to another company");
+        }
+        Set<UUID> before = postedBillDocumentIds(id);
+        Map<UUID, BigDecimal> billed = new LinkedHashMap<>();
+        for (PurchaseOrderLine line : o.getLines()) {
+            if (nz(line.getQtyInvoiced()).signum() > 0) {
+                billed.put(line.getId(), line.getQtyInvoiced());
+            }
+        }
+        creditQuantities(o, billed);
+
+        o = loadOrder(id);
+        UUID previous = o.getVendorPartnerId();
+        o.setVendorPartnerId(vendor.getId());
+        if (vendor.getPaymentTermsId() != null) {
+            o.setPaymentTermsId(vendor.getPaymentTermsId());
+        }
+        o.setUpdatedAt(Instant.now());
+        purchaseOrderRepository.save(o);
+        purchaseOrderRepository.flush();
+        activityLogger.log(o.getCompanyId(), RecordActivityLogger.MODEL_PURCHASE_ORDER, id,
+                "Vendor reassigned (" + previous + " -> " + vendor.getDisplayName() + ")"
+                        + (command.getReason() != null && !command.getReason().isBlank() ? ": " + command.getReason().trim() : ""));
+        if (o.getWarehouseId() != null) {
+            // Open receipts carry the partner: replace them so they come from the new vendor.
+            cancelOpenPickings(id);
+            createReceiptPickingForRemaining(loadOrder(id));
+        }
+        rebill(loadOrder(id), billed);
+        return correctionResult(id, before);
+    }
+
+    /** Order-line quantity (order unit or packaging) expressed in the product's stock unit. */
+    private BigDecimal toStockUomQty(PurchaseOrderLine line, Product product, BigDecimal qtyInOrderUom) {
+        if (line.getQtyPerPackage() != null && line.getQtyPerPackage().signum() > 0) {
+            return ProductPackaging.toBaseQty(qtyInOrderUom, line.getQtyPerPackage());
+        }
+        return uomApplicationService.convert(line.getUomId(), product.getUomId().getId(), qtyInOrderUom);
+    }
+
+    @Override
+    @Transactional
+    public PurchaseOrderResponse returnGoods(UUID id, ReturnGoodsCommand command) {
+        PurchaseOrder o = loadOrder(id);
+        if (o.getState() != PurchaseOrderState.CONFIRMED) {
+            throw new PurchaseDomainException(
+                    "error.purchase.returnRequiresConfirmed", null,
+                    "Purchase order must be confirmed to create a return");
+        }
+        if (o.isLocked()) {
+            throw new PurchaseDomainException(
+                    "error.purchase.orderLocked", null, "Purchase order is locked; unlock before amending");
+        }
+        Map<UUID, PurchaseOrderLine> byId = new LinkedHashMap<>();
+        for (PurchaseOrderLine line : o.getLines()) {
+            byId.put(line.getId(), line);
+        }
+        // Requested quantities, checked against what is received and converted to stock units.
+        Map<UUID, BigDecimal> wantedStockQty = new LinkedHashMap<>();
+        for (ReturnGoodsCommand.Line rl : command.getLines()) {
+            BigDecimal qty = nz(rl.getQty());
+            if (qty.signum() <= 0) {
+                continue;
+            }
+            PurchaseOrderLine pol = byId.get(rl.getPurchaseOrderLineId());
+            if (pol == null) {
+                throw new PurchaseDomainException("error.purchase.documentLineNotOnOrder", null,
+                        "The document has a line that no longer exists on the purchase order");
+            }
+            Product product = productRepository.findById(new ProductId(pol.getProductId()))
+                    .orElseThrow(() -> new PurchaseDomainException("Product not found: " + pol.getProductId()));
+            if (product.getProductType() == ProductType.SERVICE || qty.compareTo(nz(pol.getQtyReceived())) > 0) {
+                throw new PurchaseDomainException("error.purchase.returnExceedsReceived",
+                        new Object[] { pol.getName() },
+                        "Cannot return more than was received for '" + pol.getName() + "'");
+            }
+            wantedStockQty.merge(pol.getId(), toStockUomQty(pol, product, qty), BigDecimal::add);
+        }
+        if (wantedStockQty.isEmpty()) {
+            throw new PurchaseDomainException("error.purchase.nothingToReturn", null, "No received stock available to return");
+        }
+
+        // Validated receipts, newest first, and what earlier returns already took back from each.
+        List<StockPickingResponse> receipts = new ArrayList<>();
+        for (UUID pid : stockMovePurchaseQueryPort.findPickingIdsByPurchaseOrderId(o.getId())) {
+            StockPickingResponse p = stockPickingApplicationService.getPicking(pid);
+            if (p.getState() == PickingState.DONE) {
+                receipts.add(p);
+            }
+        }
+        receipts.sort(Comparator.comparing(StockPickingResponse::getValidatedAt,
+                Comparator.nullsFirst(Comparator.naturalOrder())).reversed());
+        Map<String, BigDecimal> alreadyReturned = new LinkedHashMap<>();
+        for (UUID rid : stockMovePurchaseQueryPort.findReturnPickingIdsByPurchaseOrderId(o.getId())) {
+            StockPickingResponse r = stockPickingApplicationService.getPicking(rid);
+            if (r.getState() == PickingState.CANCELLED || r.getBackorderOf() == null) {
+                continue;
+            }
+            for (StockPickingResponse.MoveResponse m : r.getMoves()) {
+                if (m.getPurchaseOrderLineId() == null || m.getState() == MoveState.CANCELLED) {
+                    continue;
+                }
+                BigDecimal q = m.getState() == MoveState.DONE ? nz(m.getPickedQuantity()) : nz(m.getDemandQuantity());
+                alreadyReturned.merge(r.getBackorderOf() + "|" + m.getPurchaseOrderLineId(), q, BigDecimal::add);
+            }
+        }
+
+        // Spread each line's quantity over the receipts it came in.
+        Map<UUID, Map<UUID, BigDecimal>> planByReceipt = new LinkedHashMap<>();
+        for (Map.Entry<UUID, BigDecimal> want : wantedStockQty.entrySet()) {
+            BigDecimal rem = want.getValue();
+            for (StockPickingResponse d : receipts) {
+                BigDecimal returnedHere = nz(alreadyReturned.get(d.getId() + "|" + want.getKey()));
+                for (StockPickingResponse.MoveResponse m : d.getMoves()) {
+                    if (rem.signum() <= 0) {
+                        break;
+                    }
+                    if (!want.getKey().equals(m.getPurchaseOrderLineId()) || m.getState() != MoveState.DONE) {
+                        continue;
+                    }
+                    BigDecimal picked = nz(m.getPickedQuantity());
+                    BigDecimal usedByEarlier = returnedHere.min(picked);
+                    returnedHere = returnedHere.subtract(usedByEarlier);
+                    BigDecimal take = rem.min(picked.subtract(usedByEarlier));
+                    if (take.signum() <= 0) {
+                        continue;
+                    }
+                    planByReceipt.computeIfAbsent(d.getId(), k -> new LinkedHashMap<>()).merge(m.getId(), take, BigDecimal::add);
+                    rem = rem.subtract(take);
+                }
+                if (rem.signum() <= 0) {
+                    break;
+                }
+            }
+            if (rem.signum() > 0) {
+                PurchaseOrderLine pol = byId.get(want.getKey());
+                throw new PurchaseDomainException("error.purchase.returnExceedsReceived",
+                        new Object[] { pol.getName() },
+                        "Cannot return more than was received for '" + pol.getName() + "'");
+            }
+        }
+
+        for (Map.Entry<UUID, Map<UUID, BigDecimal>> plan : planByReceipt.entrySet()) {
+            // A move missing from the quantity map is returned in full, so every other move of the
+            // receipt gets an explicit zero: only the requested lines go back.
+            Map<UUID, BigDecimal> quantities = new LinkedHashMap<>();
+            for (StockPickingResponse d : receipts) {
+                if (d.getId().equals(plan.getKey())) {
+                    for (StockPickingResponse.MoveResponse m : d.getMoves()) {
+                        quantities.put(m.getId(), BigDecimal.ZERO);
+                    }
+                }
+            }
+            quantities.putAll(plan.getValue());
+            ReturnPickingCommand rc = new ReturnPickingCommand();
+            rc.setMoveQuantities(quantities);
+            rc.setToRefund(command.isRefund());
+            StockPickingResponse ret = stockPickingApplicationService.returnPicking(plan.getKey(), rc);
+            stockPickingApplicationService.validatePicking(ret.getId(), null);
+        }
+        activityLogger.log(o.getCompanyId(), RecordActivityLogger.MODEL_PURCHASE_ORDER, o.getId(),
+                (command.isRefund() ? "Goods returned to the vendor and refunded" : "Goods returned for replacement")
+                        + (command.getReason() != null && !command.getReason().isBlank()
+                                ? ": " + command.getReason().trim() : ""));
+        return getPurchaseOrder(id);
+    }
+
+    @Override
+    @Transactional
+    public PurchaseOrderResponse closeRemainingQuantities(UUID id, String reason) {
+        PurchaseOrder o = loadOrder(id);
+        if (o.getState() != PurchaseOrderState.CONFIRMED) {
+            throw new PurchaseDomainException("error.purchase.closeRemainingRequiresConfirmed", null,
+                    "Only confirmed orders can be closed short");
+        }
+        if (o.isLocked()) {
+            throw new PurchaseDomainException(
+                    "error.purchase.orderLocked", null, "Purchase order is locked; unlock before amending");
+        }
+        if (hasDraftBillDocuments(o.getId())) {
+            throw new PurchaseDomainException(
+                    "error.purchase.draftBillBlocksAmendment", null,
+                    "A draft bill or credit note exists for this order; post or cancel it before changing lines");
+        }
+        Map<UUID, BigDecimal> qtyOrderedBefore = new LinkedHashMap<>();
+        BigDecimal untaxedBefore = nz(o.getAmountUntaxed());
+        Instant now = Instant.now();
+        for (PurchaseOrderLine line : o.getLines()) {
+            qtyOrderedBefore.put(line.getId(), nz(line.getQtyOrdered()));
+            Product product = productRepository.findById(new ProductId(line.getProductId()))
+                    .orElseThrow(() -> new PurchaseDomainException("Product not found: " + line.getProductId()));
+            if (product.getProductType() == ProductType.SERVICE) {
+                continue;
+            }
+            BigDecimal received = nz(line.getQtyReceived());
+            if (nz(line.getQtyInvoiced()).compareTo(received) > 0) {
+                throw new PurchaseDomainException("error.purchase.closeRemainingBilledUnreceived", null,
+                        "Some quantity is billed but not received; create a credit note for it first");
+            }
+            if (nz(line.getQtyOrdered()).compareTo(received) != 0) {
+                line.setQtyOrdered(received);
+                line.setUpdatedAt(now);
+            }
+        }
+        cancelOpenPickings(o.getId());
+        o.setUpdatedAt(now);
+        recalcTotals(o);
+        PurchaseOrder saved = purchaseOrderRepository.save(o);
+        purchaseOrderRepository.flush();
+        postPurchaseAmendmentTracking(saved, qtyOrderedBefore, untaxedBefore);
+        activityLogger.log(saved.getCompanyId(), RecordActivityLogger.MODEL_PURCHASE_ORDER, saved.getId(),
+                "Remaining quantities closed" + (reason != null && !reason.isBlank() ? ": " + reason.trim() : ""));
+        return getPurchaseOrder(saved.getId());
+    }
+
+    /**
+     * Before posting a bill or credit note of an order: refuse a document that no longer fits it,
+     * i.e. billing beyond the ordered quantity or crediting beyond the billed quantity.
+     */
+    private void assertBillFitsOrder(VendorBill bill) {
+        if (bill.getPurchaseOrderId() == null || bill.getMoveType() == VendorBillMoveType.DEBIT_NOTE) {
+            return;
+        }
+        PurchaseOrder po = loadOrder(bill.getPurchaseOrderId());
+        boolean creditNote = bill.getMoveType() == VendorBillMoveType.CREDIT_NOTE;
+        Map<UUID, BigDecimal> qtyByLine = new LinkedHashMap<>();
+        for (VendorBillLine line : bill.getLines()) {
+            if (line.getPurchaseOrderLineId() != null) {
+                qtyByLine.merge(line.getPurchaseOrderLineId(), nz(line.getQty()), BigDecimal::add);
+            }
+        }
+        for (PurchaseOrderLine pol : po.getLines()) {
+            BigDecimal qty = qtyByLine.get(pol.getId());
+            if (qty == null) {
+                continue;
+            }
+            BigDecimal billed = nz(pol.getQtyInvoiced());
+            if (creditNote) {
+                if (qty.compareTo(billed) > 0) {
+                    throw new PurchaseDomainException("error.purchase.creditExceedsBilled",
+                            new Object[] { pol.getName() },
+                            "Cannot credit more than was billed for '" + pol.getName() + "'");
+                }
+            } else if (billed.add(qty).compareTo(nz(pol.getQtyOrdered())) > 0) {
+                throw new PurchaseDomainException("error.purchase.billExceedsOrdered",
+                        new Object[] { pol.getName() },
+                        "Cannot bill more than ordered for '" + pol.getName() + "'");
+            }
+        }
+    }
+
+    private void cancelDraftBills(UUID purchaseOrderId) {
+        for (VendorBill bill : vendorBillRepository.findByPurchaseOrderId(purchaseOrderId)) {
+            if (bill.getState() == VendorBillState.DRAFT) {
+                cancelVendorBill(bill.getId());
+            }
+        }
+    }
+
+    private boolean hasDraftBillDocuments(UUID purchaseOrderId) {
+        return vendorBillRepository.findByPurchaseOrderId(purchaseOrderId).stream()
+                .anyMatch(b -> b.getState() == VendorBillState.DRAFT);
+    }
+
+    private static BigDecimal nz(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
+    }
+
+    private static boolean sameAmount(BigDecimal a, BigDecimal b) {
+        return nz(a).compareTo(nz(b)) == 0;
+    }
+
+    /** Commercial terms of a line (qty, price, discount, taxes) used to detect edits. */
+    private static String lineTermsSignature(PurchaseOrderLine line) {
+        List<String> taxIds = new ArrayList<>();
+        for (PurchaseOrderLineTax t : line.getTaxes()) {
+            taxIds.add(String.valueOf(t.getTaxId()));
+        }
+        java.util.Collections.sort(taxIds);
+        return nz(line.getQtyOrdered()).stripTrailingZeros().toPlainString()
+                + "|" + nz(line.getUnitPrice()).stripTrailingZeros().toPlainString()
+                + "|" + line.getDiscountType()
+                + "|" + nz(line.getDiscountValue()).stripTrailingZeros().toPlainString()
+                + "|" + String.join(",", taxIds);
+    }
+
+    private static boolean orderDiscountChanged(PurchaseOrder o, CreatePurchaseOrderCommand command) {
+        PurchaseOrder probe = new PurchaseOrder();
+        probe.setOrderDiscountType(o.getOrderDiscountType());
+        probe.setOrderDiscountValue(o.getOrderDiscountValue());
+        applyOrderDiscountInput(probe, command);
+        return probe.getOrderDiscountType() != o.getOrderDiscountType()
+                || !sameAmount(probe.getOrderDiscountValue(), o.getOrderDiscountValue());
+    }
+
+    /**
+     * Rules for editing a line of a confirmed order: quantity never below what was received or
+     * billed, and price, discount and taxes are fixed once anything is received or billed (the
+     * received goods were valued at the agreed price; change it with the guided correction).
+     */
+    private static void assertLineAmendmentAllowed(PurchaseOrderLine line, PurchaseOrderLineCommand lc) {
+        BigDecimal newQty = nz(lc.getQtyOrdered());
+        BigDecimal received = nz(line.getQtyReceived());
+        BigDecimal billed = nz(line.getQtyInvoiced());
+        if (newQty.compareTo(received) < 0) {
+            throw new PurchaseDomainException(
+                    "error.purchase.qtyBelowReceived",
+                    new Object[] { MonetaryScale.toDisplayString(received) },
+                    "Quantity cannot be below the received quantity (" + received.toPlainString()
+                            + "); return the goods first");
+        }
+        if (newQty.compareTo(billed) < 0) {
+            throw new PurchaseDomainException(
+                    "error.purchase.qtyBelowBilled",
+                    new Object[] { MonetaryScale.toDisplayString(billed) },
+                    "Quantity cannot be below the billed quantity (" + billed.toPlainString()
+                            + "); create a credit note first");
+        }
+        if (received.signum() <= 0 && billed.signum() <= 0) {
+            return;
+        }
+        boolean priceChanged = lc.getUnitPrice() != null && !sameAmount(lc.getUnitPrice(), line.getUnitPrice());
+        PurchaseOrderLine probe = new PurchaseOrderLine();
+        probe.setDiscountType(line.getDiscountType());
+        probe.setDiscountValue(line.getDiscountValue());
+        applyLineDiscountInput(probe, lc);
+        boolean discountChanged = probe.getDiscountType() != line.getDiscountType()
+                || !sameAmount(probe.getDiscountValue(), line.getDiscountValue());
+        Set<UUID> taxesBefore = new HashSet<>();
+        for (PurchaseOrderLineTax t : line.getTaxes()) {
+            taxesBefore.add(t.getTaxId());
+        }
+        boolean taxesChanged = !taxesBefore.equals(new HashSet<>(lc.getTaxIds()));
+        if (priceChanged || discountChanged || taxesChanged) {
+            throw new PurchaseDomainException(
+                    "error.purchase.receivedLineTermsLocked", null,
+                    "Price, discount and taxes are locked once goods are received or billed; use Correct order");
+        }
     }
 
     @Override
@@ -1139,20 +1914,168 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
 
     @Override
     public void syncPurchaseOrderLineQtyReceivedFromStockMoves(UUID purchaseOrderId, UUID pickingId) {
+        Map<UUID, BigDecimal> receivedBefore = new LinkedHashMap<>();
+        purchaseOrderRepository.findById(purchaseOrderId).ifPresent(before -> before.getLines()
+                .forEach(l -> receivedBefore.put(l.getId(), nz(l.getQtyReceived()))));
         PurchaseOrder o = purchaseOrderQtyWriter.updateQtyReceived(purchaseOrderId);
-        if (o != null) {
-            UUID id = o.getId();
-            boolean toRefund = stockMovePurchaseQueryPort.isPickingToRefund(pickingId);
-            runAfterCommit(() -> {
-                if (!toRefund) {
-                    return;
-                }
-                PurchaseOrder fresh = purchaseOrderRepository.findById(id).orElse(null);
-                if (fresh != null) {
-                    tryAutoCreateDraftCreditNoteFromReturn(fresh);
-                }
-            });
+        if (o == null || pickingId == null) {
+            return;
         }
+        // Runs inside the picking validation transaction: refusing here rolls the whole validation
+        // back, so goods can never be received beyond the ordered quantity.
+        for (PurchaseOrderLine line : o.getLines()) {
+            if (nz(line.getQtyReceived()).compareTo(nz(line.getQtyOrdered())) > 0) {
+                throw new PurchaseDomainException("error.purchase.receivedExceedsOrdered",
+                        new Object[] { line.getName() },
+                        "Cannot receive more than ordered for '" + line.getName() + "'");
+            }
+        }
+        StockPickingResponse picking = stockPickingApplicationService.getPicking(pickingId);
+        if (picking.getPickingType() == PickingType.INCOMING) {
+            if (o.getWarehouseId() != null) {
+                syncOpenReceipts(loadOrder(o.getId()), true);
+            }
+            return;
+        }
+        Map<UUID, BigDecimal> returned = new LinkedHashMap<>();
+        for (PurchaseOrderLine line : o.getLines()) {
+            BigDecimal delta = nz(receivedBefore.get(line.getId())).subtract(nz(line.getQtyReceived()));
+            if (delta.signum() > 0) {
+                returned.put(line.getId(), delta);
+            }
+        }
+        if (returned.isEmpty()) {
+            return;
+        }
+        if (picking.isToRefund()) {
+            applyRefundReturn(o.getId(), returned);
+        } else {
+            applyReplaceReturn(o.getId());
+        }
+    }
+
+    /**
+     * Goods went back to the vendor and the vendor refunds: they are no longer ordered, and the
+     * billed part of them is credited and posted now, in the same transaction as the return.
+     */
+    private void applyRefundReturn(UUID purchaseOrderId, Map<UUID, BigDecimal> returned) {
+        PurchaseOrder o = loadOrder(purchaseOrderId);
+        Map<UUID, BigDecimal> qtyOrderedBefore = new LinkedHashMap<>();
+        BigDecimal untaxedBefore = nz(o.getAmountUntaxed());
+        Instant now = Instant.now();
+        for (PurchaseOrderLine line : o.getLines()) {
+            qtyOrderedBefore.put(line.getId(), nz(line.getQtyOrdered()));
+            BigDecimal back = returned.get(line.getId());
+            if (back == null) {
+                continue;
+            }
+            line.setQtyOrdered(nz(line.getQtyOrdered()).subtract(back).max(nz(line.getQtyReceived())));
+            line.setUpdatedAt(now);
+        }
+        o.setUpdatedAt(now);
+        recalcTotals(o);
+        PurchaseOrder saved = purchaseOrderRepository.save(o);
+        purchaseOrderRepository.flush();
+        postPurchaseAmendmentTracking(saved, qtyOrderedBefore, untaxedBefore);
+        activityLogger.log(saved.getCompanyId(), RecordActivityLogger.MODEL_PURCHASE_ORDER, saved.getId(),
+                "Returned goods refunded: ordered quantity reduced");
+        creditReturnedGoods(loadOrder(purchaseOrderId), returned);
+    }
+
+    /** Goods went back to be replaced: the order is unchanged and a receipt is created for them. */
+    private void applyReplaceReturn(UUID purchaseOrderId) {
+        PurchaseOrder o = loadOrder(purchaseOrderId);
+        if (o.getWarehouseId() != null) {
+            syncOpenReceipts(o, false);
+        }
+        activityLogger.log(o.getCompanyId(), RecordActivityLogger.MODEL_PURCHASE_ORDER, o.getId(),
+                "Returned goods to be replaced: re-receipt created");
+    }
+
+    /**
+     * Credits and posts what is billed but no longer received, capped at what was actually returned
+     * (a bill posted before receipt keeps covering goods that have not arrived yet).
+     */
+    private void creditReturnedGoods(PurchaseOrder o, Map<UUID, BigDecimal> returned) {
+        Map<UUID, BigDecimal> draftCn = draftCreditNoteQtyByPoLine(o.getId());
+        Map<UUID, BigDecimal> toCredit = new LinkedHashMap<>();
+        for (PurchaseOrderLine pol : o.getLines()) {
+            BigDecimal qty = creditNoteableQtyForPoLine(pol, draftCn).min(nz(returned.get(pol.getId())));
+            if (qty.signum() > 0) {
+                toCredit.put(pol.getId(), qty);
+            }
+        }
+        creditQuantities(o, toCredit);
+    }
+
+    /**
+     * Creates and posts vendor credit notes for the given quantity per order line, spread over the
+     * order's posted bills newest first, at each bill line's original price, discount and tax and
+     * never beyond what a bill line still has uncredited. Returns the posted credit notes.
+     */
+    private List<VendorBillResponse> creditQuantities(PurchaseOrder o, Map<UUID, BigDecimal> quantities) {
+        List<VendorBillResponse> posted = new ArrayList<>();
+        Map<UUID, BigDecimal> toCredit = new LinkedHashMap<>();
+        quantities.forEach((k, v) -> {
+            if (nz(v).signum() > 0) {
+                toCredit.put(k, v);
+            }
+        });
+        if (toCredit.isEmpty()) {
+            return posted;
+        }
+        List<VendorBill> bills = vendorBillRepository.findByPurchaseOrderId(o.getId()).stream()
+                .filter(b -> b.getState() == VendorBillState.POSTED)
+                .filter(b -> b.getMoveType() == null || b.getMoveType() == VendorBillMoveType.BILL)
+                .sorted(Comparator.comparing(VendorBill::getCreatedAt, Comparator.nullsFirst(Comparator.naturalOrder()))
+                        .thenComparing(VendorBill::getId).reversed())
+                .toList();
+        for (VendorBill bill : bills) {
+            bill.getLines().size();
+            for (VendorBillLine l : bill.getLines()) {
+                l.getTaxSnapshots().size();
+            }
+            Map<UUID, BigDecimal> credited = creditedQtyBySourceBillLine(bill);
+            List<CreateCreditNoteFromVendorBillCommand.CreditNoteLineQtyCommand> lines = new ArrayList<>();
+            for (Map.Entry<UUID, BigDecimal> e : toCredit.entrySet()) {
+                for (VendorBillLine billLine : bill.getLines()) {
+                    if (e.getValue().signum() <= 0) {
+                        break;
+                    }
+                    if (!e.getKey().equals(billLine.getPurchaseOrderLineId())) {
+                        continue;
+                    }
+                    BigDecimal available = nz(billLine.getQty()).subtract(credited.getOrDefault(billLine.getId(), BigDecimal.ZERO))
+                            .max(BigDecimal.ZERO);
+                    BigDecimal take = e.getValue().min(available);
+                    if (take.signum() <= 0) {
+                        continue;
+                    }
+                    CreateCreditNoteFromVendorBillCommand.CreditNoteLineQtyCommand lc =
+                            new CreateCreditNoteFromVendorBillCommand.CreditNoteLineQtyCommand();
+                    lc.setBillLineId(billLine.getId());
+                    lc.setQty(take);
+                    lines.add(lc);
+                    credited.merge(billLine.getId(), take, BigDecimal::add);
+                    e.setValue(e.getValue().subtract(take));
+                }
+            }
+            if (lines.isEmpty()) {
+                continue;
+            }
+            CreateCreditNoteFromVendorBillCommand cmd = new CreateCreditNoteFromVendorBillCommand();
+            cmd.setCompanyId(o.getCompanyId());
+            cmd.setBillDate(LocalDate.now());
+            cmd.setReference(o.getName() != null ? "CN/" + o.getName() : null);
+            cmd.setLines(lines);
+            VendorBillResponse cn = createCreditNoteFromVendorBill(bill.getId(), cmd);
+            posted.add(postVendorBill(cn.getId()));
+        }
+        if (toCredit.values().stream().anyMatch(q -> q.signum() > 0)) {
+            throw new PurchaseDomainException("error.purchase.cannotCreditReturn", null,
+                    "The returned goods could not be fully credited against this order's bills");
+        }
+        return posted;
     }
 
     private BigDecimal creditNoteableQtyForPoLine(PurchaseOrderLine pol, Map<UUID, BigDecimal> draftCreditNotes) {
@@ -1166,96 +2089,6 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         }
         return pol.getQtyInvoiced().subtract(baseline).subtract(draft).max(BigDecimal.ZERO)
                 .setScale(4, RoundingMode.HALF_UP);
-    }
-
-    private void tryAutoCreateDraftCreditNoteFromReturn(PurchaseOrder o) {
-        Map<UUID, BigDecimal> draftCn = draftCreditNoteQtyByPoLine(o.getId());
-        final Map<UUID, BigDecimal> initialDraftCn = draftCn;
-        boolean hasCreditable = o.getLines().stream()
-                .anyMatch(pol -> creditNoteableQtyForPoLine(pol, initialDraftCn).signum() > 0);
-        if (!hasCreditable) {
-            return;
-        }
-        List<VendorBill> postedBills = vendorBillRepository.findByPurchaseOrderId(o.getId()).stream()
-                .filter(b -> b.getState() == VendorBillState.POSTED)
-                .filter(b -> b.getMoveType() == null || b.getMoveType() == VendorBillMoveType.BILL)
-                .sorted(Comparator.comparing(VendorBill::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
-                        .thenComparing(VendorBill::getBillDate, Comparator.nullsLast(Comparator.naturalOrder())))
-                .toList();
-        if (postedBills.isEmpty()) {
-            return;
-        }
-        // Remaining credit-noteable qty per PO line after each CN (FIFO across bills).
-        Map<UUID, BigDecimal> remaining = new HashMap<>();
-        for (PurchaseOrderLine pol : o.getLines()) {
-            BigDecimal qty = creditNoteableQtyForPoLine(pol, draftCn);
-            if (qty.signum() > 0) {
-                remaining.put(pol.getId(), qty);
-            }
-        }
-        for (VendorBill sourceBill : postedBills) {
-            if (remaining.values().stream().noneMatch(q -> q.signum() > 0)) {
-                break;
-            }
-            VendorBillResponse cn = createVendorCreditNoteFromPurchaseOrder(o, sourceBill, remaining);
-            if (cn != null) {
-                // Leave as DRAFT — do not auto-post (Odoo-like purchase return correction).
-                draftCn = draftCreditNoteQtyByPoLine(o.getId());
-                remaining.clear();
-                for (PurchaseOrderLine pol : o.getLines()) {
-                    BigDecimal qty = creditNoteableQtyForPoLine(pol, draftCn);
-                    if (qty.signum() > 0) {
-                        remaining.put(pol.getId(), qty);
-                    }
-                }
-            }
-        }
-    }
-
-    private VendorBillResponse createVendorCreditNoteFromPurchaseOrder(PurchaseOrder po,
-                                                                         VendorBill sourceBill,
-                                                                         Map<UUID, BigDecimal> remainingByPoLine) {
-        sourceBill.getLines().size();
-        for (VendorBillLine line : sourceBill.getLines()) {
-            line.getTaxSnapshots().size();
-        }
-        CreateCreditNoteFromVendorBillCommand cnCmd = new CreateCreditNoteFromVendorBillCommand();
-        cnCmd.setCompanyId(po.getCompanyId());
-        cnCmd.setBillDate(LocalDate.now());
-        // PO names are already "PO/YYYY/NNNNN"; prefix only "CN/" → "CN/PO/YYYY/NNNNN".
-        cnCmd.setReference(po.getName() != null ? "CN/" + po.getName() : "CN/PO/" + po.getId());
-        List<CreateCreditNoteFromVendorBillCommand.CreditNoteLineQtyCommand> cnLines = new ArrayList<>();
-        Map<UUID, BigDecimal> creditedOnBill = creditedQtyBySourceBillLine(sourceBill);
-        for (PurchaseOrderLine pol : po.getLines()) {
-            BigDecimal remaining = remainingByPoLine.getOrDefault(pol.getId(), BigDecimal.ZERO);
-            if (remaining.signum() <= 0) {
-                continue;
-            }
-            for (VendorBillLine billLine : sourceBill.getLines()) {
-                if (!pol.getId().equals(billLine.getPurchaseOrderLineId())) {
-                    continue;
-                }
-                BigDecimal alreadyCredited = creditedOnBill.getOrDefault(billLine.getId(), BigDecimal.ZERO);
-                BigDecimal availableOnBill = billLine.getQty().subtract(alreadyCredited).max(BigDecimal.ZERO);
-                BigDecimal qty = remaining.min(availableOnBill);
-                if (qty.signum() <= 0) {
-                    continue;
-                }
-                CreateCreditNoteFromVendorBillCommand.CreditNoteLineQtyCommand lc =
-                        new CreateCreditNoteFromVendorBillCommand.CreditNoteLineQtyCommand();
-                lc.setBillLineId(billLine.getId());
-                lc.setQty(qty);
-                cnLines.add(lc);
-                remaining = remaining.subtract(qty);
-                remainingByPoLine.put(pol.getId(), remaining);
-                break;
-            }
-        }
-        if (cnLines.isEmpty()) {
-            return null;
-        }
-        cnCmd.setLines(cnLines);
-        return createCreditNoteFromVendorBill(sourceBill.getId(), cnCmd);
     }
 
     @Override
@@ -1321,7 +2154,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 BigDecimal maxQty = billableQtyForLine(pol, product, otherDraftAllocated, bill.getCompanyId());
                 if (newQty.compareTo(maxQty) > 0) {
                     throw new PurchaseDomainException(
-                            "Bill qty " + newQty + " exceeds billable qty " + maxQty
+                            "Bill qty " + MonetaryScale.toDisplayString(newQty) + " exceeds billable qty " + MonetaryScale.toDisplayString(maxQty)
                                     + " on PO line " + (pol.getName() != null ? pol.getName() : pol.getId()));
                 }
             }
@@ -1338,7 +2171,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                         BigDecimal remaining = srcLine.getQty().subtract(prior).setScale(4, RoundingMode.HALF_UP);
                         if (newQty.compareTo(remaining) > 0) {
                             throw new PurchaseDomainException(
-                                    "Credit qty " + newQty + " exceeds remaining creditable qty " + remaining
+                                    "Credit qty " + MonetaryScale.toDisplayString(newQty) + " exceeds remaining creditable qty " + MonetaryScale.toDisplayString(remaining)
                                             + " on bill line " + srcLine.getName());
                         }
                     }
@@ -1504,7 +2337,10 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         for (PurchaseOrderLine pol : po.getLines()) {
             Product product = productRepository.findById(new ProductId(pol.getProductId()))
                     .orElseThrow(() -> new PurchaseDomainException("Product not found: " + pol.getProductId()));
-            BigDecimal qty = billableQtyForLine(pol, product, draftAllocated, companyId);
+            BigDecimal qty = command.getLineQuantities() != null
+                    ? nz(command.getLineQuantities().get(pol.getId()))
+                            .min(nz(pol.getQtyOrdered()).subtract(effectiveQtyInvoiced(pol, draftAllocated)).max(BigDecimal.ZERO))
+                    : billableQtyForLine(pol, product, draftAllocated, companyId);
             if (qty.signum() <= 0) {
                 continue;
             }
@@ -1615,6 +2451,18 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         vbl.setDiscountPercent(DiscountMath.effectivePercent(billedGross, DiscountType.FIXED, amount));
     }
 
+    private static BigDecimal billLineGross(VendorBillLine line) {
+        if (line.getQty() == null || line.getUnitPrice() == null) {
+            return BigDecimal.ZERO;
+        }
+        return line.getQty().multiply(line.getUnitPrice()).max(BigDecimal.ZERO).setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private static BigDecimal billLineDiscount(VendorBillLine line) {
+        return DiscountMath.discountAmount(billLineGross(line), line.getDiscountType(), line.getDiscountValue())
+                .setScale(4, RoundingMode.HALF_UP);
+    }
+
     private static BigDecimal billLineNet(VendorBillLine line) {
         return PurchaseOrderRules
                 .lineNet(line.getQty(), line.getUnitPrice(), line.getDiscountType(), line.getDiscountValue())
@@ -1636,55 +2484,9 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     }
 
     private BigDecimal sumPostedPaymentsForBill(UUID billId, String billCurrency) {
-        return vendorPaymentRepository.findByVendorBillId(billId).stream()
-                .filter(p -> p.getState() == VendorPaymentState.POSTED)
-                .filter(p -> billCurrency.equalsIgnoreCase(p.getCurrencyCode()))
-                .map(VendorPayment::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
+        return vendorPaymentService.sumActiveAllocationsByBillIds(List.of(billId))
+                .getOrDefault(billId, BigDecimal.ZERO)
                 .setScale(4, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal sumPostedCreditNotesForBill(UUID sourceBillId, String billCurrency) {
-        return vendorBillRepository.findByReversedBillId(sourceBillId).stream()
-                .filter(cn -> cn.getState() == VendorBillState.POSTED)
-                .filter(cn -> cn.getMoveType() == VendorBillMoveType.CREDIT_NOTE)
-                .filter(cn -> billCurrency.equalsIgnoreCase(cn.getCurrencyCode()))
-                .map(this::billTotalDocumentCurrency)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(4, RoundingMode.HALF_UP);
-    }
-
-    private void ensurePaymentWithinOutstanding(VendorBill bill, BigDecimal docAmt, String paymentCurrency) {
-        bill.getLines().size();
-        for (VendorBillLine line : bill.getLines()) {
-            line.getTaxSnapshots().size();
-        }
-        String billCurrency = bill.getCurrencyCode();
-        BigDecimal billTotal = billTotalDocumentCurrency(bill);
-        BigDecimal paid = sumPostedPaymentsForBill(bill.getId(), billCurrency);
-        BigDecimal outstanding;
-        if (bill.getMoveType() == VendorBillMoveType.CREDIT_NOTE) {
-            // Refunds against a credit note: outstanding = CN total - refunds already paid.
-            outstanding = billTotal.subtract(paid).setScale(4, RoundingMode.HALF_UP);
-            if (outstanding.signum() <= 0) {
-                throw new PurchaseDomainException(
-                        "error.purchase.creditNoteFullyRefunded", null, "Credit note is already fully refunded");
-            }
-        } else {
-            BigDecimal credited = sumPostedCreditNotesForBill(bill.getId(), billCurrency);
-            outstanding = billTotal.subtract(paid).subtract(credited).setScale(4, RoundingMode.HALF_UP);
-            if (outstanding.signum() <= 0) {
-                throw new PurchaseDomainException("error.purchase.vendorBillFullyPaid", null, "Vendor bill is already fully paid");
-            }
-        }
-        if (!billCurrency.equalsIgnoreCase(paymentCurrency)) {
-            return;
-        }
-        if (docAmt.compareTo(outstanding) > 0) {
-            throw new PurchaseDomainException(
-                    "Payment amount exceeds outstanding balance of " + outstanding.toPlainString()
-                            + " " + billCurrency);
-        }
     }
 
     private UUID resolveStockInputAccount(Product product) {
@@ -1749,9 +2551,9 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             BigDecimal remaining = srcLine.getQty().subtract(prior).setScale(4, RoundingMode.HALF_UP);
             if (qty.compareTo(remaining) > 0) {
                 throw new PurchaseDomainException(
-                        "Credit qty " + qty + " exceeds remaining creditable qty " + remaining
+                        "Credit qty " + MonetaryScale.toDisplayString(qty) + " exceeds remaining creditable qty " + MonetaryScale.toDisplayString(remaining)
                                 + " on bill line " + srcLine.getName()
-                                + " (already credited " + prior + " of " + srcLine.getQty() + ")");
+                                + " (already credited " + MonetaryScale.toDisplayString(prior) + " of " + MonetaryScale.toDisplayString(srcLine.getQty()) + ")");
             }
         }
 
@@ -1798,6 +2600,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             line.setDiscountPercent(DiscountMath.effectivePercent(
                     line.getQty().multiply(line.getUnitPrice()), line.getDiscountType(), line.getDiscountValue()));
             line.setAccountId(srcLine.getAccountId());
+            line.setPriceVariance(nz(srcLine.getPriceVariance()).multiply(ratio).setScale(4, RoundingMode.HALF_UP));
             line.setCreatedAt(now);
             line.setUpdatedAt(now);
             for (VendorBillLineTax tax : srcLine.getTaxSnapshots()) {
@@ -1965,6 +2768,76 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         return toBillResponse(vendorBillRepository.save(dn));
     }
 
+    /**
+     * What goods of an order were received at, so a bill that pays a different price books the
+     * difference as price variance instead of leaving it on Stock Input (GR/IR).
+     */
+    private final class PriceVarianceContext {
+        private final Map<UUID, PurchaseOrderLine> lines = new LinkedHashMap<>();
+        private final Map<UUID, BigDecimal> avgStockCost = new LinkedHashMap<>();
+        private final Map<UUID, BigDecimal> billedSoFar = new LinkedHashMap<>();
+
+        PriceVarianceContext(PurchaseOrder po) {
+            Map<UUID, BigDecimal[]> acc = new LinkedHashMap<>();
+            for (PurchaseOrderLine l : po.getLines()) {
+                lines.put(l.getId(), l);
+                billedSoFar.put(l.getId(), nz(l.getQtyInvoiced()));
+            }
+            for (UUID pid : stockMovePurchaseQueryPort.findPickingIdsByPurchaseOrderId(po.getId())) {
+                StockPickingResponse p = stockPickingApplicationService.getPicking(pid);
+                if (p.getState() != PickingState.DONE || p.getPickingType() != PickingType.INCOMING) {
+                    continue;
+                }
+                for (StockPickingResponse.MoveResponse m : p.getMoves()) {
+                    if (m.getPurchaseOrderLineId() == null || m.getState() != MoveState.DONE) {
+                        continue;
+                    }
+                    BigDecimal q = nz(m.getPickedQuantity());
+                    BigDecimal[] a = acc.computeIfAbsent(m.getPurchaseOrderLineId(),
+                            k -> new BigDecimal[] { BigDecimal.ZERO, BigDecimal.ZERO });
+                    a[0] = a[0].add(q.multiply(nz(m.getUnitCost())));
+                    a[1] = a[1].add(q);
+                }
+            }
+            acc.forEach((k, a) -> {
+                if (a[1].signum() > 0) {
+                    avgStockCost.put(k, a[0].divide(a[1], 8, RoundingMode.HALF_UP));
+                }
+            });
+        }
+
+        /** Bill net (company currency) minus the receipt cost of the received, not yet billed part. */
+        BigDecimal varianceFor(VendorBillLine line, BigDecimal netComp) {
+            PurchaseOrderLine pol = line.getPurchaseOrderLineId() != null ? lines.get(line.getPurchaseOrderLineId()) : null;
+            if (pol == null || nz(line.getQty()).signum() <= 0) {
+                return BigDecimal.ZERO;
+            }
+            Product product = productRepository.findById(new ProductId(pol.getProductId())).orElse(null);
+            if (product == null || product.getProductType() == ProductType.SERVICE) {
+                return BigDecimal.ZERO;
+            }
+            BigDecimal before = billedSoFar.get(pol.getId());
+            billedSoFar.put(pol.getId(), before.add(line.getQty()));
+            BigDecimal covered = line.getQty().min(nz(pol.getQtyReceived()).subtract(before).max(BigDecimal.ZERO));
+            BigDecimal avg = avgStockCost.get(pol.getId());
+            if (covered.signum() <= 0 || avg == null) {
+                return BigDecimal.ZERO;
+            }
+            BigDecimal perOrderUnit = avg.multiply(toStockUomQty(pol, product, BigDecimal.ONE));
+            BigDecimal billed = netComp.multiply(covered).divide(line.getQty(), 8, RoundingMode.HALF_UP);
+            BigDecimal variance = billed.subtract(perOrderUnit.multiply(covered)).setScale(4, RoundingMode.HALF_UP);
+            return variance.abs().compareTo(new BigDecimal("0.01")) < 0 ? BigDecimal.ZERO : variance;
+        }
+    }
+
+    private PriceVarianceContext priceVarianceContext(VendorBill bill) {
+        if (bill.getPurchaseOrderId() == null || bill.getMoveType() == VendorBillMoveType.DEBIT_NOTE
+                || bill.isOpeningBalance()) {
+            return null;
+        }
+        return new PriceVarianceContext(loadOrder(bill.getPurchaseOrderId()));
+    }
+
     @Override
     @Transactional
     public VendorBillResponse postVendorBill(UUID billId) {
@@ -1976,6 +2849,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         if (bill.getState() == VendorBillState.CANCELLED) {
             throw new PurchaseDomainException("error.purchase.cannotPostCancelledBill", null, "Cannot post a cancelled bill");
         }
+        assertBillFitsOrder(bill);
         PartnerResponse vendor = partnerApplicationService.getPartner(bill.getVendorPartnerId());
         UUID payableAccount = vendor.getPayableAccountId() != null
                 ? vendor.getPayableAccountId()
@@ -1991,18 +2865,57 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         List<JournalItemCommand> items = new ArrayList<>();
         BigDecimal apCreditCompany = BigDecimal.ZERO;
         BigDecimal apDocTotal = BigDecimal.ZERO;
+        UUID purchaseDiscountAccount = accountingReferenceLookupPort
+                .resolveAccountIdByCode(bill.getCompanyId(), PURCHASE_DISCOUNT_ACCOUNT_CODE);
+        PriceVarianceContext varianceCtx = creditNote ? null : priceVarianceContext(bill);
+        UUID varianceAccount = null;
 
         for (VendorBillLine line : bill.getLines()) {
+            BigDecimal grossDoc = billLineGross(line);
+            BigDecimal grossComp = PurchaseTaxEngine.convertAtRate(grossDoc, rate);
+            BigDecimal discDoc = billLineDiscount(line);
+            BigDecimal discComp = PurchaseTaxEngine.convertAtRate(discDoc, rate);
             BigDecimal lineNetDoc = billLineNet(line);
             BigDecimal netComp = PurchaseTaxEngine.convertAtRate(lineNetDoc, rate);
-            if (netComp.signum() > 0) {
-                if (creditNote) {
-                    items.add(new JournalItemCommand(line.getAccountId(), line.getName(), BigDecimal.ZERO, netComp,
-                            bill.getCurrencyCode(), lineNetDoc.negate(), null));
-                } else {
-                    items.add(new JournalItemCommand(line.getAccountId(), line.getName(), netComp, BigDecimal.ZERO,
-                            bill.getCurrencyCode(), lineNetDoc, null));
+            if (varianceCtx != null) {
+                line.setPriceVariance(varianceCtx.varianceFor(line, netComp));
+            }
+            if (line.getPriceVariance().signum() != 0) {
+                if (varianceAccount == null) {
+                    varianceAccount = accountingReferenceLookupPort
+                            .resolveAccountIdByCode(bill.getCompanyId(), PURCHASE_PRICE_VARIANCE_ACCOUNT_CODE);
                 }
+                // A bill pays more (or less) than the goods were received at: the difference leaves
+                // Stock Input so it clears, and sits on the variance account. A credit note reverses it.
+                BigDecimal move = creditNote ? line.getPriceVariance().negate() : line.getPriceVariance();
+                BigDecimal amt = move.abs();
+                items.add(new JournalItemCommand(line.getAccountId(), "Price variance: " + line.getName(),
+                        move.signum() < 0 ? amt : BigDecimal.ZERO, move.signum() > 0 ? amt : BigDecimal.ZERO,
+                        null, null));
+                items.add(new JournalItemCommand(varianceAccount, "Price variance: " + line.getName(),
+                        move.signum() > 0 ? amt : BigDecimal.ZERO, move.signum() < 0 ? amt : BigDecimal.ZERO,
+                        null, null));
+            }
+
+            if (grossComp.signum() > 0) {
+                if (creditNote) {
+                    items.add(new JournalItemCommand(line.getAccountId(), line.getName(), BigDecimal.ZERO, grossComp,
+                            bill.getCurrencyCode(), grossDoc.negate(), null));
+                } else {
+                    items.add(new JournalItemCommand(line.getAccountId(), line.getName(), grossComp, BigDecimal.ZERO,
+                            bill.getCurrencyCode(), grossDoc, null));
+                }
+            }
+            if (discComp.signum() > 0) {
+                if (creditNote) {
+                    items.add(new JournalItemCommand(purchaseDiscountAccount, "Discount: " + line.getName(), discComp, BigDecimal.ZERO,
+                            bill.getCurrencyCode(), discDoc, null));
+                } else {
+                    items.add(new JournalItemCommand(purchaseDiscountAccount, "Discount: " + line.getName(), BigDecimal.ZERO, discComp,
+                            bill.getCurrencyCode(), discDoc.negate(), null));
+                }
+            }
+            if (netComp.signum() > 0) {
                 apCreditCompany = apCreditCompany.add(netComp);
                 apDocTotal = apDocTotal.add(lineNetDoc);
             }
@@ -2026,33 +2939,20 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         BigDecimal orderDiscDoc = bill.getOrderDiscountAmount() != null
                 ? bill.getOrderDiscountAmount().max(BigDecimal.ZERO)
                 : BigDecimal.ZERO;
-        if (orderDiscDoc.signum() > 0 && apDocTotal.signum() > 0) {
-            // Reduce expense side and AP by the order discount so the payable matches the PO total.
+        if (orderDiscDoc.signum() > 0) {
             BigDecimal untaxedDoc = BigDecimal.ZERO;
             for (VendorBillLine line : bill.getLines()) {
                 untaxedDoc = untaxedDoc.add(billLineNet(line));
             }
             BigDecimal discDoc = orderDiscDoc.min(untaxedDoc);
             BigDecimal discComp = PurchaseTaxEngine.convertAtRate(discDoc, rate);
-            if (discComp.signum() > 0 && !items.isEmpty()) {
-                // Credit the first expense line (or debit for credit notes) to book the discount.
-                JournalItemCommand first = items.get(0);
+            if (discComp.signum() > 0) {
                 if (creditNote) {
-                    items.set(0, new JournalItemCommand(
-                            first.getAccountId(), first.getLabel(),
-                            first.getDebit().add(discComp), first.getCredit(),
-                            first.getCurrencyCode(),
-                            first.getAmountCurrency() != null ? first.getAmountCurrency().add(discDoc) : discDoc,
-                            first.getPartnerId()));
+                    items.add(new JournalItemCommand(purchaseDiscountAccount, "Order discount", discComp, BigDecimal.ZERO,
+                            bill.getCurrencyCode(), discDoc, null));
                 } else {
-                    BigDecimal newDebit = first.getDebit().subtract(discComp).max(BigDecimal.ZERO);
-                    BigDecimal newAmtCur = first.getAmountCurrency() != null
-                            ? first.getAmountCurrency().subtract(discDoc)
-                            : discDoc.negate();
-                    items.set(0, new JournalItemCommand(
-                            first.getAccountId(), first.getLabel(),
-                            newDebit, first.getCredit(),
-                            first.getCurrencyCode(), newAmtCur, first.getPartnerId()));
+                    items.add(new JournalItemCommand(purchaseDiscountAccount, "Order discount", BigDecimal.ZERO, discComp,
+                            bill.getCurrencyCode(), discDoc.negate(), null));
                 }
                 apCreditCompany = apCreditCompany.subtract(discComp).max(BigDecimal.ZERO);
                 apDocTotal = apDocTotal.subtract(discDoc).max(BigDecimal.ZERO);
@@ -2111,6 +3011,180 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     }
 
     @Override
+    @Transactional
+    public VendorBillResponse createOpeningVendorBill(UUID companyId, UUID partnerId, BigDecimal amount, String currency,
+                                                      LocalDate date, LocalDate dueDate, String reference,
+                                                      UUID openingJournalId, UUID openingEquityAccountId) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new PurchaseDomainException("error.purchase.openingAmountPositive", null,
+                    "Opening bill amount must be positive");
+        }
+        PartnerResponse vendor = partnerApplicationService.getPartner(partnerId);
+        if (!vendor.isVendor()) {
+            throw new PurchaseDomainException("error.purchase.partnerNotVendor", null, "Partner is not a vendor");
+        }
+        if (!companyId.equals(vendor.getCompanyId())) {
+            throw new PurchaseDomainException("error.purchase.partnerCompanyMismatch", null, "Vendor belongs to another company");
+        }
+        periodPostingGuard.assertDatePostable(companyId, date);
+        String currencyCode = currency != null ? currency.trim().toUpperCase() : null;
+        if (currencyCode == null || currencyCode.isBlank()) {
+            throw new PurchaseDomainException("error.purchase.paymentCurrencyRequired", null, "Currency is required");
+        }
+        UUID unitUomId = resolveReferenceUnitUom(companyId);
+        BigDecimal scaled = amount.setScale(4, RoundingMode.HALF_UP);
+        BigDecimal rate = resolveExchangeRate(companyId, currencyCode, date, null);
+        BigDecimal companyAmount = PurchaseTaxEngine.convertAtRate(scaled, rate);
+
+        Instant now = Instant.now();
+        VendorBill bill = new VendorBill();
+        bill.setId(UUID.randomUUID());
+        bill.setCompanyId(companyId);
+        bill.setVendorPartnerId(partnerId);
+        bill.setPurchaseOrderId(null);
+        bill.setBillDate(date);
+        bill.setDueDate(dueDate != null ? dueDate : date);
+        bill.setReference(reference != null && !reference.isBlank()
+                ? reference.trim()
+                : documentSequenceService.next(companyId, "OB-BILL"));
+        bill.setCurrencyCode(currencyCode);
+        bill.setState(VendorBillState.DRAFT);
+        bill.setMoveType(VendorBillMoveType.BILL);
+        bill.setExchangeRateToCompany(rate);
+        bill.setOrderDiscountAmount(BigDecimal.ZERO);
+        bill.setOpeningBalance(true);
+        bill.setCreatedAt(now);
+        bill.setUpdatedAt(now);
+        bill.setRowVersion(0L);
+
+        VendorBillLine line = new VendorBillLine();
+        line.setId(UUID.randomUUID());
+        line.setSequence(10);
+        line.setProductId(null);
+        line.setName("Opening balance");
+        line.setUomId(unitUomId);
+        line.setQty(BigDecimal.ONE.setScale(4, RoundingMode.HALF_UP));
+        line.setUnitPrice(scaled);
+        line.setDiscountType(DiscountType.PERCENT);
+        line.setDiscountValue(BigDecimal.ZERO);
+        line.setDiscountPercent(BigDecimal.ZERO);
+        line.setAccountId(openingEquityAccountId);
+        line.setCreatedAt(now);
+        line.setUpdatedAt(now);
+        bill.getLines().add(line);
+
+        UUID payableAccount = vendor.getPayableAccountId() != null
+                ? vendor.getPayableAccountId()
+                : accountingReferenceLookupPort.resolveAccountIdByCode(companyId, DEFAULT_AP_ACCOUNT_CODE);
+
+        List<JournalItemCommand> items = List.of(
+                new JournalItemCommand(openingEquityAccountId, "Opening balance", companyAmount, BigDecimal.ZERO,
+                        currencyCode, scaled, null),
+                new JournalItemCommand(payableAccount, "Accounts payable", BigDecimal.ZERO, companyAmount,
+                        currencyCode, scaled.negate(), partnerId));
+        CreateJournalEntryResponse created = journalEntryApplicationService.createJournalEntry(
+                new CreateJournalEntryCommand(companyId, openingJournalId, "",
+                        JournalEntryTiming.ofBusinessDate(date), currencyCode, partnerId, items));
+        journalEntryApplicationService.postJournalEntry(created.getJournalEntryId());
+
+        bill.setJournalEntryId(created.getJournalEntryId());
+        bill.setState(VendorBillState.POSTED);
+        bill.setUpdatedAt(Instant.now());
+        VendorBill saved = vendorBillRepository.save(bill);
+        vendorPaymentService.syncForBills(List.of(saved.getId()));
+        activityLogger.log(saved.getCompanyId(), RecordActivityLogger.MODEL_VENDOR_BILL, saved.getId(),
+                "Opening balance bill posted");
+        return toBillResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public void cancelOpeningVendorBill(UUID billId) {
+        VendorBill bill = vendorBillRepository.findById(billId)
+                .orElseThrow(() -> new PurchaseDomainException("Vendor bill not found: " + billId));
+        if (!bill.isOpeningBalance()) {
+            throw new PurchaseDomainException("error.purchase.notOpeningBill", null,
+                    "Bill is not an opening balance document");
+        }
+        if (bill.getState() == VendorBillState.CANCELLED) {
+            return;
+        }
+        if (bill.getState() != VendorBillState.POSTED) {
+            throw new PurchaseDomainException("error.purchase.openingBillNotPosted", null,
+                    "Only posted opening bills can be cancelled");
+        }
+        if (bill.getJournalEntryId() != null) {
+            journalEntryApplicationService.reverseJournalEntry(
+                    new com.bradox.erp.accounting.service.domain.create.ReverseJournalEntryCommand(
+                            bill.getJournalEntryId(), "Opening balances replaced"));
+        }
+        bill.setState(VendorBillState.CANCELLED);
+        bill.setUpdatedAt(Instant.now());
+        vendorBillRepository.save(bill);
+        vendorPaymentService.syncForBills(List.of(bill.getId()));
+        activityLogger.log(bill.getCompanyId(), RecordActivityLogger.MODEL_VENDOR_BILL, bill.getId(),
+                "Opening balance bill cancelled");
+    }
+
+    @Override
+    @Transactional
+    public VendorPaymentResponse postOpeningVendorPayment(UUID companyId, UUID partnerId, BigDecimal amount,
+                                                          String currency, LocalDate date, String reference,
+                                                          UUID openingJournalId, UUID openingEquityAccountId) {
+        VendorPayment payment = vendorPaymentService.postOpeningPayment(
+                companyId, partnerId, amount, currency, date, reference, openingJournalId, openingEquityAccountId);
+        return vendorPaymentService.get(payment.getId());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<VendorBillResponse> listOpeningVendorBills(UUID companyId) {
+        return vendorBillRepository.findOpeningBalanceByCompanyId(companyId).stream()
+                .filter(b -> b.getState() == VendorBillState.POSTED)
+                .map(this::toBillResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<VendorPaymentResponse> listOpeningVendorPayments(UUID companyId) {
+        return vendorPaymentRepository.findOpeningBalanceByCompanyId(companyId).stream()
+                .filter(p -> p.getState() == VendorPaymentState.POSTED)
+                .map(p -> vendorPaymentService.get(p.getId()))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean hasActiveVendorAllocations(java.util.Collection<UUID> billIds,
+                                              java.util.Collection<UUID> paymentIds) {
+        return vendorPaymentService.hasActiveAllocations(billIds, paymentIds);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean hasVendorCreditNotes(java.util.Collection<UUID> billIds) {
+        if (billIds == null || billIds.isEmpty()) {
+            return false;
+        }
+        return vendorBillRepository.findByReversedBillIdIn(billIds).stream()
+                .anyMatch(cn -> cn.getState() != VendorBillState.CANCELLED
+                        && cn.getMoveType() == VendorBillMoveType.CREDIT_NOTE);
+    }
+
+    private UUID resolveReferenceUnitUom(UUID companyId) {
+        for (var category : uomApplicationService.listUomCategories(new CompanyId(companyId), false)) {
+            for (var uom : uomApplicationService.listUomsByCategory(category.getId(), false)) {
+                if ("Unit".equalsIgnoreCase(uom.getName())) {
+                    return uom.getId();
+                }
+            }
+        }
+        throw new PurchaseDomainException("error.purchase.unitUomMissing", null,
+                "Company reference UoM \"Unit\" not found; run ERP bootstrap first.");
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<VendorBillResponse> listCreditNotesForBill(UUID billId) {
         vendorBillRepository.findById(billId)
@@ -2159,11 +3233,33 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
 
     @Override
     @Transactional(readOnly = true)
-    public List<VendorPaymentResponse> listVendorPayments(UUID companyId) {
+    public Page<VendorBillSummaryResponse> searchVendorBills(UUID companyId, Pageable pageable) {
         UUID cid = companyIdOrDefault(companyId);
-        return vendorPaymentRepository.findByCompanyIdOrderByPaymentDateDescCreatedAtDesc(cid).stream()
-                .map(this::toVendorPaymentListRow)
-                .collect(Collectors.toList());
+        return vendorBillRepository.searchByCompanyId(cid, pageable).map(b -> {
+            b.getLines().size();
+            for (VendorBillLine line : b.getLines()) {
+                line.getTaxSnapshots().size();
+            }
+            return toBillSummaryResponse(b);
+        });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<VendorPaymentResponse> searchVendorPayments(UUID companyId, Pageable pageable) {
+        return vendorPaymentService.search(companyIdOrDefault(companyId), pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<VendorPaymentResponse> listVendorPayments(UUID companyId) {
+        return vendorPaymentService.list(companyIdOrDefault(companyId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public VendorPaymentResponse getVendorPayment(UUID paymentId) {
+        return vendorPaymentService.get(paymentId);
     }
 
     @Override
@@ -2189,16 +3285,18 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
 
     private List<PartnerStatementSectionResponse> buildPayableSections(
             UUID cid, UUID partnerId, LocalDate from, LocalDate to) {
-        List<VendorBill> bills = vendorBillRepository
-                .findByCompanyIdAndVendorPartnerIdOrderByBillDateAscCreatedAtAsc(cid, partnerId);
+        List<VendorBill> bills = new ArrayList<>();
+        bills.addAll(vendorBillRepository.findPostedByPartnerBefore(cid, partnerId, from));
+        bills.addAll(vendorBillRepository.findPostedByPartnerBetween(cid, partnerId, from, to));
         for (VendorBill b : bills) {
             b.getLines().size();
             for (VendorBillLine line : b.getLines()) {
                 line.getTaxSnapshots().size();
             }
         }
-        List<VendorPayment> payments = vendorPaymentRepository
-                .findByCompanyIdAndVendorPartnerIdOrderByPaymentDateAscCreatedAtAsc(cid, partnerId);
+        List<VendorPayment> payments = new ArrayList<>();
+        payments.addAll(vendorPaymentRepository.findPostedByPartnerBefore(cid, partnerId, from));
+        payments.addAll(vendorPaymentRepository.findPostedByPartnerBetween(cid, partnerId, from, to));
 
         Set<String> currencies = new LinkedHashSet<>();
         for (VendorBill b : bills) {
@@ -2277,8 +3375,9 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 period.add(new PayEvt(p.getPaymentDate(), p.getCreatedAt(), "P:" + p.getId(), null, p));
             }
         }
-        period.sort(Comparator.comparing(PayEvt::d)
-                .thenComparing(PayEvt::created)
+        period.sort(Comparator
+                .comparing((PayEvt e) -> e.d().toLocalDate())
+                .thenComparing(PayEvt::created, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(PayEvt::idKey));
 
         BigDecimal running = opening;
@@ -2317,7 +3416,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                         ? p.getReference()
                         : "Payment");
                 row.setCurrencyCode(p.getCurrencyCode());
-                row.setVendorBillId(p.getVendorBillId());
+                row.setVendorBillId(null);
                 row.setVendorPaymentId(p.getId());
                 row.setCustomerInvoiceId(null);
                 row.setCustomerPaymentId(null);
@@ -2344,198 +3443,63 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
     @Override
     @Transactional
     public VendorPaymentResponse registerVendorPayment(RegisterVendorPaymentCommand command) {
-        UUID companyId = companyIdOrDefault(command.getCompanyId());
-        VendorBill bill = vendorBillRepository.findById(command.getVendorBillId())
-                .orElseThrow(() -> new PurchaseDomainException("Vendor bill not found"));
-        if (!bill.getCompanyId().equals(companyId)) {
-            throw new PurchaseDomainException("error.purchase.billCompanyMismatch", null, "Bill company mismatch");
+        VendorPaymentResponse response = vendorPaymentService.register(command);
+        UUID primaryBillId = null;
+        if (command.getVendorBillId() != null) {
+            primaryBillId = command.getVendorBillId();
+        } else if (command.getAllocations() != null && command.getAllocations().size() == 1) {
+            primaryBillId = command.getAllocations().get(0).getBillId();
         }
-        if (bill.getState() != VendorBillState.POSTED || bill.getJournalEntryId() == null) {
-            throw new PurchaseDomainException("error.purchase.billMustBePostedBeforePayment", null, "Bill must be posted before payment");
-        }
-        boolean refund = bill.getMoveType() == VendorBillMoveType.CREDIT_NOTE;
-        periodPostingGuard.assertDatePostable(companyId, command.getPaymentDate().toLocalDate());
-        String paymentCurrency = command.getCurrencyCode() != null ? command.getCurrencyCode() : bill.getCurrencyCode();
-        BigDecimal docAmt = command.getAmount().setScale(4, RoundingMode.HALF_UP);
-        ensurePaymentWithinOutstanding(bill, docAmt, paymentCurrency);
-        PartnerResponse vendor = partnerApplicationService.getPartner(bill.getVendorPartnerId());
-        UUID payableAccount = vendor.getPayableAccountId() != null
-                ? vendor.getPayableAccountId()
-                : accountingReferenceLookupPort.resolveAccountIdByCode(companyId, DEFAULT_AP_ACCOUNT_CODE);
-
-        JournalType paymentJournalType = accountingReferenceLookupPort
-                .resolveJournalType(companyId, command.getBankJournalId());
-        UUID liquidityAccountId = resolveLiquidityAccountForPaymentJournal(companyId, command.getBankJournalId());
-        String liquidityLabel = paymentJournalType == JournalType.CASH
-                ? (refund ? "Cash refund" : "Cash payment")
-                : (refund ? "Bank refund" : "Bank payment");
-
-        BigDecimal billRate = resolveExchangeRate(
-                companyId, bill.getCurrencyCode(), bill.getBillDate(), bill.getExchangeRateToCompany());
-        BigDecimal paymentRate = resolveExchangeRate(
-                companyId, paymentCurrency, command.getPaymentDate().toLocalDate(), command.getExchangeRateToCompany());
-
-        BigDecimal apClearComp = CurrencyMath.convertAtRate(docAmt, billRate);
-        BigDecimal liquidityComp = CurrencyMath.convertAtRate(docAmt, paymentRate);
-        BigDecimal fxDiff = refund
-                ? liquidityComp.subtract(apClearComp).setScale(4, RoundingMode.HALF_UP)
-                : apClearComp.subtract(liquidityComp).setScale(4, RoundingMode.HALF_UP);
-
-        List<JournalItemCommand> items = new ArrayList<>();
-        if (refund) {
-            // Opposite of normal payment: debit liquidity, credit AP.
-            items.add(new JournalItemCommand(liquidityAccountId, liquidityLabel, liquidityComp, BigDecimal.ZERO,
-                    paymentCurrency, docAmt, null));
-            items.add(new JournalItemCommand(payableAccount, "Refund " + bill.getReference(), BigDecimal.ZERO, apClearComp,
-                    paymentCurrency, docAmt.negate(), bill.getVendorPartnerId()));
-        } else {
-            items.add(new JournalItemCommand(payableAccount, "Payment " + bill.getReference(), apClearComp, BigDecimal.ZERO,
-                    paymentCurrency, docAmt, bill.getVendorPartnerId()));
-            items.add(new JournalItemCommand(liquidityAccountId, liquidityLabel, BigDecimal.ZERO, liquidityComp,
-                    paymentCurrency, docAmt.negate(), null));
-        }
-        appendVendorExchangeDifference(items, companyId, fxDiff);
-        CreateJournalEntryCommand jcmd = new CreateJournalEntryCommand(
-                companyId,
-                command.getBankJournalId(),
-                "",
-                    JournalEntryTiming.ensureTimed(command.getPaymentDate()),
-                paymentCurrency,
-                bill.getVendorPartnerId(),
-                items);
-        CreateJournalEntryResponse payEntry = journalEntryApplicationService.createJournalEntry(jcmd);
-        journalEntryApplicationService.postJournalEntry(payEntry.getJournalEntryId());
-
-        JournalEntryResponse billEntry = journalEntryApplicationService.getJournalEntry(bill.getJournalEntryId());
-        UUID billApItem;
-        if (refund) {
-            billApItem = billEntry.getItems().stream()
-                    .filter(i -> payableAccount.equals(i.getAccountId()) && i.getDebit().compareTo(BigDecimal.ZERO) > 0)
-                    .map(JournalEntryResponse.JournalItemResponse::getId)
-                    .findFirst()
-                    .orElseThrow(() -> new PurchaseDomainException("Could not find AP line on vendor credit note entry"));
-        } else {
-            billApItem = billEntry.getItems().stream()
-                    .filter(i -> payableAccount.equals(i.getAccountId()) && i.getCredit().compareTo(BigDecimal.ZERO) > 0)
-                    .map(JournalEntryResponse.JournalItemResponse::getId)
-                    .findFirst()
-                    .orElseThrow(() -> new PurchaseDomainException("Could not find AP line on vendor bill entry"));
-        }
-        JournalEntryResponse paymentEntry = journalEntryApplicationService.getJournalEntry(payEntry.getJournalEntryId());
-        UUID payApItem;
-        if (refund) {
-            payApItem = paymentEntry.getItems().stream()
-                    .filter(i -> payableAccount.equals(i.getAccountId()) && i.getCredit().compareTo(BigDecimal.ZERO) > 0)
-                    .map(JournalEntryResponse.JournalItemResponse::getId)
-                    .findFirst()
-                    .orElseThrow(() -> new PurchaseDomainException("Could not find AP line on refund entry"));
-        } else {
-            payApItem = paymentEntry.getItems().stream()
-                    .filter(i -> payableAccount.equals(i.getAccountId()) && i.getDebit().compareTo(BigDecimal.ZERO) > 0)
-                    .map(JournalEntryResponse.JournalItemResponse::getId)
-                    .findFirst()
-                    .orElseThrow(() -> new PurchaseDomainException("Could not find AP line on payment entry"));
-        }
-
-        UUID reconciliationId = UUID.randomUUID();
-        reconciliationApplicationService.reconcile(
-                new ReconciliationApplicationService.ReconcileCommand(
-                        List.of(billApItem, payApItem), reconciliationId));
-
-        Instant now = Instant.now();
-        VendorPayment p = new VendorPayment();
-        p.setId(UUID.randomUUID());
-        p.setCompanyId(companyId);
-        p.setVendorPartnerId(bill.getVendorPartnerId());
-        p.setVendorBillId(bill.getId());
-        p.setPaymentDate(command.getPaymentDate());
-        p.setBankJournalId(command.getBankJournalId());
-        p.setAmount(docAmt);
-        p.setCurrencyCode(paymentCurrency);
-        p.setExchangeRateToCompany(paymentRate);
-        p.setState(VendorPaymentState.POSTED);
-        p.setPaymentKind(refund ? VendorPaymentKind.REFUND : VendorPaymentKind.PAYOUT);
-        p.setJournalEntryId(payEntry.getJournalEntryId());
-        String paymentReference = command.getReference();
-        if (paymentReference == null || paymentReference.isBlank()) {
-            paymentReference = paymentEntry.getSequenceNumber();
-        }
-        p.setReference(paymentReference);
-        p.setCreatedAt(now);
-        p.setUpdatedAt(now);
-        vendorPaymentRepository.save(p);
-
-        String actionLabel = refund ? "Refund registered: " : "Payment registered: ";
-        activityLogger.log(p.getCompanyId(), RecordActivityLogger.MODEL_VENDOR_PAYMENT, p.getId(),
-                actionLabel + docAmt.toPlainString() + " " + paymentCurrency);
-        activityLogger.log(bill.getCompanyId(), RecordActivityLogger.MODEL_VENDOR_BILL, bill.getId(),
-                actionLabel + docAmt.toPlainString() + " " + paymentCurrency
-                        + (p.getReference() != null ? " (" + p.getReference() + ")" : ""));
-        if (bill.getPurchaseOrderId() != null) {
-            activityLogger.log(bill.getCompanyId(), RecordActivityLogger.MODEL_PURCHASE_ORDER, bill.getPurchaseOrderId(),
-                    actionLabel + "on bill " + (bill.getReference() != null ? bill.getReference() : bill.getId())
-                            + ": " + docAmt.toPlainString() + " " + paymentCurrency);
-        }
-
-        VendorPaymentResponse r = new VendorPaymentResponse();
-        r.setId(p.getId());
-        r.setCompanyId(companyId);
-        r.setVendorPartnerId(p.getVendorPartnerId());
-        r.setVendorBillId(bill.getId());
-        r.setPaymentDate(command.getPaymentDate());
-        r.setBankJournalId(p.getBankJournalId());
-        r.setAmount(docAmt);
-        r.setCurrencyCode(paymentCurrency);
-        r.setExchangeRateToCompany(paymentRate);
-        r.setState(VendorPaymentState.POSTED);
-        r.setPaymentKind(p.getPaymentKind());
-        r.setJournalEntryId(payEntry.getJournalEntryId());
-        r.setReconciliationId(reconciliationId);
-        r.setReference(paymentReference);
         purchaseEventPublisher.publishVendorPaymentRegistered(new VendorPaymentRegisteredEvent(
                 UUID.randomUUID(),
                 Instant.now(),
-                companyId,
-                p.getId(),
-                p.getVendorPartnerId(),
-                p.getVendorBillId()));
-        return r;
+                response.getCompanyId(),
+                response.getId(),
+                response.getVendorPartnerId(),
+                primaryBillId));
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public VendorPaymentResponse allocateVendorPayment(UUID paymentId, AllocateVendorPaymentCommand command) {
+        return vendorPaymentService.allocate(paymentId, command);
+    }
+
+    @Override
+    @Transactional
+    public VendorPaymentResponse deallocateVendorPayment(UUID allocationId) {
+        return vendorPaymentService.deallocate(allocationId);
     }
 
     @Override
     @Transactional
     public VendorPaymentResponse reverseVendorPayment(UUID paymentId, String reason) {
-        VendorPayment p = vendorPaymentRepository.findById(paymentId)
-                .orElseThrow(() -> new PurchaseDomainException("Vendor payment not found"));
-        if (p.getState() != VendorPaymentState.POSTED) {
-            throw new PurchaseDomainException("Only posted payments can be reversed");
-        }
-        if (p.getJournalEntryId() == null) {
-            throw new PurchaseDomainException("Payment has no journal entry to reverse");
-        }
-        JournalEntryResponse paymentEntry = journalEntryApplicationService.getJournalEntry(p.getJournalEntryId());
-        List<UUID> reconciliationIds = paymentEntry.getItems().stream()
-                .map(JournalEntryResponse.JournalItemResponse::getReconciliationId)
-                .filter(id -> id != null)
-                .distinct()
-                .toList();
-        if (!reconciliationIds.isEmpty()) {
-            List<UUID> itemIds = journalItemReconciliationPort.findItemIdsByReconciliationIds(reconciliationIds);
-            reconciliationApplicationService.unreconcile(
-                    new ReconciliationApplicationService.UnreconcileCommand(itemIds));
-        }
-        var reverseResp = journalEntryApplicationService.reverseJournalEntry(
-                new com.bradox.erp.accounting.service.domain.create.ReverseJournalEntryCommand(
-                        p.getJournalEntryId(),
-                        reason != null && !reason.isBlank() ? reason : "Payment reverse"));
-        p.setState(VendorPaymentState.REVERSED);
-        p.setReversalJournalEntryId(reverseResp.getReversalJournalEntryId());
-        p.setUpdatedAt(Instant.now());
-        vendorPaymentRepository.save(p);
+        return vendorPaymentService.reverse(paymentId, reason);
+    }
 
-        activityLogger.log(p.getCompanyId(), RecordActivityLogger.MODEL_VENDOR_PAYMENT, p.getId(),
-                "Payment reversed: " + (reason != null ? reason : ""));
-        return toVendorPaymentListRow(p);
+    @Override
+    @Transactional
+    public VendorPaymentResponse correctVendorPayment(UUID paymentId, CorrectVendorPaymentCommand command) {
+        return vendorPaymentService.correctPayment(paymentId, command);
+    }
+
+    @Override
+    @Transactional
+    public VendorPaymentResponse refundVendorCredit(UUID billId, RefundVendorCreditCommand command) {
+        return vendorPaymentService.refundCredit(billId, command);
+    }
+
+    @Override
+    @Transactional
+    public BigDecimal keepVendorCredit(UUID billId) {
+        return vendorPaymentService.keepCredit(billId);
+    }
+
+    @Override
+    @Transactional
+    public BigDecimal applyVendorCredit(UUID billId) {
+        return vendorPaymentService.applyCredit(billId);
     }
 
     @Override
@@ -2604,11 +3568,11 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         r.setVendorReference(o.getVendorReference());
         r.setAmountUntaxed(o.getAmountUntaxed());
         r.setAmountTax(o.getAmountTax());
-        r.setAmountTotal(o.getAmountTotal());
         r.setOrderDiscountType(o.getOrderDiscountType());
         r.setOrderDiscountValue(o.getOrderDiscountValue());
         r.setOrderDiscountPercent(o.getOrderDiscountPercent());
         OrderPaymentFields payment = computePurchasePaymentFields(o);
+        r.setAmountTotal(payment.amountTotal());
         r.setPaymentStatus(payment.paymentStatus());
         r.setAmountPaid(payment.amountPaid());
         r.setAmountDue(payment.amountDue());
@@ -2617,6 +3581,7 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         r.setConfirmedAt(o.getConfirmedAt());
         r.setCancelledAt(o.getCancelledAt());
         r.setLocked(o.isLocked());
+        r.setRowVersion(o.getRowVersion());
         r.setReceiptPickingIds(stockMovePurchaseQueryPort.findPickingIdsByPurchaseOrderId(o.getId()));
         r.setReturnPickingIds(stockMovePurchaseQueryPort.findReturnPickingIdsByPurchaseOrderId(o.getId()));
         r.setCanCreateVendorBill(computeCanCreateVendorBill(o));
@@ -2668,23 +3633,82 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
         return r;
     }
 
-    private VendorPaymentResponse toVendorPaymentListRow(VendorPayment p) {
-        VendorPaymentResponse r = new VendorPaymentResponse();
-        r.setId(p.getId());
-        r.setCompanyId(p.getCompanyId());
-        r.setVendorPartnerId(p.getVendorPartnerId());
-        r.setVendorBillId(p.getVendorBillId());
-        r.setPaymentDate(p.getPaymentDate());
-        r.setBankJournalId(p.getBankJournalId());
-        r.setAmount(p.getAmount());
-        r.setCurrencyCode(p.getCurrencyCode());
-        r.setExchangeRateToCompany(p.getExchangeRateToCompany());
-        r.setState(p.getState());
-        r.setPaymentKind(p.getPaymentKind() != null ? p.getPaymentKind() : VendorPaymentKind.PAYOUT);
-        r.setJournalEntryId(p.getJournalEntryId());
-        r.setReconciliationId(null);
-        r.setReversalJournalEntryId(p.getReversalJournalEntryId());
-        r.setReference(p.getReference());
+    private VendorBillResponse toBillResponse(VendorBill b) {
+        VendorBillResponse r = new VendorBillResponse();
+        r.setId(b.getId());
+        r.setCompanyId(b.getCompanyId());
+        r.setVendorPartnerId(b.getVendorPartnerId());
+        r.setPurchaseOrderId(b.getPurchaseOrderId());
+        r.setBillDate(b.getBillDate());
+        r.setDueDate(b.getDueDate());
+        r.setReference(b.getReference());
+        r.setCurrencyCode(b.getCurrencyCode());
+        r.setState(b.getState());
+        r.setMoveType(b.getMoveType() != null ? b.getMoveType() : VendorBillMoveType.BILL);
+        r.setReversedBillId(b.getReversedBillId());
+        r.setJournalEntryId(b.getJournalEntryId());
+        r.setOrderDiscountAmount(b.getOrderDiscountAmount());
+        if (b.getState() == VendorBillState.POSTED) {
+            BigDecimal total = billTotalDocumentCurrency(b);
+            BigDecimal paid = vendorPaymentService.sumActiveAllocationsByBillIds(List.of(b.getId()))
+                    .getOrDefault(b.getId(), BigDecimal.ZERO);
+            BigDecimal credited = BigDecimal.ZERO;
+            if (b.getMoveType() != VendorBillMoveType.CREDIT_NOTE) {
+                for (VendorBill cn : vendorBillRepository.findByReversedBillId(b.getId())) {
+                    if (cn.getState() == VendorBillState.POSTED) {
+                        cn.getLines().size();
+                        for (VendorBillLine line : cn.getLines()) {
+                            line.getTaxSnapshots().size();
+                        }
+                        credited = credited.add(billTotalDocumentCurrency(cn));
+                    }
+                }
+            }
+            r.setAmountTotal(total);
+            r.setAmountPaid(paid);
+            r.setAmountCredited(credited);
+            r.setAmountResidual(total.subtract(paid).subtract(credited).max(BigDecimal.ZERO));
+            if (b.getMoveType() == VendorBillMoveType.CREDIT_NOTE) {
+                r.setAmountOverpaid(BigDecimal.ZERO);
+                r.setAmountRefundable(vendorPaymentService.refundableOf(b));
+            } else {
+                r.setAmountOverpaid(vendorPaymentService.creditAvailableOn(b));
+                r.setAmountRefundable(BigDecimal.ZERO);
+            }
+            r.setPaymentAllocations(vendorPaymentService.allocationResponsesForBill(b.getId()));
+        } else {
+            r.setAmountTotal(billTotalDocumentCurrency(b));
+            r.setAmountPaid(BigDecimal.ZERO);
+            r.setAmountCredited(BigDecimal.ZERO);
+            r.setAmountResidual(BigDecimal.ZERO);
+            r.setAmountOverpaid(BigDecimal.ZERO);
+            r.setAmountRefundable(BigDecimal.ZERO);
+        }
+        r.setLines(b.getLines().stream().sorted(Comparator.comparingInt(VendorBillLine::getSequence)).map(l -> {
+            VendorBillLineResponse lr = new VendorBillLineResponse();
+            lr.setId(l.getId());
+            lr.setSequence(l.getSequence());
+            lr.setPurchaseOrderLineId(l.getPurchaseOrderLineId());
+            lr.setProductId(l.getProductId());
+            lr.setName(l.getName());
+            lr.setUomId(l.getUomId());
+            lr.setQty(l.getQty());
+            lr.setUnitPrice(l.getUnitPrice());
+            lr.setDiscountType(l.getDiscountType());
+            lr.setDiscountValue(l.getDiscountValue());
+            lr.setDiscountPercent(l.getDiscountPercent());
+            lr.setAccountId(l.getAccountId());
+            lr.setTaxes(l.getTaxSnapshots().stream().map(ts -> {
+                VendorBillLineTaxResponse tr = new VendorBillLineTaxResponse();
+                tr.setTaxId(ts.getTaxId());
+                tr.setTaxName(ts.getTaxName());
+                tr.setTaxBase(ts.getTaxBase());
+                tr.setTaxAmount(ts.getTaxAmount());
+                tr.setAccountId(ts.getAccountId());
+                return tr;
+            }).collect(Collectors.toList()));
+            return lr;
+        }).collect(Collectors.toList()));
         return r;
     }
 
@@ -2718,49 +3742,6 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             }
         }
         return null;
-    }
-
-    private VendorBillResponse toBillResponse(VendorBill b) {
-        VendorBillResponse r = new VendorBillResponse();
-        r.setId(b.getId());
-        r.setCompanyId(b.getCompanyId());
-        r.setVendorPartnerId(b.getVendorPartnerId());
-        r.setPurchaseOrderId(b.getPurchaseOrderId());
-        r.setBillDate(b.getBillDate());
-        r.setDueDate(b.getDueDate());
-        r.setReference(b.getReference());
-        r.setCurrencyCode(b.getCurrencyCode());
-        r.setState(b.getState());
-        r.setMoveType(b.getMoveType() != null ? b.getMoveType() : VendorBillMoveType.BILL);
-        r.setReversedBillId(b.getReversedBillId());
-        r.setJournalEntryId(b.getJournalEntryId());
-        r.setOrderDiscountAmount(b.getOrderDiscountAmount());
-        r.setLines(b.getLines().stream().sorted(Comparator.comparingInt(VendorBillLine::getSequence)).map(l -> {
-            VendorBillLineResponse lr = new VendorBillLineResponse();
-            lr.setId(l.getId());
-            lr.setSequence(l.getSequence());
-            lr.setPurchaseOrderLineId(l.getPurchaseOrderLineId());
-            lr.setProductId(l.getProductId());
-            lr.setName(l.getName());
-            lr.setUomId(l.getUomId());
-            lr.setQty(l.getQty());
-            lr.setUnitPrice(l.getUnitPrice());
-            lr.setDiscountType(l.getDiscountType());
-            lr.setDiscountValue(l.getDiscountValue());
-            lr.setDiscountPercent(l.getDiscountPercent());
-            lr.setAccountId(l.getAccountId());
-            lr.setTaxes(l.getTaxSnapshots().stream().map(ts -> {
-                VendorBillLineTaxResponse tr = new VendorBillLineTaxResponse();
-                tr.setTaxId(ts.getTaxId());
-                tr.setTaxName(ts.getTaxName());
-                tr.setTaxBase(ts.getTaxBase());
-                tr.setTaxAmount(ts.getTaxAmount());
-                tr.setAccountId(ts.getAccountId());
-                return tr;
-            }).collect(Collectors.toList()));
-            return lr;
-        }).collect(Collectors.toList()));
-        return r;
     }
 
     private FiscalTaxResponse toTaxResponse(FiscalTax t) {
@@ -2800,12 +3781,12 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                 label = "[" + product.get().getSku() + "] " + product.get().getName();
             }
             StringBuilder block = new StringBuilder("• ").append(label).append(":\n  Ordered Quantity: ")
-                    .append(oldQty.stripTrailingZeros().toPlainString())
+                    .append(MonetaryScale.toDisplayString(oldQty))
                     .append(" → ")
-                    .append(newQty.stripTrailingZeros().toPlainString());
+                    .append(MonetaryScale.toDisplayString(newQty));
             if (line.getQtyInvoiced() != null && line.getQtyInvoiced().signum() > 0) {
                 block.append("\n  Billed Quantity: ")
-                        .append(line.getQtyInvoiced().stripTrailingZeros().toPlainString());
+                        .append(MonetaryScale.toDisplayString(line.getQtyInvoiced()));
             }
             qtyBlocks.add(block.toString());
         }
@@ -2819,8 +3800,8 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
                     saved.getCompanyId(),
                     RecordActivityLogger.MODEL_PURCHASE_ORDER,
                     saved.getId(),
-                    untaxedBefore.stripTrailingZeros().toPlainString(),
-                    untaxedAfter.stripTrailingZeros().toPlainString(),
+                    MonetaryScale.toDisplayString(untaxedBefore),
+                    MonetaryScale.toDisplayString(untaxedAfter),
                     "Subtotal");
         }
     }
@@ -2834,23 +3815,6 @@ public class PurchaseApplicationServiceImpl implements PurchaseApplicationServic
             }
         }
         return currencyConversionPort.exchangeRateToCompany(companyId, currencyCode, asOf);
-    }
-
-    private void appendVendorExchangeDifference(List<JournalItemCommand> items, UUID companyId, BigDecimal fxDiff) {
-        if (fxDiff.signum() == 0) {
-            return;
-        }
-        if (fxDiff.signum() > 0) {
-            UUID gainAccount = accountingReferenceLookupPort.resolveAccountIdByCode(
-                    companyId, EXCHANGE_GAIN_ACCOUNT_CODE);
-            items.add(new JournalItemCommand(gainAccount, "Exchange gain", BigDecimal.ZERO, fxDiff,
-                    null, null, null));
-        } else {
-            UUID lossAccount = accountingReferenceLookupPort.resolveAccountIdByCode(
-                    companyId, EXCHANGE_LOSS_ACCOUNT_CODE);
-            items.add(new JournalItemCommand(lossAccount, "Exchange loss", fxDiff.abs(), BigDecimal.ZERO,
-                    null, null, null));
-        }
     }
 
     private void applyPackagingSnapshot(PurchaseOrderLine line, UUID packagingId) {

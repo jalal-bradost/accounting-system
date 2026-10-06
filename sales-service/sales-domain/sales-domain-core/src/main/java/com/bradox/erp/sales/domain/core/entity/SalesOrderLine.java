@@ -25,6 +25,7 @@ public class SalesOrderLine {
     /** Qty for which Stock Output → COGS has already been posted (Anglo-Saxon). */
     private BigDecimal qtyCogsCleared;
     private BigDecimal unitPrice;
+    private boolean isGift;
     /** Discount as entered. {@code discountPercent} is the derived percentage for reporting. */
     private DiscountType discountType = DiscountType.PERCENT;
     private BigDecimal discountValue = BigDecimal.ZERO;
@@ -63,6 +64,8 @@ public class SalesOrderLine {
     }
     public BigDecimal getUnitPrice() { return unitPrice; }
     public void setUnitPrice(BigDecimal unitPrice) { this.unitPrice = unitPrice; }
+    public boolean isGift() { return isGift; }
+    public void setGift(boolean gift) { this.isGift = gift; }
     public DiscountType getDiscountType() { return discountType; }
     public void setDiscountType(DiscountType discountType) { this.discountType = DiscountType.orPercent(discountType); }
     public BigDecimal getDiscountValue() { return discountValue; }

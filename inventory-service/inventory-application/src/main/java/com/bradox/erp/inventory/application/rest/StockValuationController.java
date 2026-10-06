@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -25,7 +26,7 @@ public class StockValuationController {
     }
 
     @GetMapping("/quants")
-    @RequiresPermission("inventory.valuation.read")
+    @RequiresPermission(value = {"inventory.valuation.read", "inventory.product.read"}, op = RequiresPermission.LogicalOp.OR)
     public ResponseEntity<List<StockQuantResponse>> quants(@CurrentCompany CompanyId companyId,
                                                             @RequestParam(required = false) UUID productId,
                                                             @RequestParam(required = false) UUID locationId) {
@@ -39,13 +40,25 @@ public class StockValuationController {
     }
 
     @GetMapping("/on-hand/{productId}")
-    @RequiresPermission("inventory.valuation.read")
+    @RequiresPermission(value = {"inventory.valuation.read", "inventory.product.read"}, op = RequiresPermission.LogicalOp.OR)
     public ResponseEntity<Map<String, Object>> onHand(@CurrentCompany CompanyId companyId,
                                                        @PathVariable UUID productId) {
         BigDecimal qty = service.totalOnHand(companyId, productId);
         return ResponseEntity.ok(Map.of(
                 "productId", productId,
                 "totalOnHand", qty));
+    }
+
+    /** Bulk on-hand for field sales / POS — one row per product with stock in the warehouse. */
+    @GetMapping("/warehouses/{warehouseId}/on-hand")
+    @RequiresPermission(value = {"inventory.valuation.read", "inventory.product.read"}, op = RequiresPermission.LogicalOp.OR)
+    public ResponseEntity<List<Map<String, Object>>> warehouseOnHand(@CurrentCompany CompanyId companyId,
+                                                                      @PathVariable UUID warehouseId) {
+        return ResponseEntity.ok(service.onHandByWarehouse(companyId, warehouseId).entrySet().stream()
+                .map(e -> Map.<String, Object>of(
+                        "productId", e.getKey(),
+                        "totalOnHand", e.getValue()))
+                .toList());
     }
 
     @GetMapping("/valuation-layers")
@@ -63,5 +76,13 @@ public class StockValuationController {
         return ResponseEntity.ok(Map.of(
                 "productId", productId,
                 "valuation", value));
+    }
+
+    @GetMapping("/valuation")
+    @RequiresPermission("inventory.valuation.read")
+    public ResponseEntity<List<Map<String, Object>>> bulkValuation(
+            @CurrentCompany CompanyId companyId,
+            @RequestParam("productIds") List<UUID> productIds) {
+        return ResponseEntity.ok(service.bulkValuation(companyId, productIds));
     }
 }

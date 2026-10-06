@@ -29,4 +29,13 @@ class MonetaryScaleTest {
         assertThat(result).isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(result.scale()).isEqualTo(MonetaryScale.SCALE);
     }
+
+    @Test
+    void toDisplayString_stripsTrailingZerosButKeepsSignificantFraction() {
+        assertThat(MonetaryScale.toDisplayString(new BigDecimal("85000.0000"))).isEqualTo("85000");
+        assertThat(MonetaryScale.toDisplayString(new BigDecimal("85000.5990"))).isEqualTo("85000.599");
+        assertThat(MonetaryScale.toDisplayString(new BigDecimal("2.5000"))).isEqualTo("2.5");
+        assertThat(MonetaryScale.toDisplayString(null)).isEqualTo("0");
+        assertThat(MonetaryScale.toDisplayString(BigDecimal.ZERO)).isEqualTo("0");
+    }
 }

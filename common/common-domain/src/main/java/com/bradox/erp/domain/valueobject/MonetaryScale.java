@@ -22,4 +22,15 @@ public final class MonetaryScale {
         if (amount == null) return BigDecimal.ZERO.setScale(SCALE, ROUNDING_MODE);
         return amount.setScale(SCALE, ROUNDING_MODE);
     }
+
+    /**
+     * Human-readable decimal for chatter, errors, and other string UI.
+     * Strips trailing zeros ({@code 85000.0000} → {@code 85000}) but keeps
+     * significant fractional digits ({@code 85000.599} → {@code 85000.599}).
+     * Use for both money and quantity display; keep {@link #scale} for storage/math.
+     */
+    public static String toDisplayString(BigDecimal amount) {
+        if (amount == null) return "0";
+        return amount.stripTrailingZeros().toPlainString();
+    }
 }

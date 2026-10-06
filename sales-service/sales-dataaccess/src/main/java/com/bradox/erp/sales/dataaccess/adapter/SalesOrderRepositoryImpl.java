@@ -79,8 +79,15 @@ public class SalesOrderRepositoryImpl implements SalesOrderRepository {
                                    SalesOrderState state,
                                    UUID customerPartnerId,
                                    String q,
+                                   java.time.LocalDate orderDateFrom,
+                                   java.time.LocalDate orderDateTo,
                                    Pageable pageable) {
-        return jpa.search(companyId, state, customerPartnerId, q, pageable).map(mapper::entityToDomain);
+        // Plain bounds instead of null checks: a null date parameter does not bind reliably everywhere.
+        java.time.LocalDate from = orderDateFrom != null ? orderDateFrom : java.time.LocalDate.of(1900, 1, 1);
+        java.time.LocalDate to = orderDateTo != null ? orderDateTo : java.time.LocalDate.of(9999, 12, 31);
+        boolean filterDates = orderDateFrom != null || orderDateTo != null;
+        return jpa.search(companyId, state, customerPartnerId, q, filterDates, from, to, pageable)
+                .map(mapper::entityToDomain);
     }
 
     @Override
