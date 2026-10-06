@@ -43,6 +43,8 @@ public class SalesOrderResponse {
     private Instant confirmedAt;
     private Instant cancelledAt;
     private boolean locked;
+    /** Optimistic-lock version; send it back on update to detect concurrent edits. */
+    private long rowVersion;
     private Instant deliveryCompletedAt;
     private Instant invoicingCompletedAt;
     /** True when the API would allow creating a customer invoice (confirmed + invoiceable qty on a line). */
@@ -111,6 +113,8 @@ public class SalesOrderResponse {
     public void setCancelledAt(Instant cancelledAt) { this.cancelledAt = cancelledAt; }
     public boolean isLocked() { return locked; }
     public void setLocked(boolean locked) { this.locked = locked; }
+    public long getRowVersion() { return rowVersion; }
+    public void setRowVersion(long rowVersion) { this.rowVersion = rowVersion; }
     public Instant getDeliveryCompletedAt() { return deliveryCompletedAt; }
     public void setDeliveryCompletedAt(Instant deliveryCompletedAt) { this.deliveryCompletedAt = deliveryCompletedAt; }
     public Instant getInvoicingCompletedAt() { return invoicingCompletedAt; }

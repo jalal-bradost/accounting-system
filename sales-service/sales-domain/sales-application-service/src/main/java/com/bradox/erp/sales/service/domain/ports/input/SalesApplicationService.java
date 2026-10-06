@@ -22,9 +22,18 @@ public interface SalesApplicationService {
     SalesOrderResponse updateSalesOrder(UUID id, @Valid CreateSalesOrderCommand command);
 
     Page<SalesOrderSummaryResponse> searchSalesOrders(UUID companyId,
+                                                           SalesOrderState state,
+                                                           UUID customerPartnerId,
+                                                           String q,
+                                                           Pageable pageable);
+
+    /** As above, limited to orders whose order date is within [orderDateFrom, orderDateTo] (either may be null). */
+    Page<SalesOrderSummaryResponse> searchSalesOrders(UUID companyId,
                                                       SalesOrderState state,
                                                       UUID customerPartnerId,
                                                       String q,
+                                                      java.time.LocalDate orderDateFrom,
+                                                      java.time.LocalDate orderDateTo,
                                                       Pageable pageable);
 
     SalesOrderResponse getSalesOrder(UUID id);
@@ -34,6 +43,31 @@ public interface SalesApplicationService {
     SalesOrderResponse confirmSalesOrder(UUID id);
 
     SalesOrderResponse cancelSalesOrder(UUID id);
+
+    /**
+     * Guided return in one transaction: return pickings across the order's deliveries, validated
+     * at the original cost; refund credits and posts, replace re-delivers, damaged goods are scrapped.
+     */
+    SalesOrderResponse returnGoods(UUID id, com.bradox.erp.sales.service.domain.dto.ReturnGoodsCommand command);
+
+    /** Price/discount/tax/order-discount change after invoicing: credit at old terms, re-invoice at new. */
+    com.bradox.erp.sales.service.domain.dto.SalesCorrectionResult changeTerms(
+            UUID id, com.bradox.erp.sales.service.domain.dto.SalesCorrectionCommand command);
+
+    /** Lower quantities (not below delivered); invoiced quantity above the new quantity is credited. */
+    com.bradox.erp.sales.service.domain.dto.SalesCorrectionResult reduceQuantities(
+            UUID id, com.bradox.erp.sales.service.domain.dto.SalesCorrectionCommand command);
+
+    /** Return everything delivered, credit everything invoiced, then cancel the order. */
+    com.bradox.erp.sales.service.domain.dto.SalesCorrectionResult cancelWithDocuments(
+            UUID id, com.bradox.erp.sales.service.domain.dto.SalesCorrectionCommand command);
+
+    /** Wrong customer before delivery: credit their invoices, move the order, re-invoice the new customer. */
+    com.bradox.erp.sales.service.domain.dto.SalesCorrectionResult reassignCustomer(
+            UUID id, com.bradox.erp.sales.service.domain.dto.SalesCorrectionCommand command);
+
+    /** Customer won't take the rest: ordered = delivered on every goods line, open deliveries cancelled. */
+    SalesOrderResponse closeRemainingQuantities(UUID id, String reason);
 
     SalesOrderResponse lockSalesOrder(UUID id);
 

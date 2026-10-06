@@ -120,10 +120,11 @@ class MultiCurrencyPartnerStatementIntegrationTest {
                         .content(payBody))
                 .andExpect(status().isOk())
                 .andReturn();
-        UUID payJeId = UUID.fromString(json.readTree(payRes.getResponse().getContentAsString())
-                .get("journalEntryId").asText());
+        JsonNode pay = json.readTree(payRes.getResponse().getContentAsString());
+        assertThat(pay.get("allocations")).hasSize(1);
+        UUID fxJeId = UUID.fromString(pay.get("allocations").get(0).get("fxJournalEntryId").asText());
 
-        MvcResult jeResult = mockMvc.perform(get("/api/v1/journal-entries/" + payJeId))
+        MvcResult jeResult = mockMvc.perform(get("/api/v1/journal-entries/" + fxJeId))
                 .andExpect(status().isOk())
                 .andReturn();
         JsonNode je = json.readTree(jeResult.getResponse().getContentAsString());

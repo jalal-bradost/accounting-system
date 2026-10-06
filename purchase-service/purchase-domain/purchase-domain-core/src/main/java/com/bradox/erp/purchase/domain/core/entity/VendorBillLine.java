@@ -23,6 +23,8 @@ public class VendorBillLine {
     private BigDecimal discountValue = BigDecimal.ZERO;
     private BigDecimal discountPercent = BigDecimal.ZERO;
     private UUID accountId;
+    /** Company-currency price variance booked when the bill was posted (goods lines of an order). */
+    private BigDecimal priceVariance = BigDecimal.ZERO;
     private Instant createdAt;
     private Instant updatedAt;
     private List<VendorBillLineTax> taxSnapshots = new ArrayList<>();
@@ -55,6 +57,10 @@ public class VendorBillLine {
     }
     public UUID getAccountId() { return accountId; }
     public void setAccountId(UUID accountId) { this.accountId = accountId; }
+    public BigDecimal getPriceVariance() { return priceVariance; }
+    public void setPriceVariance(BigDecimal priceVariance) {
+        this.priceVariance = priceVariance != null ? priceVariance : BigDecimal.ZERO;
+    }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

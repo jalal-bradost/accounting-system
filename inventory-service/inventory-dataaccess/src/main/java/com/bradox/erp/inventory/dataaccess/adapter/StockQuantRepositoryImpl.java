@@ -14,8 +14,11 @@ import org.springframework.stereotype.Component;
 import com.bradox.erp.inventory.domain.core.valueobject.WarehouseId;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 @Component
 public class StockQuantRepositoryImpl implements StockQuantRepository {
@@ -47,11 +50,38 @@ public class StockQuantRepositoryImpl implements StockQuantRepository {
         return sum != null ? sum : BigDecimal.ZERO;
     }
 
+    
+    @Override
+    public Map<UUID, BigDecimal> sumOnHandInternalByProductIds(CompanyId companyId, java.util.Collection<UUID> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, BigDecimal> out = new java.util.HashMap<>();
+        for (Object[] row : jpa.sumOnHandInternalByProductIds(
+                companyId.getId(), productIds, com.bradox.erp.inventory.domain.core.valueobject.LocationType.INTERNAL)) {
+            out.put((UUID) row[0], (BigDecimal) row[1]);
+        }
+        return out;
+    }
+
     @Override
     public BigDecimal sumOnHandByWarehouse(CompanyId companyId, ProductId productId, WarehouseId warehouseId) {
         BigDecimal sum = jpa.sumOnHandByWarehouse(
                 companyId.getId(), productId.getId(), warehouseId.getId(), LocationType.INTERNAL);
         return sum != null ? sum : BigDecimal.ZERO;
+    }
+
+    @Override
+    public Map<UUID, BigDecimal> sumOnHandGroupedByWarehouse(CompanyId companyId, WarehouseId warehouseId) {
+        Map<UUID, BigDecimal> out = new HashMap<>();
+        for (Object[] row : jpa.sumOnHandGroupedByWarehouse(
+                companyId.getId(), warehouseId.getId(), LocationType.INTERNAL)) {
+            if (row == null || row.length < 2 || row[0] == null) continue;
+            UUID productId = (UUID) row[0];
+            BigDecimal qty = row[1] instanceof BigDecimal bd ? bd : BigDecimal.ZERO;
+            out.put(productId, qty);
+        }
+        return out;
     }
 
     @Override

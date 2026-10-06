@@ -6,7 +6,9 @@ import com.bradox.erp.accounting.service.domain.create.JournalEntryResponse;
 import com.bradox.erp.accounting.service.domain.create.ReverseJournalEntryCommand;
 import com.bradox.erp.accounting.service.domain.create.ReverseJournalEntryResponse;
 import com.bradox.erp.accounting.service.domain.ports.input.service.JournalEntryApplicationService;
+import com.bradox.erp.platform.application.dto.PageResponse;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Function;
 
 @RestController
 @RequestMapping(value = "/api/v1/journal-entries", produces = "application/json")
@@ -29,14 +32,23 @@ public class JournalEntryController {
         this.journalEntryApplicationService = journalEntryApplicationService;
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<JournalEntryResponse> getJournalEntry(@PathVariable UUID id) {
-        return ResponseEntity.ok(journalEntryApplicationService.getJournalEntry(id));
-    }
-
     @GetMapping
     public ResponseEntity<List<JournalEntryResponse>> listJournalEntries(@RequestParam UUID companyId) {
         return ResponseEntity.ok(journalEntryApplicationService.listJournalEntriesByCompany(companyId));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<PageResponse<JournalEntryResponse>> searchJournalEntries(
+            @RequestParam UUID companyId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        var result = journalEntryApplicationService.searchJournalEntries(companyId, PageRequest.of(page, size));
+        return ResponseEntity.ok(PageResponse.of(result, Function.identity()));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<JournalEntryResponse> getJournalEntry(@PathVariable UUID id) {
+        return ResponseEntity.ok(journalEntryApplicationService.getJournalEntry(id));
     }
 
     @PostMapping
@@ -58,7 +70,7 @@ public class JournalEntryController {
                 ? body.getReason()
                 : "Reversal";
         ReverseJournalEntryCommand command = new ReverseJournalEntryCommand(id, reason);
-        ReverseJournalEntryResponse response = journalEntryApplicationService.reverseJournalEntry(command);
+        ReverseJournalEntryResponse response = journalEntryApplicationService.reverseManualJournalEntry(command);
         return ResponseEntity.ok(response);
     }
 }

@@ -2,7 +2,9 @@ package com.bradox.erp.purchase.service.domain.dto;
 
 import jakarta.validation.constraints.NotNull;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.UUID;
 
 public class CreateVendorBillFromPoCommand {
@@ -12,6 +14,8 @@ public class CreateVendorBillFromPoCommand {
     @NotNull private LocalDate billDate;
     private LocalDate dueDate;
     private String reference;
+    /** When set, bill exactly these quantities (per order line) instead of what is billable. */
+    private Map<UUID, BigDecimal> lineQuantities;
 
     public UUID getCompanyId() { return companyId; }
     public void setCompanyId(UUID companyId) { this.companyId = companyId; }
@@ -23,4 +27,6 @@ public class CreateVendorBillFromPoCommand {
     public void setDueDate(LocalDate dueDate) { this.dueDate = dueDate; }
     public String getReference() { return reference; }
     public void setReference(String reference) { this.reference = reference; }
+    public Map<UUID, BigDecimal> getLineQuantities() { return lineQuantities; }
+    public void setLineQuantities(Map<UUID, BigDecimal> lineQuantities) { this.lineQuantities = lineQuantities; }
 }

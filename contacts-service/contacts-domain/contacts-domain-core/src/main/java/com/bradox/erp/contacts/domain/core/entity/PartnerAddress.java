@@ -5,6 +5,8 @@ import com.bradox.erp.contacts.domain.core.valueobject.PartnerAddressId;
 import com.bradox.erp.contacts.domain.core.valueobject.PartnerId;
 import com.bradox.erp.domain.entity.BaseEntity;
 
+import java.math.BigDecimal;
+
 /** Postal address attached to a {@link Partner}. Owned by the partner aggregate. */
 public class PartnerAddress extends BaseEntity<PartnerAddressId> {
 
@@ -17,6 +19,8 @@ public class PartnerAddress extends BaseEntity<PartnerAddressId> {
     private String state;
     private String postalCode;
     private String country;
+    private BigDecimal latitude;
+    private BigDecimal longitude;
 
     private PartnerAddress(Builder b) {
         super.setId(b.id);
@@ -29,6 +33,8 @@ public class PartnerAddress extends BaseEntity<PartnerAddressId> {
         this.state = b.state;
         this.postalCode = b.postalCode;
         this.country = b.country;
+        this.latitude = b.latitude;
+        this.longitude = b.longitude;
     }
 
     public PartnerId getPartnerId() { return partnerId; }
@@ -40,18 +46,23 @@ public class PartnerAddress extends BaseEntity<PartnerAddressId> {
     public String getState() { return state; }
     public String getPostalCode() { return postalCode; }
     public String getCountry() { return country; }
+    public BigDecimal getLatitude() { return latitude; }
+    public BigDecimal getLongitude() { return longitude; }
 
     void markDefault(boolean isDefault) {
         this.defaultForType = isDefault;
     }
 
-    public void update(String street1, String street2, String city, String state, String postalCode, String country) {
+    public void update(String street1, String street2, String city, String state, String postalCode, String country,
+                        BigDecimal latitude, BigDecimal longitude) {
         this.street1 = street1;
         this.street2 = street2;
         this.city = city;
         this.state = state;
         this.postalCode = postalCode;
         this.country = country;
+        this.latitude = latitude;
+        this.longitude = longitude;
     }
 
     public static Builder builder() { return new Builder(); }
@@ -67,6 +78,8 @@ public class PartnerAddress extends BaseEntity<PartnerAddressId> {
         private String state;
         private String postalCode;
         private String country;
+        private BigDecimal latitude;
+        private BigDecimal longitude;
 
         public Builder id(PartnerAddressId v) { this.id = v; return this; }
         public Builder partnerId(PartnerId v) { this.partnerId = v; return this; }
@@ -78,6 +91,8 @@ public class PartnerAddress extends BaseEntity<PartnerAddressId> {
         public Builder state(String v) { this.state = v; return this; }
         public Builder postalCode(String v) { this.postalCode = v; return this; }
         public Builder country(String v) { this.country = v; return this; }
+        public Builder latitude(BigDecimal v) { this.latitude = v; return this; }
+        public Builder longitude(BigDecimal v) { this.longitude = v; return this; }
         public PartnerAddress build() { return new PartnerAddress(this); }
     }
 }

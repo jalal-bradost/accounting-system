@@ -46,6 +46,7 @@ public class PlatformSecurityConfiguration {
         cfg.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", cfg);
+        source.registerCorsConfiguration("/media/**", cfg);
         return source;
     }
 

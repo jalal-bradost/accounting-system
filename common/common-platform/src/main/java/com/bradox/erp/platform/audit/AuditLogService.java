@@ -3,6 +3,7 @@ package com.bradox.erp.platform.audit;
 import com.bradox.erp.domain.valueobject.CompanyId;
 import com.bradox.erp.platform.dataaccess.entity.AuditLogEntity;
 import com.bradox.erp.platform.dataaccess.repository.AuditLogJpaRepository;
+import com.bradox.erp.platform.transaction.DryRun;
 import com.bradox.erp.platform.web.CompanyContext;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
@@ -52,6 +53,10 @@ public class AuditLogService implements AuditLogPort {
                        UUID recordId,
                        String message,
                        Map<String, Object> changes) {
+        if (DryRun.isActive()) {
+            // Previews roll back their work; this table writes in its own transaction, so skip it.
+            return;
+        }
         AuditLogEntity entity = new AuditLogEntity();
         entity.setId(UUID.randomUUID());
         entity.setCompanyId(companyId != null ? companyId.getId() : currentCompanyIdOrNull());

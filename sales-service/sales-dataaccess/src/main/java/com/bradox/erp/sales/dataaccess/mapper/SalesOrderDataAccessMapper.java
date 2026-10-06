@@ -85,6 +85,7 @@ public class SalesOrderDataAccessMapper {
         line.setQtyInvoiced(e.getQtyInvoiced());
         line.setQtyCogsCleared(e.getQtyCogsCleared() != null ? e.getQtyCogsCleared() : BigDecimal.ZERO);
         line.setUnitPrice(e.getUnitPrice());
+        line.setGift(e.isGift());
         line.setDiscountType(e.getDiscountType());
         line.setDiscountValue(e.getDiscountValue());
         line.setDiscountPercent(e.getDiscountPercent());
@@ -173,6 +174,7 @@ public class SalesOrderDataAccessMapper {
             lineEntity.setQtyInvoiced(line.getQtyInvoiced());
             lineEntity.setQtyCogsCleared(line.getQtyCogsCleared() != null ? line.getQtyCogsCleared() : BigDecimal.ZERO);
             lineEntity.setUnitPrice(line.getUnitPrice());
+            lineEntity.setGift(line.isGift());
             lineEntity.setDiscountType(line.getDiscountType());
             lineEntity.setDiscountValue(line.getDiscountValue());
             lineEntity.setDiscountPercent(line.getDiscountPercent());

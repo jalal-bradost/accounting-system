@@ -62,6 +62,9 @@ public class AccCustomerInvoiceEntity {
     @Column(name = "order_discount_amount", precision = 19, scale = 4, nullable = false)
     private BigDecimal orderDiscountAmount = BigDecimal.ZERO;
 
+    @Column(name = "opening_balance", nullable = false)
+    private boolean openingBalance;
+
     @Version
     @Column(name = "row_version", nullable = false)
     private long rowVersion;
@@ -110,6 +113,8 @@ public class AccCustomerInvoiceEntity {
     public void setOrderDiscountAmount(BigDecimal orderDiscountAmount) {
         this.orderDiscountAmount = orderDiscountAmount != null ? orderDiscountAmount : BigDecimal.ZERO;
     }
+    public boolean isOpeningBalance() { return openingBalance; }
+    public void setOpeningBalance(boolean openingBalance) { this.openingBalance = openingBalance; }
     public long getRowVersion() { return rowVersion; }
     public void setRowVersion(long rowVersion) { this.rowVersion = rowVersion; }
     public Instant getCreatedAt() { return createdAt; }

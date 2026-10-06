@@ -69,8 +69,12 @@ public class StockPickingController {
 
     @PostMapping("/{id}/return")
     @RequiresPermission("inventory.picking.write")
-    public ResponseEntity<StockPickingResponse> doReturn(@PathVariable UUID id) {
-        return ResponseEntity.ok(service.returnPicking(id));
+    public ResponseEntity<StockPickingResponse> doReturn(
+            @PathVariable UUID id,
+            @RequestBody(required = false) com.bradox.erp.inventory.service.domain.dto.ReturnPickingCommand body) {
+        // No body: full return with refund, as before. A body can set per-move quantities and
+        // toRefund=false (sales: goods will be replaced instead of credited).
+        return ResponseEntity.ok(service.returnPicking(id, body));
     }
 
     @PostMapping("/adjust")

@@ -23,19 +23,26 @@ public class AccountingDashboardQueryAdapter implements AccountingDashboardQuery
 
     private static final String INVOICE_LINES =
             "COALESCE((SELECT SUM(l.qty * l.unit_price * (1 - COALESCE(l.discount_percent, 0) / 100)) "
-                    + "FROM acc_customer_invoice_line l WHERE l.customer_invoice_id = i.id), 0)";
+                    + "FROM acc_customer_invoice_line l "
+                    + "WHERE l.customer_invoice_id = i.id "
+                    + "AND COALESCE(l.is_gift, FALSE) = FALSE), 0)";
 
     private static final String INVOICE_TAXES =
             "COALESCE((SELECT SUM(t.tax_amount) FROM acc_customer_invoice_line_tax t "
                     + "JOIN acc_customer_invoice_line l ON l.id = t.line_id "
-                    + "WHERE l.customer_invoice_id = i.id), 0)";
+                    + "WHERE l.customer_invoice_id = i.id "
+                    + "AND COALESCE(l.is_gift, FALSE) = FALSE), 0)";
 
+    /** Matches invoiceTotalDocumentCurrency: non-gift lines + tax − order discount. */
     private static final String INVOICE_COMPANY_AMOUNT =
-            "(" + INVOICE_SIGN + " * (" + INVOICE_LINES + " + " + INVOICE_TAXES + ")"
+            "(" + INVOICE_SIGN + " * GREATEST((" + INVOICE_LINES + " + " + INVOICE_TAXES + ")"
+                    + " - COALESCE(i.order_discount_amount, 0), 0)"
                     + " * COALESCE(i.exchange_rate_to_company, 1))";
 
+    /** Opening-balance invoices carry pre-go-live receivables, not sales of the period. */
     private static final String INVOICE_IN_RANGE =
             "i.state = 'POSTED' "
+                    + "AND COALESCE(i.opening_balance, FALSE) = FALSE "
                     + "AND i.invoice_date IS NOT NULL "
                     + "AND i.invoice_date >= :fromDate AND i.invoice_date <= :toDate";
 
@@ -43,7 +50,7 @@ public class AccountingDashboardQueryAdapter implements AccountingDashboardQuery
             "(CASE WHEN b.move_type = 'CREDIT_NOTE' THEN -1 ELSE 1 END)";
 
     private static final String BILL_LINES =
-            "COALESCE((SELECT SUM(l.qty * l.unit_price) FROM pur_vendor_bill_line l "
+            "COALESCE((SELECT SUM(l.qty * l.unit_price * (1 - COALESCE(l.discount_percent, 0) / 100)) FROM pur_vendor_bill_line l "
                     + "WHERE l.vendor_bill_id = b.id), 0)";
 
     private static final String BILL_TAXES =
@@ -52,7 +59,8 @@ public class AccountingDashboardQueryAdapter implements AccountingDashboardQuery
                     + "WHERE l.vendor_bill_id = b.id), 0)";
 
     private static final String BILL_COMPANY_AMOUNT =
-            "(" + BILL_SIGN + " * (" + BILL_LINES + " + " + BILL_TAXES + ")"
+            "(" + BILL_SIGN + " * GREATEST((" + BILL_LINES + " + " + BILL_TAXES + ")"
+                    + " - COALESCE(b.order_discount_amount, 0), 0)"
                     + " * COALESCE(b.exchange_rate_to_company, 1))";
 
     private static final String BILL_IN_RANGE =

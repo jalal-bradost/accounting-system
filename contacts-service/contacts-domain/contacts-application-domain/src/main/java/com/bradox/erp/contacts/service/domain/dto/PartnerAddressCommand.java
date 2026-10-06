@@ -3,6 +3,8 @@ package com.bradox.erp.contacts.service.domain.dto;
 import com.bradox.erp.contacts.domain.core.valueobject.AddressType;
 import jakarta.validation.constraints.NotNull;
 
+import java.math.BigDecimal;
+
 public class PartnerAddressCommand {
     @NotNull private AddressType type;
     private boolean defaultForType;
@@ -12,6 +14,8 @@ public class PartnerAddressCommand {
     private String state;
     private String postalCode;
     private String country;
+    private BigDecimal latitude;
+    private BigDecimal longitude;
 
     public AddressType getType() { return type; }
     public void setType(AddressType type) { this.type = type; }
@@ -29,4 +33,8 @@ public class PartnerAddressCommand {
     public void setPostalCode(String v) { this.postalCode = v; }
     public String getCountry() { return country; }
     public void setCountry(String v) { this.country = v; }
+    public BigDecimal getLatitude() { return latitude; }
+    public void setLatitude(BigDecimal v) { this.latitude = v; }
+    public BigDecimal getLongitude() { return longitude; }
+    public void setLongitude(BigDecimal v) { this.longitude = v; }
 }

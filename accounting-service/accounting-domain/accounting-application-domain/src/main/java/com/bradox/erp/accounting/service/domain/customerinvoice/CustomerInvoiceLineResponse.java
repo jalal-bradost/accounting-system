@@ -1,6 +1,7 @@
 package com.bradox.erp.accounting.service.domain.customerinvoice;
 
 import com.bradox.erp.domain.valueobject.DiscountType;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,6 +18,7 @@ public class CustomerInvoiceLineResponse {
     private BigDecimal discountPercent;
     private UUID revenueAccountId;
     private UUID salesOrderLineId;
+    private boolean isGift;
     private List<CustomerInvoiceLineTaxResponse> taxSnapshots = new ArrayList<>();
 
     public UUID getId() { return id; }
@@ -39,6 +41,9 @@ public class CustomerInvoiceLineResponse {
     public void setRevenueAccountId(UUID revenueAccountId) { this.revenueAccountId = revenueAccountId; }
     public UUID getSalesOrderLineId() { return salesOrderLineId; }
     public void setSalesOrderLineId(UUID salesOrderLineId) { this.salesOrderLineId = salesOrderLineId; }
+    @JsonProperty("isGift")
+    public boolean isGift() { return isGift; }
+    public void setGift(boolean gift) { this.isGift = gift; }
     public List<CustomerInvoiceLineTaxResponse> getTaxSnapshots() { return taxSnapshots; }
     public void setTaxSnapshots(List<CustomerInvoiceLineTaxResponse> taxSnapshots) {
         this.taxSnapshots = taxSnapshots != null ? taxSnapshots : new ArrayList<>();

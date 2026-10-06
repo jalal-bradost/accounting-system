@@ -26,6 +26,7 @@ public class CustomerInvoiceLineCommand {
     /** When null, default sales revenue account (chart) is used. */
     private UUID revenueAccountId;
     private UUID salesOrderLineId;
+    private Boolean isGift;
     @Valid
     private List<CustomerInvoiceLineTaxCommand> taxSnapshots = new ArrayList<>();
 
@@ -45,6 +46,8 @@ public class CustomerInvoiceLineCommand {
     public void setRevenueAccountId(UUID revenueAccountId) { this.revenueAccountId = revenueAccountId; }
     public UUID getSalesOrderLineId() { return salesOrderLineId; }
     public void setSalesOrderLineId(UUID salesOrderLineId) { this.salesOrderLineId = salesOrderLineId; }
+    public Boolean getIsGift() { return isGift; }
+    public void setIsGift(Boolean isGift) { this.isGift = isGift; }
     public List<CustomerInvoiceLineTaxCommand> getTaxSnapshots() { return taxSnapshots; }
     public void setTaxSnapshots(List<CustomerInvoiceLineTaxCommand> taxSnapshots) {
         this.taxSnapshots = taxSnapshots != null ? taxSnapshots : new ArrayList<>();

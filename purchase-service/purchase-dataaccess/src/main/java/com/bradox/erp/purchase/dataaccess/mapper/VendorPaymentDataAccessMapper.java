@@ -13,7 +13,6 @@ public class VendorPaymentDataAccessMapper {
         d.setId(e.getId());
         d.setCompanyId(e.getCompanyId());
         d.setVendorPartnerId(e.getVendorPartnerId());
-        d.setVendorBillId(e.getVendorBillId());
         d.setPaymentDate(e.getPaymentDate());
         d.setBankJournalId(e.getBankJournalId());
         d.setAmount(e.getAmount());
@@ -24,6 +23,7 @@ public class VendorPaymentDataAccessMapper {
         d.setJournalEntryId(e.getJournalEntryId());
         d.setReversalJournalEntryId(e.getReversalJournalEntryId());
         d.setReference(e.getReference());
+        d.setOpeningBalance(e.isOpeningBalance());
         d.setCreatedAt(e.getCreatedAt());
         d.setUpdatedAt(e.getUpdatedAt());
         return d;
@@ -35,7 +35,6 @@ public class VendorPaymentDataAccessMapper {
         e.setId(d.getId());
         e.setCompanyId(d.getCompanyId());
         e.setVendorPartnerId(d.getVendorPartnerId());
-        e.setVendorBillId(d.getVendorBillId());
         e.setPaymentDate(d.getPaymentDate());
         e.setBankJournalId(d.getBankJournalId());
         e.setAmount(d.getAmount());
@@ -46,6 +45,7 @@ public class VendorPaymentDataAccessMapper {
         e.setJournalEntryId(d.getJournalEntryId());
         e.setReversalJournalEntryId(d.getReversalJournalEntryId());
         e.setReference(d.getReference());
+        e.setOpeningBalance(d.isOpeningBalance());
         e.setCreatedAt(d.getCreatedAt());
         e.setUpdatedAt(d.getUpdatedAt());
         return e;

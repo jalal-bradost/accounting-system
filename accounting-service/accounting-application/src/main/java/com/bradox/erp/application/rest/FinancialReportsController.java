@@ -4,6 +4,10 @@ import com.bradox.erp.accounting.service.domain.ports.input.service.ReportingApp
 import com.bradox.erp.accounting.service.domain.report.BalanceSheetReport;
 import com.bradox.erp.accounting.service.domain.report.GeneralLedgerLine;
 import com.bradox.erp.accounting.service.domain.report.ProfitAndLossReport;
+import com.bradox.erp.domain.valueobject.CompanyId;
+import com.bradox.erp.platform.security.ForbiddenException;
+import com.bradox.erp.platform.security.RequiresPermission;
+import com.bradox.erp.platform.web.CurrentCompany;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,28 +33,37 @@ public class FinancialReportsController {
     }
 
     @GetMapping("/{companyId}/balance-sheet")
+    @RequiresPermission("accounting.report.read")
     public ResponseEntity<BalanceSheetResponse> getBalanceSheet(
+            @CurrentCompany CompanyId currentCompany,
             @PathVariable UUID companyId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOf) {
+        requireSameCompany(currentCompany, companyId);
         BalanceSheetReport report = reportingApplicationService.getBalanceSheet(companyId, asOf);
         return ResponseEntity.ok(BalanceSheetResponse.from(companyId, report));
     }
 
     @GetMapping("/{companyId}/profit-and-loss")
+    @RequiresPermission("accounting.report.read")
     public ResponseEntity<ProfitAndLossResponse> getProfitAndLoss(
+            @CurrentCompany CompanyId currentCompany,
             @PathVariable UUID companyId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        requireSameCompany(currentCompany, companyId);
         ProfitAndLossReport report = reportingApplicationService.getProfitAndLoss(companyId, from, to);
         return ResponseEntity.ok(ProfitAndLossResponse.from(companyId, report));
     }
 
     @GetMapping("/{companyId}/general-ledger")
+    @RequiresPermission("accounting.report.read")
     public ResponseEntity<GeneralLedgerResponse> getGeneralLedger(
+            @CurrentCompany CompanyId currentCompany,
             @PathVariable UUID companyId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) UUID accountId) {
+        requireSameCompany(currentCompany, companyId);
         List<GeneralLedgerLine> lines = reportingApplicationService.getGeneralLedger(companyId, from, to, accountId);
         List<GeneralLedgerResponse.Line> out = lines.stream()
                 .map(l -> new GeneralLedgerResponse.Line(
@@ -58,6 +71,15 @@ public class FinancialReportsController {
                         l.label(), l.debit(), l.credit(), l.runningBalance()))
                 .collect(Collectors.toList());
         return ResponseEntity.ok(new GeneralLedgerResponse(companyId, from, to, accountId, out));
+    }
+
+    private static void requireSameCompany(CompanyId currentCompany, UUID pathCompanyId) {
+        if (currentCompany == null || pathCompanyId == null || !pathCompanyId.equals(currentCompany.getId())) {
+            throw new ForbiddenException(
+                    "error.security.forbidden",
+                    new Object[]{"company"},
+                    "Company scope mismatch");
+        }
     }
 
     public static class BalanceSheetResponse {
@@ -141,11 +163,15 @@ public class FinancialReportsController {
                     companyId,
                     r.from(),
                     r.to(),
-                    r.revenue().stream().map(l -> new Line(l.accountId(), l.amount())).collect(Collectors.toList()),
-                    r.expenses().stream().map(l -> new Line(l.accountId(), l.amount())).collect(Collectors.toList()),
+                    mapPnL(r.revenue()),
+                    mapPnL(r.expenses()),
                     r.totalRevenue(),
                     r.totalExpenses(),
                     r.netIncome());
+        }
+
+        private static List<Line> mapPnL(List<ProfitAndLossReport.AccountLine> lines) {
+            return lines.stream().map(l -> new Line(l.accountId(), l.amount())).collect(Collectors.toList());
         }
 
         public ProfitAndLossResponse(UUID companyId, LocalDate from, LocalDate to, List<Line> revenue, List<Line> expenses,
@@ -203,40 +229,16 @@ public class FinancialReportsController {
         public UUID getAccountId() { return accountId; }
         public List<Line> getLines() { return lines; }
 
-        public static class Line {
-            private final UUID accountId;
-            private final UUID journalEntryId;
-            private final LocalDateTime entryDate;
-            private final String journalCode;
-            private final String sequenceNumber;
-            private final String label;
-            private final java.math.BigDecimal debit;
-            private final java.math.BigDecimal credit;
-            private final java.math.BigDecimal runningBalance;
-
-            public Line(UUID accountId, UUID journalEntryId, LocalDateTime entryDate, String journalCode,
-                        String sequenceNumber, String label, java.math.BigDecimal debit, java.math.BigDecimal credit,
-                        java.math.BigDecimal runningBalance) {
-                this.accountId = accountId;
-                this.journalEntryId = journalEntryId;
-                this.entryDate = entryDate;
-                this.journalCode = journalCode;
-                this.sequenceNumber = sequenceNumber;
-                this.label = label;
-                this.debit = debit;
-                this.credit = credit;
-                this.runningBalance = runningBalance;
-            }
-
-            public UUID getAccountId() { return accountId; }
-            public UUID getJournalEntryId() { return journalEntryId; }
-            public LocalDateTime getEntryDate() { return entryDate; }
-            public String getJournalCode() { return journalCode; }
-            public String getSequenceNumber() { return sequenceNumber; }
-            public String getLabel() { return label; }
-            public java.math.BigDecimal getDebit() { return debit; }
-            public java.math.BigDecimal getCredit() { return credit; }
-            public java.math.BigDecimal getRunningBalance() { return runningBalance; }
-        }
+        public record Line(
+                UUID accountId,
+                UUID journalEntryId,
+                LocalDateTime entryDate,
+                String journalCode,
+                String sequenceNumber,
+                String label,
+                java.math.BigDecimal debit,
+                java.math.BigDecimal credit,
+                java.math.BigDecimal runningBalance
+        ) {}
     }
 }

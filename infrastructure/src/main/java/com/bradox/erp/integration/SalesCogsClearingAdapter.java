@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -120,9 +121,10 @@ public class SalesCogsClearingAdapter implements SalesCogsClearingPort {
         }
 
         if (!lines.isEmpty()) {
+            LocalDate businessDate = order.orderDate() != null ? order.orderDate() : LocalDate.now(ZoneOffset.UTC);
             posting.postValuationEntry(
                     new CompanyId(order.companyId()),
-                    LocalDate.now(),
+                    businessDate,
                     "COGS-CLR-" + salesOrderId,
                     null,
                     lines);

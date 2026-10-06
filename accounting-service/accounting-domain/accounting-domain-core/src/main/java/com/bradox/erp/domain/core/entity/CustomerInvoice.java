@@ -29,6 +29,7 @@ public class CustomerInvoice {
     private Instant createdAt;
     private Instant updatedAt;
     private BigDecimal orderDiscountAmount = BigDecimal.ZERO;
+    private boolean openingBalance;
     private List<CustomerInvoiceLine> lines = new ArrayList<>();
 
     public UUID getId() { return id; }
@@ -69,6 +70,8 @@ public class CustomerInvoice {
     public void setOrderDiscountAmount(BigDecimal orderDiscountAmount) {
         this.orderDiscountAmount = orderDiscountAmount != null ? orderDiscountAmount : BigDecimal.ZERO;
     }
+    public boolean isOpeningBalance() { return openingBalance; }
+    public void setOpeningBalance(boolean openingBalance) { this.openingBalance = openingBalance; }
     public List<CustomerInvoiceLine> getLines() { return lines; }
     public void setLines(List<CustomerInvoiceLine> lines) {
         this.lines = lines != null ? lines : new ArrayList<>();

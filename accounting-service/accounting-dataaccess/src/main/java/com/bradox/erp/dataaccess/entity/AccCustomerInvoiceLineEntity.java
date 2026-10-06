@@ -50,6 +50,9 @@ public class AccCustomerInvoiceLineEntity {
     @Column(name = "sales_order_line_id")
     private UUID salesOrderLineId;
 
+    @Column(name = "is_gift", nullable = false)
+    private boolean gift = false;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -86,6 +89,8 @@ public class AccCustomerInvoiceLineEntity {
     public void setDiscountPercent(BigDecimal discountPercent) { this.discountPercent = discountPercent; }
     public UUID getSalesOrderLineId() { return salesOrderLineId; }
     public void setSalesOrderLineId(UUID salesOrderLineId) { this.salesOrderLineId = salesOrderLineId; }
+    public boolean isGift() { return gift; }
+    public void setGift(boolean gift) { this.gift = gift; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

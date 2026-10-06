@@ -34,6 +34,7 @@ public class VendorBillDataAccessMapper {
         d.setJournalEntryId(e.getJournalEntryId());
         d.setExchangeRateToCompany(e.getExchangeRateToCompany());
         d.setOrderDiscountAmount(e.getOrderDiscountAmount());
+        d.setOpeningBalance(e.isOpeningBalance());
         d.setRowVersion(e.getRowVersion());
         d.setCreatedAt(e.getCreatedAt());
         d.setUpdatedAt(e.getUpdatedAt());
@@ -61,6 +62,7 @@ public class VendorBillDataAccessMapper {
         d.setDiscountValue(e.getDiscountValue());
         d.setDiscountPercent(e.getDiscountPercent());
         d.setAccountId(e.getAccountId());
+        d.setPriceVariance(e.getPriceVariance());
         d.setCreatedAt(e.getCreatedAt());
         d.setUpdatedAt(e.getUpdatedAt());
         if (e.getTaxSnapshots() != null) {
@@ -95,6 +97,7 @@ public class VendorBillDataAccessMapper {
         e.setJournalEntryId(d.getJournalEntryId());
         e.setExchangeRateToCompany(d.getExchangeRateToCompany());
         e.setOrderDiscountAmount(d.getOrderDiscountAmount());
+        e.setOpeningBalance(d.isOpeningBalance());
         if (existingOrNull == null) {
             e.setRowVersion(d.getRowVersion());
         }
@@ -123,6 +126,7 @@ public class VendorBillDataAccessMapper {
             lineEntity.setDiscountValue(lineDomain.getDiscountValue());
             lineEntity.setDiscountPercent(lineDomain.getDiscountPercent());
             lineEntity.setAccountId(lineDomain.getAccountId());
+            lineEntity.setPriceVariance(lineDomain.getPriceVariance());
             lineEntity.setCreatedAt(lineDomain.getCreatedAt());
             lineEntity.setUpdatedAt(lineDomain.getUpdatedAt());
 

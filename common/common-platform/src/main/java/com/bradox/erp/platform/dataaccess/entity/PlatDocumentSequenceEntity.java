@@ -26,7 +26,7 @@ public class PlatDocumentSequenceEntity {
     @Column(name = "seq_year", nullable = false)
     private int year;
 
-    @Column(name = "last_value", nullable = false)
+    @Column(name = "seq_last_value", nullable = false)
     private long lastValue;
 
     public PlatDocumentSequenceEntity() {}

@@ -275,7 +275,8 @@ class PartnerApplicationServiceImpl implements PartnerApplicationService {
             throw new ContactsDomainException("error.contacts.addressTypeCannotChange", null, "Address type cannot be changed; remove + add");
         }
         current.update(cmd.getStreet1(), cmd.getStreet2(), cmd.getCity(),
-                cmd.getState(), cmd.getPostalCode(), cmd.getCountry());
+                cmd.getState(), cmd.getPostalCode(), cmd.getCountry(),
+                cmd.getLatitude(), cmd.getLongitude());
         if (cmd.isDefaultForType()) {
             partner.markAddressDefault(addressId);
         }

@@ -18,12 +18,8 @@ import java.util.UUID;
 @Component
 public class SalesDashboardQueryAdapter implements SalesDashboardQueryPort {
 
-    private static final String COMPANY_AMOUNT =
-            "(o.amount_total * COALESCE(o.exchange_rate_to_company, 1))";
-
-    private static final String LINE_COMPANY_AMOUNT =
-            "((l.qty_ordered * l.unit_price * (1 - COALESCE(l.discount_percent, 0) / 100))"
-                    + " * COALESCE(o.exchange_rate_to_company, 1))";
+    private static final String NON_GIFT_LINE =
+            "AND COALESCE(l.is_gift, FALSE) = FALSE";
 
     private static final String CONFIRMED_IN_RANGE =
             "o.state = 'CONFIRMED' AND ("
@@ -33,6 +29,13 @@ public class SalesDashboardQueryAdapter implements SalesDashboardQueryPort {
 
     private static final String CONFIRMED_BUCKET_DATE =
             "COALESCE(o.order_date, CAST(o.confirmed_at AS DATE))";
+
+    private static final String ORDER_NET = SalesNetRevenueSql.ORDER_NET_COMPANY_AMOUNT;
+    private static final String LINE_NET = SalesNetRevenueSql.LINE_NET_COMPANY_AMOUNT;
+
+    /** Gross order total — quotations only (returns do not apply). */
+    private static final String QUOTE_COMPANY_AMOUNT =
+            "(o.amount_total * COALESCE(o.exchange_rate_to_company, 1))";
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -54,7 +57,8 @@ public class SalesDashboardQueryAdapter implements SalesDashboardQueryPort {
         Query q = entityManager.createNativeQuery(
                 "SELECT COUNT(*) FROM sal_sales_order o "
                         + "WHERE o.company_id = :companyId "
-                        + "AND " + CONFIRMED_IN_RANGE);
+                        + "AND " + CONFIRMED_IN_RANGE + " "
+                        + "AND (" + ORDER_NET + ") > 0");
         bindRange(q, companyId, from, to);
         return ((Number) q.getSingleResult()).longValue();
     }
@@ -62,7 +66,7 @@ public class SalesDashboardQueryAdapter implements SalesDashboardQueryPort {
     @Override
     public BigDecimal sumConfirmedRevenue(UUID companyId, LocalDate from, LocalDate to) {
         Query q = entityManager.createNativeQuery(
-                "SELECT COALESCE(SUM(" + COMPANY_AMOUNT + "), 0) FROM sal_sales_order o "
+                "SELECT COALESCE(SUM(" + ORDER_NET + "), 0) FROM sal_sales_order o "
                         + "WHERE o.company_id = :companyId "
                         + "AND " + CONFIRMED_IN_RANGE);
         bindRange(q, companyId, from, to);
@@ -73,10 +77,11 @@ public class SalesDashboardQueryAdapter implements SalesDashboardQueryPort {
     @SuppressWarnings("unchecked")
     public List<ConfirmedOrderFact> listConfirmedOrderFacts(UUID companyId, LocalDate from, LocalDate to) {
         Query q = entityManager.createNativeQuery(
-                "SELECT " + CONFIRMED_BUCKET_DATE + " AS conf_date, " + COMPANY_AMOUNT + " "
+                "SELECT " + CONFIRMED_BUCKET_DATE + " AS conf_date, " + ORDER_NET + " "
                         + "FROM sal_sales_order o "
                         + "WHERE o.company_id = :companyId "
-                        + "AND " + CONFIRMED_IN_RANGE);
+                        + "AND " + CONFIRMED_IN_RANGE + " "
+                        + "AND (" + ORDER_NET + ") > 0");
         bindRange(q, companyId, from, to);
         List<Object[]> rows = q.getResultList();
         List<ConfirmedOrderFact> facts = new ArrayList<>(rows.size());
@@ -95,14 +100,14 @@ public class SalesDashboardQueryAdapter implements SalesDashboardQueryPort {
     public List<SalesDashboardResponse.SalesRankedOrderRow> topQuotations(
             UUID companyId, LocalDate from, LocalDate to, int limit) {
         Query q = entityManager.createNativeQuery(
-                "SELECT o.id, o.name, p.display_name, " + COMPANY_AMOUNT + ", o.order_date "
+                "SELECT o.id, o.name, p.display_name, " + QUOTE_COMPANY_AMOUNT + ", o.order_date "
                         + "FROM sal_sales_order o "
                         + "LEFT JOIN contacts_partner p ON p.id = o.customer_partner_id "
                         + "WHERE o.company_id = :companyId "
                         + "AND o.state IN ('DRAFT', 'QUOTATION_SENT') "
                         + "AND o.order_date IS NOT NULL "
                         + "AND o.order_date >= :fromDate AND o.order_date <= :toDate "
-                        + "ORDER BY " + COMPANY_AMOUNT + " DESC");
+                        + "ORDER BY " + QUOTE_COMPANY_AMOUNT + " DESC");
         bindRange(q, companyId, from, to);
         q.setMaxResults(limit);
         return mapOrderRows(q.getResultList());
@@ -113,12 +118,13 @@ public class SalesDashboardQueryAdapter implements SalesDashboardQueryPort {
     public List<SalesDashboardResponse.SalesRankedOrderRow> topConfirmedOrders(
             UUID companyId, LocalDate from, LocalDate to, int limit) {
         Query q = entityManager.createNativeQuery(
-                "SELECT o.id, o.name, p.display_name, " + COMPANY_AMOUNT + ", o.order_date "
+                "SELECT o.id, o.name, p.display_name, " + ORDER_NET + ", o.order_date "
                         + "FROM sal_sales_order o "
                         + "LEFT JOIN contacts_partner p ON p.id = o.customer_partner_id "
                         + "WHERE o.company_id = :companyId "
                         + "AND " + CONFIRMED_IN_RANGE + " "
-                        + "ORDER BY " + COMPANY_AMOUNT + " DESC");
+                        + "AND (" + ORDER_NET + ") > 0 "
+                        + "ORDER BY " + ORDER_NET + " DESC");
         bindRange(q, companyId, from, to);
         q.setMaxResults(limit);
         return mapOrderRows(q.getResultList());
@@ -129,14 +135,16 @@ public class SalesDashboardQueryAdapter implements SalesDashboardQueryPort {
     public List<SalesDashboardResponse.SalesRankedProductRow> topProducts(
             UUID companyId, LocalDate from, LocalDate to, int limit) {
         Query q = entityManager.createNativeQuery(
-                "SELECT p.id, p.name, COUNT(DISTINCT o.id), COALESCE(SUM(" + LINE_COMPANY_AMOUNT + "), 0) "
+                "SELECT p.id, p.name, COUNT(DISTINCT o.id), COALESCE(SUM(" + LINE_NET + "), 0) "
                         + "FROM sal_sales_order_line l "
                         + "JOIN sal_sales_order o ON o.id = l.sales_order_id "
                         + "JOIN inv_product p ON p.id = l.product_id "
                         + "WHERE o.company_id = :companyId "
                         + "AND " + CONFIRMED_IN_RANGE + " "
+                        + NON_GIFT_LINE + " "
                         + "GROUP BY p.id, p.name "
-                        + "ORDER BY COALESCE(SUM(" + LINE_COMPANY_AMOUNT + "), 0) DESC");
+                        + "HAVING COALESCE(SUM(" + SalesNetRevenueSql.NET_QTY_FOR_LINE_L + "), 0) > 0 "
+                        + "ORDER BY COALESCE(SUM(" + LINE_NET + "), 0) DESC");
         bindRange(q, companyId, from, to);
         q.setMaxResults(limit);
         List<Object[]> rows = q.getResultList();
@@ -157,15 +165,17 @@ public class SalesDashboardQueryAdapter implements SalesDashboardQueryPort {
     public List<SalesDashboardResponse.SalesCategoryNode> topCategories(
             UUID companyId, LocalDate from, LocalDate to, int limit) {
         Query q = entityManager.createNativeQuery(
-                "SELECT c.id, c.name, COUNT(DISTINCT o.id), COALESCE(SUM(" + LINE_COMPANY_AMOUNT + "), 0) "
+                "SELECT c.id, c.name, COUNT(DISTINCT o.id), COALESCE(SUM(" + LINE_NET + "), 0) "
                         + "FROM sal_sales_order_line l "
                         + "JOIN sal_sales_order o ON o.id = l.sales_order_id "
                         + "JOIN inv_product p ON p.id = l.product_id "
                         + "JOIN inv_product_category c ON c.id = p.category_id "
                         + "WHERE o.company_id = :companyId "
                         + "AND " + CONFIRMED_IN_RANGE + " "
+                        + NON_GIFT_LINE + " "
                         + "GROUP BY c.id, c.name "
-                        + "ORDER BY COALESCE(SUM(" + LINE_COMPANY_AMOUNT + "), 0) DESC");
+                        + "HAVING COALESCE(SUM(" + SalesNetRevenueSql.NET_QTY_FOR_LINE_L + "), 0) > 0 "
+                        + "ORDER BY COALESCE(SUM(" + LINE_NET + "), 0) DESC");
         bindRange(q, companyId, from, to);
         q.setMaxResults(limit);
         List<Object[]> rows = q.getResultList();
@@ -185,22 +195,18 @@ public class SalesDashboardQueryAdapter implements SalesDashboardQueryPort {
     @SuppressWarnings("unchecked")
     public List<SalesDashboardResponse.SalesNamedAmount> channelSplit(UUID companyId, LocalDate from, LocalDate to) {
         Query q = entityManager.createNativeQuery(
-                "SELECT CASE WHEN EXISTS (SELECT 1 FROM pos_order po WHERE po.sales_order_id = o.id) "
-                        + "THEN 'POS' ELSE 'SALES' END AS channel_key, "
-                        + "COUNT(*), COALESCE(SUM(" + COMPANY_AMOUNT + "), 0) "
+                "SELECT 'SALES' AS channel_key, COUNT(*), COALESCE(SUM(" + ORDER_NET + "), 0) "
                         + "FROM sal_sales_order o "
                         + "WHERE o.company_id = :companyId "
                         + "AND " + CONFIRMED_IN_RANGE + " "
-                        + "GROUP BY CASE WHEN EXISTS (SELECT 1 FROM pos_order po WHERE po.sales_order_id = o.id) "
-                        + "THEN 'POS' ELSE 'SALES' END");
+                        + "AND (" + ORDER_NET + ") > 0");
         bindRange(q, companyId, from, to);
         List<Object[]> rows = q.getResultList();
         List<SalesDashboardResponse.SalesNamedAmount> result = new ArrayList<>();
         for (Object[] row : rows) {
-            String key = row[0] != null ? row[0].toString() : "SALES";
             SalesDashboardResponse.SalesNamedAmount item = new SalesDashboardResponse.SalesNamedAmount();
-            item.setKey(key);
-            item.setLabel("POS".equals(key) ? "Point of Sale" : "Sales orders");
+            item.setKey("SALES");
+            item.setLabel("Sales orders");
             item.setCount(((Number) row[1]).longValue());
             item.setAmount(toBigDecimal(row[2]));
             result.add(item);
@@ -213,16 +219,19 @@ public class SalesDashboardQueryAdapter implements SalesDashboardQueryPort {
     public List<SalesDashboardResponse.SalesNamedAmount> paymentMethodSplit(
             UUID companyId, LocalDate from, LocalDate to) {
         Query q = entityManager.createNativeQuery(
-                "SELECT pay.method, COUNT(*), "
-                        + "COALESCE(SUM(pay.amount * COALESCE(o.exchange_rate_to_company, 1)), 0) "
-                        + "FROM pos_payment pay "
-                        + "JOIN pos_order po ON po.id = pay.order_id "
-                        + "JOIN sal_sales_order o ON o.id = po.sales_order_id "
-                        + "WHERE po.company_id = :companyId "
-                        + "AND po.state = 'FINALIZED' "
+                "SELECT j.type, COUNT(DISTINCT p.id), "
+                        + "COALESCE(SUM(a.amount_company), 0) "
+                        + "FROM acc_customer_payment p "
+                        + "JOIN acc_customer_payment_allocation a ON a.payment_id = p.id "
+                        + "JOIN acc_customer_invoice inv ON inv.id = a.customer_invoice_id "
+                        + "JOIN sal_sales_order o ON o.id = inv.sales_order_id "
+                        + "JOIN journals j ON j.id = p.payment_journal_id "
+                        + "WHERE p.company_id = :companyId "
+                        + "AND p.state = 'POSTED' "
+                        + "AND a.state = 'ACTIVE' "
                         + "AND " + CONFIRMED_IN_RANGE + " "
-                        + "GROUP BY pay.method "
-                        + "ORDER BY COALESCE(SUM(pay.amount * COALESCE(o.exchange_rate_to_company, 1)), 0) DESC");
+                        + "GROUP BY j.type "
+                        + "ORDER BY COALESCE(SUM(a.amount_company), 0) DESC");
         bindRange(q, companyId, from, to);
         List<Object[]> rows = q.getResultList();
         List<SalesDashboardResponse.SalesNamedAmount> result = new ArrayList<>(rows.size());

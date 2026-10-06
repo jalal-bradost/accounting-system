@@ -7,6 +7,7 @@ import com.bradox.erp.platform.application.dto.PageResponse;
 import com.bradox.erp.platform.security.RequiresPermission;
 import com.bradox.erp.platform.web.CurrentCompany;
 import com.bradox.erp.purchase.domain.core.PurchaseOrderState;
+import com.bradox.erp.purchase.service.domain.PurchaseCorrectionPreviewer;
 import com.bradox.erp.purchase.service.domain.PurchaseDashboardService;
 import com.bradox.erp.purchase.service.domain.dto.*;
 import com.bradox.erp.purchase.service.domain.ports.input.PurchaseApplicationService;
@@ -29,11 +30,14 @@ public class PurchaseController {
 
     private final PurchaseApplicationService purchaseApplicationService;
     private final PurchaseDashboardService purchaseDashboardService;
+    private final PurchaseCorrectionPreviewer correctionPreviewer;
 
     public PurchaseController(PurchaseApplicationService purchaseApplicationService,
-                              PurchaseDashboardService purchaseDashboardService) {
+                              PurchaseDashboardService purchaseDashboardService,
+                              PurchaseCorrectionPreviewer correctionPreviewer) {
         this.purchaseApplicationService = purchaseApplicationService;
         this.purchaseDashboardService = purchaseDashboardService;
+        this.correctionPreviewer = correctionPreviewer;
     }
 
     @GetMapping("/dashboard")
@@ -103,6 +107,61 @@ public class PurchaseController {
     @RequiresPermission("purchase.order.write")
     public ResponseEntity<PurchaseOrderResponse> cancel(@PathVariable UUID id) {
         return ResponseEntity.ok(purchaseApplicationService.cancelPurchaseOrder(id));
+    }
+
+    @PostMapping("/orders/{id}/returns")
+    @RequiresPermission("purchase.order.write")
+    public ResponseEntity<PurchaseOrderResponse> returnGoods(@PathVariable UUID id,
+                                                            @RequestBody com.bradox.erp.purchase.service.domain.dto.ReturnGoodsCommand body) {
+        return ResponseEntity.ok(purchaseApplicationService.returnGoods(id, body));
+    }
+
+    // Guided corrections of a confirmed order. With ?preview=true nothing is saved: the response shows
+    // exactly which bills and credit notes would be posted.
+
+    @PostMapping("/orders/{id}/corrections/change-terms")
+    @RequiresPermission("purchase.order.write")
+    public ResponseEntity<PurchaseCorrectionResult> changeTerms(@PathVariable UUID id,
+                                                                @RequestParam(defaultValue = "false") boolean preview,
+                                                                @RequestBody PurchaseCorrectionCommand body) {
+        return ResponseEntity.ok(correct(preview, () -> purchaseApplicationService.changeTerms(id, body)));
+    }
+
+    @PostMapping("/orders/{id}/corrections/reduce-quantities")
+    @RequiresPermission("purchase.order.write")
+    public ResponseEntity<PurchaseCorrectionResult> reduceQuantities(@PathVariable UUID id,
+                                                                     @RequestParam(defaultValue = "false") boolean preview,
+                                                                     @RequestBody PurchaseCorrectionCommand body) {
+        return ResponseEntity.ok(correct(preview, () -> purchaseApplicationService.reduceQuantities(id, body)));
+    }
+
+    @PostMapping("/orders/{id}/corrections/cancel")
+    @RequiresPermission("purchase.order.write")
+    public ResponseEntity<PurchaseCorrectionResult> cancelWithDocuments(@PathVariable UUID id,
+                                                                        @RequestParam(defaultValue = "false") boolean preview,
+                                                                        @RequestBody(required = false) PurchaseCorrectionCommand body) {
+        PurchaseCorrectionCommand cmd = body != null ? body : new PurchaseCorrectionCommand();
+        return ResponseEntity.ok(correct(preview, () -> purchaseApplicationService.cancelWithDocuments(id, cmd)));
+    }
+
+    @PostMapping("/orders/{id}/corrections/reassign-vendor")
+    @RequiresPermission("purchase.order.write")
+    public ResponseEntity<PurchaseCorrectionResult> reassignVendor(@PathVariable UUID id,
+                                                                   @RequestParam(defaultValue = "false") boolean preview,
+                                                                   @RequestBody PurchaseCorrectionCommand body) {
+        return ResponseEntity.ok(correct(preview, () -> purchaseApplicationService.reassignVendor(id, body)));
+    }
+
+    private PurchaseCorrectionResult correct(boolean preview, java.util.function.Supplier<PurchaseCorrectionResult> flow) {
+        return preview ? correctionPreviewer.preview(flow) : flow.get();
+    }
+
+    @PostMapping("/orders/{id}/close-remaining")
+    @RequiresPermission("purchase.order.write")
+    public ResponseEntity<PurchaseOrderResponse> closeRemaining(@PathVariable UUID id,
+                                                               @RequestBody(required = false) java.util.Map<String, String> body) {
+        String reason = body != null ? body.get("reason") : null;
+        return ResponseEntity.ok(purchaseApplicationService.closeRemainingQuantities(id, reason));
     }
 
     @PostMapping("/orders/{id}/lock")

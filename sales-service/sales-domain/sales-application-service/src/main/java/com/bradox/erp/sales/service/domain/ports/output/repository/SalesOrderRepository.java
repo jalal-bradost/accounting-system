@@ -19,10 +19,21 @@ public interface SalesOrderRepository {
 
     Optional<SalesOrder> findByCompanyIdAndName(UUID companyId, String name);
 
+    default Page<SalesOrder> search(UUID companyId,
+                            SalesOrderState state,
+                            UUID customerPartnerId,
+                            String q,
+                            Pageable pageable) {
+        return search(companyId, state, customerPartnerId, q, null, null, pageable);
+    }
+
+    /** As above, limited to orders whose order date is within [orderDateFrom, orderDateTo] (either may be null). */
     Page<SalesOrder> search(UUID companyId,
                             SalesOrderState state,
                             UUID customerPartnerId,
                             String q,
+                            java.time.LocalDate orderDateFrom,
+                            java.time.LocalDate orderDateTo,
                             Pageable pageable);
 
     void flush();

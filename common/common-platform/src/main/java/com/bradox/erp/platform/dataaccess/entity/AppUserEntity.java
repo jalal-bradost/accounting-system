@@ -20,7 +20,7 @@ public class AppUserEntity extends ArchivableEntity {
     @Column(nullable = false, length = 100)
     private String username;
 
-    @Column(nullable = false, length = 255)
+    @Column(length = 255)
     private String email;
 
     @Column(name = "display_name", length = 255)

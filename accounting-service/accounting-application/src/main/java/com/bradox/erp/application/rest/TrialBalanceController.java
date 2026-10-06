@@ -2,6 +2,10 @@ package com.bradox.erp.application.rest;
 
 import com.bradox.erp.accounting.service.domain.ports.input.service.ReportingApplicationService;
 import com.bradox.erp.accounting.service.domain.ports.output.repository.AccountBalanceRepository;
+import com.bradox.erp.domain.valueobject.CompanyId;
+import com.bradox.erp.platform.security.ForbiddenException;
+import com.bradox.erp.platform.security.RequiresPermission;
+import com.bradox.erp.platform.web.CurrentCompany;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,10 +26,18 @@ public class TrialBalanceController {
     }
 
     @GetMapping("/{companyId}/trial-balance")
+    @RequiresPermission("accounting.report.read")
     public ResponseEntity<TrialBalanceResponse> getTrialBalance(
+            @CurrentCompany CompanyId currentCompany,
             @PathVariable UUID companyId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        if (currentCompany == null || companyId == null || !companyId.equals(currentCompany.getId())) {
+            throw new ForbiddenException(
+                    "error.security.forbidden",
+                    new Object[]{"company"},
+                    "Company scope mismatch");
+        }
         List<AccountBalanceRepository.AccountBalanceLine> lines = reportingApplicationService.getTrialBalance(companyId, from, to);
         List<TrialBalanceResponse.Line> responseLines = lines.stream()
                 .map(l -> new TrialBalanceResponse.Line(l.accountId(), l.balance()))

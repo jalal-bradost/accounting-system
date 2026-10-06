@@ -15,7 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
 import com.bradox.erp.inventory.domain.core.valueobject.WarehouseId;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -63,6 +67,12 @@ class StockValuationApplicationServiceImpl implements StockValuationApplicationS
 
     @Override
     @Transactional(readOnly = true)
+    public Map<UUID, BigDecimal> onHandByWarehouse(CompanyId companyId, UUID warehouseId) {
+        return quantRepository.sumOnHandGroupedByWarehouse(companyId, new WarehouseId(warehouseId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<ValuationLayerResponse> layersByProduct(CompanyId companyId, UUID productId) {
         return layerRepository.findByProduct(companyId, new ProductId(productId)).stream()
                 .map(mapper::layerToResponse)
@@ -73,5 +83,24 @@ class StockValuationApplicationServiceImpl implements StockValuationApplicationS
     @Transactional(readOnly = true)
     public BigDecimal valuationOf(CompanyId companyId, UUID productId) {
         return layerRepository.sumOnHandValue(companyId, new ProductId(productId)).getAmount();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> bulkValuation(CompanyId companyId, Collection<UUID> productIds) {
+        if (productIds == null || productIds.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, BigDecimal> onHand = quantRepository.sumOnHandInternalByProductIds(companyId, productIds);
+        Map<UUID, BigDecimal> values = layerRepository.sumOnHandValueByProductIds(companyId, productIds);
+        List<Map<String, Object>> rows = new ArrayList<>(productIds.size());
+        for (UUID productId : productIds) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("productId", productId);
+            row.put("totalOnHand", onHand.getOrDefault(productId, BigDecimal.ZERO));
+            row.put("valuation", values.getOrDefault(productId, BigDecimal.ZERO));
+            rows.add(row);
+        }
+        return rows;
     }
 }

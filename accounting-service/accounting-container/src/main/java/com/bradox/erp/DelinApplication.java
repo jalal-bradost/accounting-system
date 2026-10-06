@@ -6,9 +6,11 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication(scanBasePackages = "com.bradox.erp")
 @EnableConfigurationProperties(AccountingCurrencyProperties.class)
+@EnableScheduling
 @EntityScan(basePackages = {
         "com.bradox.erp.dataaccess.entity",
         "com.bradox.erp.platform.dataaccess.entity",

@@ -23,6 +23,8 @@ public class CreatePurchaseOrderCommand {
     private LocalDate expectedDate;
     private String incoterm;
     private String notes;
+    /** Version the client last saw; a mismatch on update means someone else saved first. */
+    private Long rowVersion;
     private String vendorReference;
     private DiscountType orderDiscountType;
     private BigDecimal orderDiscountValue;
@@ -53,6 +55,8 @@ public class CreatePurchaseOrderCommand {
     public void setIncoterm(String incoterm) { this.incoterm = incoterm; }
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+    public Long getRowVersion() { return rowVersion; }
+    public void setRowVersion(Long rowVersion) { this.rowVersion = rowVersion; }
     public String getVendorReference() { return vendorReference; }
     public void setVendorReference(String vendorReference) { this.vendorReference = vendorReference; }
     public DiscountType getOrderDiscountType() { return orderDiscountType; }

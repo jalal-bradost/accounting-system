@@ -2,6 +2,7 @@ package com.bradox.erp.sales.service.domain.dto;
 
 import com.bradox.erp.domain.valueobject.DiscountType;
 import com.bradox.erp.sales.domain.core.SalInvoicePolicy;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -22,6 +23,7 @@ public class SalesOrderLineResponse {
     private BigDecimal qtyDelivered;
     private BigDecimal qtyInvoiced;
     private BigDecimal unitPrice;
+    private boolean isGift;
     private DiscountType discountType;
     private BigDecimal discountValue;
     private BigDecimal discountPercent;
@@ -53,6 +55,9 @@ public class SalesOrderLineResponse {
     public void setQtyInvoiced(BigDecimal qtyInvoiced) { this.qtyInvoiced = qtyInvoiced; }
     public BigDecimal getUnitPrice() { return unitPrice; }
     public void setUnitPrice(BigDecimal unitPrice) { this.unitPrice = unitPrice; }
+    @JsonProperty("isGift")
+    public boolean isGift() { return isGift; }
+    public void setGift(boolean gift) { this.isGift = gift; }
     public DiscountType getDiscountType() { return discountType; }
     public void setDiscountType(DiscountType discountType) { this.discountType = discountType; }
     public BigDecimal getDiscountValue() { return discountValue; }

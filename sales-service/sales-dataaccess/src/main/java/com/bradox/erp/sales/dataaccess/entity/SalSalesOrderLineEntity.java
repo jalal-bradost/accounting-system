@@ -69,6 +69,9 @@ public class SalSalesOrderLineEntity {
     @Column(name = "discount_percent", nullable = false, precision = 19, scale = 4)
     private BigDecimal discountPercent;
 
+    @Column(name = "is_gift", nullable = false)
+    private boolean isGift = false;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "invoice_policy", length = 32)
     private SalInvoicePolicy invoicePolicy;
@@ -138,4 +141,6 @@ public class SalSalesOrderLineEntity {
     public void setTaxes(List<SalSalesOrderLineTaxEntity> taxes) {
         this.taxes = taxes != null ? taxes : new ArrayList<>();
     }
+    public boolean isGift() { return isGift; }
+    public void setGift(boolean gift) { this.isGift = gift; }
 }

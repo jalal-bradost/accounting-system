@@ -11,6 +11,7 @@ import com.bradox.erp.contacts.service.domain.dto.PartnerResponse;
 import com.bradox.erp.contacts.service.domain.ports.input.PartnerApplicationService;
 import com.bradox.erp.domain.core.ValueObject.CustomerInvoiceMoveType;
 import com.bradox.erp.domain.core.ValueObject.CustomerInvoiceState;
+import com.bradox.erp.domain.core.ValueObject.CustomerPaymentState;
 import com.bradox.erp.domain.core.entity.CustomerInvoice;
 import com.bradox.erp.domain.core.entity.CustomerInvoiceLine;
 import com.bradox.erp.domain.core.entity.CustomerInvoiceLineTax;
@@ -80,10 +81,13 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
 
     private List<PartnerStatementSectionResponse> buildReceivableSections(
             UUID companyId, UUID partnerId, LocalDate from, LocalDate to) {
-        List<CustomerInvoice> invoices = customerInvoiceRepository
-                .findByCompanyIdAndCustomerPartnerIdOrderByInvoiceDateAscCreatedAtAsc(companyId, partnerId);
-        List<CustomerPayment> payments = customerPaymentRepository
-                .findByCompanyIdAndCustomerPartnerIdOrderByPaymentDateAscCreatedAtAsc(companyId, partnerId);
+        // Date-bounded loads (posted only) — same math as full-history filter, less I/O.
+        List<CustomerInvoice> invoices = new ArrayList<>();
+        invoices.addAll(customerInvoiceRepository.findPostedByPartnerBefore(companyId, partnerId, from));
+        invoices.addAll(customerInvoiceRepository.findPostedByPartnerBetween(companyId, partnerId, from, to));
+        List<CustomerPayment> payments = new ArrayList<>();
+        payments.addAll(customerPaymentRepository.findPostedByPartnerBefore(companyId, partnerId, from));
+        payments.addAll(customerPaymentRepository.findPostedByPartnerBetween(companyId, partnerId, from, to));
 
         Set<String> currencies = new LinkedHashSet<>();
         for (CustomerInvoice inv : invoices) {
@@ -92,6 +96,9 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
             }
         }
         for (CustomerPayment p : payments) {
+            if (p.getState() != CustomerPaymentState.POSTED) {
+                continue;
+            }
             if (p.getCurrencyCode() != null) {
                 currencies.add(p.getCurrencyCode().trim().toUpperCase());
             }
@@ -128,6 +135,9 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
             }
         }
         for (CustomerPayment p : payments) {
+            if (p.getState() != CustomerPaymentState.POSTED) {
+                continue;
+            }
             if (!currency.equalsIgnoreCase(p.getCurrencyCode())) {
                 continue;
             }
@@ -148,13 +158,17 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
             }
         }
         for (CustomerPayment p : payments) {
-            if (currency.equalsIgnoreCase(p.getCurrencyCode())
+            if (p.getState() == CustomerPaymentState.POSTED
+                    && currency.equalsIgnoreCase(p.getCurrencyCode())
                     && !p.getPaymentDate().toLocalDate().isBefore(from)
                     && !p.getPaymentDate().toLocalDate().isAfter(to)) {
                 period.add(new ArEvt(p.getPaymentDate(), p.getCreatedAt(), "M:" + p.getId(), null, p));
             }
         }
-        period.sort(Comparator.comparing(ArEvt::d).thenComparing(ArEvt::created).thenComparing(ArEvt::idKey));
+        period.sort(Comparator
+                .comparing((ArEvt e) -> e.d().toLocalDate())
+                .thenComparing(ArEvt::created, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(ArEvt::idKey));
 
         BigDecimal running = opening;
         List<PartnerStatementLineResponse> lines = new ArrayList<>();
@@ -182,10 +196,8 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
             } else {
                 CustomerPayment payment = e.pay();
                 BigDecimal amount = payment.getAmount().setScale(4, RoundingMode.HALF_UP);
-                row.setLineType("CUSTOMER_PAYMENT");
-                row.setReference(payment.getReference() != null && !payment.getReference().isBlank() ? payment.getReference() : "Payment");
+                applyCustomerPaymentLabels(row, payment);
                 row.setCurrencyCode(payment.getCurrencyCode());
-                row.setCustomerInvoiceId(payment.getCustomerInvoiceId());
                 row.setCustomerPaymentId(payment.getId());
                 row.setDebit(zero);
                 row.setCredit(amount);
@@ -218,5 +230,34 @@ class PartnerStatementApplicationServiceImpl implements PartnerStatementApplicat
 
     private static BigDecimal customerLineNet(CustomerInvoiceLine line) {
         return DiscountMath.lineNet(line.getQty(), line.getUnitPrice(), line.getDiscountType(), line.getDiscountValue());
+    }
+
+    /**
+     * Field cash collected by salespeople is company money (Due from Salespeople), not a normal
+     * customer receipt. Detect legacy "Field paid · SO/…" references and the stable "FIELD|" prefix.
+     */
+    private static void applyCustomerPaymentLabels(PartnerStatementLineResponse row, CustomerPayment payment) {
+        String raw = payment.getReference() != null ? payment.getReference().trim() : "";
+        if (raw.startsWith("FIELD|")) {
+            String soRef = raw.substring("FIELD|".length()).trim();
+            row.setLineType("CUSTOMER_FIELD_PAYMENT");
+            row.setReference(soRef.isEmpty() ? "Field collection" : soRef);
+            return;
+        }
+        if (raw.regionMatches(true, 0, "Field paid", 0, "Field paid".length())) {
+            String soRef = raw;
+            int sep = raw.indexOf('·');
+            if (sep < 0) {
+                sep = raw.indexOf('-');
+            }
+            if (sep >= 0 && sep + 1 < raw.length()) {
+                soRef = raw.substring(sep + 1).trim();
+            }
+            row.setLineType("CUSTOMER_FIELD_PAYMENT");
+            row.setReference(soRef.isEmpty() ? "Field collection" : soRef);
+            return;
+        }
+        row.setLineType("CUSTOMER_PAYMENT");
+        row.setReference(raw.isEmpty() ? "Payment" : raw);
     }
 }

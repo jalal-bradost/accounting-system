@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -35,6 +36,15 @@ public interface StockValuationLayerJpaRepository extends JpaRepository<StockVal
         """)
     BigDecimal sumOnHandValue(@Param("companyId") UUID companyId,
                                @Param("productId") UUID productId);
+
+    @Query("""
+        SELECT l.productId, COALESCE(SUM(l.value), 0) FROM StockValuationLayerEntity l
+        WHERE l.companyId = :companyId
+          AND l.productId in :productIds
+        GROUP BY l.productId
+        """)
+    List<Object[]> sumOnHandValueByProductIds(@Param("companyId") UUID companyId,
+                                              @Param("productIds") Collection<UUID> productIds);
 
     @Query("""
         SELECT l FROM StockValuationLayerEntity l

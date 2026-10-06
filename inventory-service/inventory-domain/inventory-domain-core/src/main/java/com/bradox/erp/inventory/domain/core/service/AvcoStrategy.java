@@ -40,6 +40,9 @@ public class AvcoStrategy implements ValuationStrategy {
         Money newAvg;
         if (newQty.signum() <= 0) {
             newAvg = ctx.providedUnitCost();
+        } else if (newValue.signum() < 0) {
+            // Poisoned ledger (e.g. prior multi-move AVCO bug): never push a negative average onto the product.
+            newAvg = Money.ZERO;
         } else {
             newAvg = new Money(newValue.divide(newQty, COST_SCALE, RoundingMode.HALF_UP));
         }

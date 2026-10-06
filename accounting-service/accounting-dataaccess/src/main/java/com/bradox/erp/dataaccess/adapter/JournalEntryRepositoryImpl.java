@@ -16,10 +16,12 @@ import com.bradox.erp.domain.core.entity.JournalEntry;
 import com.bradox.erp.domain.core.exception.AccountingDomainException;
 import com.bradox.erp.domain.valueobject.CompanyId;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -42,10 +44,11 @@ public class JournalEntryRepositoryImpl implements JournalEntryRepository {
     }
 
     @Override
+    @Transactional
     public JournalEntry save(JournalEntry journalEntry) {
         JournalEntity journalEntity = journalJpaRepository.findById(journalEntry.getJournalId().getId())
                 .orElseThrow(() -> new IllegalStateException("Journal not found: " + journalEntry.getJournalId().getId()));
-        JournalEntryEntity existing = jpaRepository.findById(journalEntry.getId().getId()).orElse(null);
+        JournalEntryEntity existing = jpaRepository.findByIdWithDetails(journalEntry.getId().getId()).orElse(null);
         if (existing != null && existing.getStatus() == JournalEntryStatus.POSTED) {
             throw new AccountingDomainException("error.accounting.cannotModifyPostedEntry", null, "Cannot modify a posted journal entry. Use reversal instead.");
         }
@@ -60,15 +63,21 @@ public class JournalEntryRepositoryImpl implements JournalEntryRepository {
         }
         setAccountOnItems(entity, journalEntry);
         JournalEntryEntity saved = jpaRepository.save(entity);
-        return mapper.entityToDomain(saved);
+        // Re-load with associations — save() may return a managed entity whose
+        // items/account proxies are not initialized when open-in-view is false.
+        return jpaRepository.findByIdWithDetails(saved.getId())
+                .map(mapper::entityToDomain)
+                .orElseGet(() -> mapper.entityToDomain(saved));
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Optional<JournalEntry> findById(JournalEntryId id) {
-        return jpaRepository.findById(id.getId()).map(mapper::entityToDomain);
+        return jpaRepository.findByIdWithDetails(id.getId()).map(mapper::entityToDomain);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<JournalEntry> findByCompanyId(CompanyId companyId) {
         return jpaRepository.findByCompanyId(companyId.getId()).stream()
                 .map(mapper::entityToDomain)
@@ -76,6 +85,28 @@ public class JournalEntryRepositoryImpl implements JournalEntryRepository {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<JournalEntry> searchByCompanyId(
+            CompanyId companyId, org.springframework.data.domain.Pageable pageable) {
+        var idPage = jpaRepository.findIdsByCompanyId(companyId.getId(), pageable);
+        if (idPage.isEmpty()) {
+            return new org.springframework.data.domain.PageImpl<>(List.of(), pageable, idPage.getTotalElements());
+        }
+        Map<java.util.UUID, JournalEntry> byId = jpaRepository.findByIdInWithDetails(idPage.getContent()).stream()
+                .map(mapper::entityToDomain)
+                .collect(Collectors.toMap(e -> e.getId().getId(), java.util.function.Function.identity(), (a, b) -> a));
+        List<JournalEntry> ordered = new java.util.ArrayList<>(idPage.getContent().size());
+        for (java.util.UUID id : idPage.getContent()) {
+            JournalEntry e = byId.get(id);
+            if (e != null) {
+                ordered.add(e);
+            }
+        }
+        return new org.springframework.data.domain.PageImpl<>(ordered, pageable, idPage.getTotalElements());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<JournalEntry> findByCompanyIdAndJournalIdAndDateBetween(
             CompanyId companyId, JournalId journalId, LocalDate from, LocalDate to) {
         return jpaRepository.findByCompanyIdAndJournalIdAndEntryDateBetween(

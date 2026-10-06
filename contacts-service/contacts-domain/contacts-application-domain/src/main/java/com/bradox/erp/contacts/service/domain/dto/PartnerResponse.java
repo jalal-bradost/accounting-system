@@ -106,7 +106,8 @@ public class PartnerResponse {
 
     public record AddressResponse(UUID id, AddressType type, boolean defaultForType,
                                    String street1, String street2, String city,
-                                   String state, String postalCode, String country) {}
+                                   String state, String postalCode, String country,
+                                   java.math.BigDecimal latitude, java.math.BigDecimal longitude) {}
 
     public record BankAccountResponse(UUID id, String iban, String swift, String accountHolderName) {}
 }

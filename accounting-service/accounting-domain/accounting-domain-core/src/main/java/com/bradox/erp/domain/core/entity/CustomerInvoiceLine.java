@@ -21,6 +21,7 @@ public class CustomerInvoiceLine {
     private BigDecimal discountPercent;
     private UUID revenueAccountId;
     private UUID salesOrderLineId;
+    private boolean gift;
     private Instant createdAt;
     private Instant updatedAt;
     private List<CustomerInvoiceLineTax> taxSnapshots = new ArrayList<>();
@@ -47,6 +48,8 @@ public class CustomerInvoiceLine {
     public void setRevenueAccountId(UUID revenueAccountId) { this.revenueAccountId = revenueAccountId; }
     public UUID getSalesOrderLineId() { return salesOrderLineId; }
     public void setSalesOrderLineId(UUID salesOrderLineId) { this.salesOrderLineId = salesOrderLineId; }
+    public boolean isGift() { return gift; }
+    public void setGift(boolean gift) { this.gift = gift; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

@@ -43,16 +43,30 @@ public interface JournalItemJpaRepository extends JpaRepository<JournalItemEntit
                                           @Param("toExclusive") LocalDateTime toExclusive,
                                           @Param("accountId") UUID accountId);
 
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("UPDATE JournalItemEntity i SET i.reconciliationId = :reconciliationId WHERE i.id IN :ids")
     void setReconciliationId(@Param("ids") List<UUID> ids, @Param("reconciliationId") UUID reconciliationId);
 
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query("UPDATE JournalItemEntity i SET i.reconciliationId = NULL WHERE i.id IN :ids")
     void clearReconciliationId(@Param("ids") List<UUID> ids);
 
     @Query("SELECT i.id FROM JournalItemEntity i WHERE i.reconciliationId IN :reconciliationIds")
     List<UUID> findIdsByReconciliationIdIn(@Param("reconciliationIds") Collection<UUID> reconciliationIds);
+
+    @Query("SELECT i.id, e.id, e.companyId, a.id, a.type, COALESCE(i.partnerId, e.partnerId), "
+            + "i.debit, i.credit, i.reconciliationId, e.status "
+            + "FROM JournalItemEntity i JOIN i.journalEntry e JOIN i.account a WHERE i.id IN :ids")
+    List<Object[]> findSnapshotsByIds(@Param("ids") Collection<UUID> ids);
+
+    @Query("SELECT i.id, e.id, e.companyId, a.id, a.type, COALESCE(i.partnerId, e.partnerId), "
+            + "i.debit, i.credit, i.reconciliationId, e.status "
+            + "FROM JournalItemEntity i JOIN i.journalEntry e JOIN i.account a WHERE e.id IN :entryIds")
+    List<Object[]> findSnapshotsByEntryIds(@Param("entryIds") Collection<UUID> entryIds);
+
+    @Query("SELECT e.reversalOfEntryId, e.id FROM JournalEntryEntity e "
+            + "WHERE e.reversalOfEntryId IN :entryIds AND e.status = 'POSTED'")
+    List<Object[]> findPostedReversalsOf(@Param("entryIds") Collection<UUID> entryIds);
 
     /**
      * Sum of (debit - credit) on posted journal items for the given partner, restricted to

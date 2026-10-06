@@ -1,17 +1,28 @@
 package com.bradox.erp.accounting.service.domain.customerinvoice;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 public class RegisterCustomerPaymentCommand {
 
     private UUID companyId;
-    @NotNull
+    /**
+     * Legacy shorthand: allocate the full amount to this invoice / credit note. Mutually exclusive
+     * with {@link #allocations}.
+     */
     private UUID customerInvoiceId;
+    /** Required when no document is given; must match the documents' customer otherwise. */
+    private UUID customerPartnerId;
+    /** Optional allocations applied right after the payment is posted (sum ≤ amount). */
+    @Valid
+    private List<CustomerPaymentAllocationLine> allocations = new ArrayList<>();
     /** Cash (430001) or Bank (430002) journal from the chart — liquidity account matches journal code. */
     @NotNull
     private UUID paymentJournalId;
@@ -25,11 +36,19 @@ public class RegisterCustomerPaymentCommand {
     /** Document × rate = company currency. Defaults from company currency master on payment date. */
     private BigDecimal exchangeRateToCompany;
     private String reference;
+    /** Optional override: debit this account instead of the payment journal's liquidity account (e.g. Due from Salespeople). */
+    private UUID liquidityAccountId;
 
     public UUID getCompanyId() { return companyId; }
     public void setCompanyId(UUID companyId) { this.companyId = companyId; }
     public UUID getCustomerInvoiceId() { return customerInvoiceId; }
     public void setCustomerInvoiceId(UUID customerInvoiceId) { this.customerInvoiceId = customerInvoiceId; }
+    public UUID getCustomerPartnerId() { return customerPartnerId; }
+    public void setCustomerPartnerId(UUID customerPartnerId) { this.customerPartnerId = customerPartnerId; }
+    public List<CustomerPaymentAllocationLine> getAllocations() { return allocations; }
+    public void setAllocations(List<CustomerPaymentAllocationLine> allocations) {
+        this.allocations = allocations != null ? allocations : new ArrayList<>();
+    }
     public UUID getPaymentJournalId() { return paymentJournalId; }
     public void setPaymentJournalId(UUID paymentJournalId) { this.paymentJournalId = paymentJournalId; }
     public LocalDateTime getPaymentDate() { return paymentDate; }
@@ -42,4 +61,6 @@ public class RegisterCustomerPaymentCommand {
     public void setExchangeRateToCompany(BigDecimal exchangeRateToCompany) { this.exchangeRateToCompany = exchangeRateToCompany; }
     public String getReference() { return reference; }
     public void setReference(String reference) { this.reference = reference; }
+    public UUID getLiquidityAccountId() { return liquidityAccountId; }
+    public void setLiquidityAccountId(UUID liquidityAccountId) { this.liquidityAccountId = liquidityAccountId; }
 }

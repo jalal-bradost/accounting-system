@@ -80,7 +80,7 @@ public class CompanyEntity extends ArchivableEntity {
 
     /** When true, customer invoices may be created from ordered qty before delivery. */
     @Column(name = "allow_invoice_without_delivery", nullable = false)
-    private boolean allowInvoiceWithoutDelivery = false;
+    private boolean allowInvoiceWithoutDelivery = true;
 
     public CompanyEntity() {}
 

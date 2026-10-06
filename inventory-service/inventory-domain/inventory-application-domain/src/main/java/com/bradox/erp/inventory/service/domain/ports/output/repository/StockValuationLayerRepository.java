@@ -6,8 +6,12 @@ import com.bradox.erp.inventory.domain.core.entity.StockValuationLayer;
 import com.bradox.erp.inventory.domain.core.valueobject.ProductId;
 import com.bradox.erp.inventory.domain.core.valueobject.ValuationLayerId;
 
+import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 public interface StockValuationLayerRepository {
 
@@ -23,6 +27,8 @@ public interface StockValuationLayerRepository {
 
     /** Sum of remaining-value across all positive layers (per product). */
     Money sumOnHandValue(CompanyId companyId, ProductId productId);
+
+    Map<UUID, BigDecimal> sumOnHandValueByProductIds(CompanyId companyId, Collection<UUID> productIds);
 
     /** All layers for a product (chronological). */
     List<StockValuationLayer> findByProduct(CompanyId companyId, ProductId productId);

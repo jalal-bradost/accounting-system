@@ -75,6 +75,10 @@ hr:
 spring:
   application:
     name: bradox-erp
+  # Long-lived requests (SSE) must not hold a JDBC connection for the whole stream;
+  # application services already use @Transactional for DB work.
+  jpa:
+    open-in-view: false
   profiles:
     default: dev
   autoconfigure:
