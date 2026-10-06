@@ -1,0 +1,4 @@
+#!/bin/sh
+# Installed to /etc/update-motd.d/: shows backup health on SSH login.
+[ -x __COMPOSE_DIR__/backend/ops/backup/status.sh ] && FORCE_COLOR=1 __COMPOSE_DIR__/backend/ops/backup/status.sh 2>/dev/null
+exit 0

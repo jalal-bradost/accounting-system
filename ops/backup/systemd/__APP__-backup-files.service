@@ -1,0 +1,12 @@
+[Unit]
+Description=__APP__ uploads and config archive
+Requires=docker.service
+After=docker.service
+
+[Service]
+Environment=APP_NAME=__APP__
+Type=oneshot
+ExecStart=__COMPOSE_DIR__/backend/ops/backup/backup-files.sh
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=30min
