@@ -49,6 +49,18 @@ public class StockValuationController {
                 "totalOnHand", qty));
     }
 
+    /** Lifetime sold / purchased quantity for the product form's smart buttons. */
+    @GetMapping("/products/{productId}/movement-totals")
+    @RequiresPermission(value = {"inventory.valuation.read", "inventory.product.read"}, op = RequiresPermission.LogicalOp.OR)
+    public ResponseEntity<Map<String, Object>> movementTotals(@CurrentCompany CompanyId companyId,
+                                                               @PathVariable UUID productId) {
+        Map<String, BigDecimal> totals = service.movementTotals(companyId, productId);
+        return ResponseEntity.ok(Map.of(
+                "productId", productId,
+                "sold", totals.get("sold"),
+                "purchased", totals.get("purchased")));
+    }
+
     /** Bulk on-hand for field sales / POS — one row per product with stock in the warehouse. */
     @GetMapping("/warehouses/{warehouseId}/on-hand")
     @RequiresPermission(value = {"inventory.valuation.read", "inventory.product.read"}, op = RequiresPermission.LogicalOp.OR)

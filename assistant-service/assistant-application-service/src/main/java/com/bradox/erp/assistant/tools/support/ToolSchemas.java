@@ -17,7 +17,7 @@ public final class ToolSchemas {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("period", Map.of(
                 "type", "string",
-                "description", "Relative period (default THIS_MONTH if omitted): TODAY, YESTERDAY, THIS_WEEK, LAST_WEEK, THIS_MONTH, LAST_MONTH, THIS_QUARTER, LAST_QUARTER, THIS_YEAR, LAST_YEAR, LAST_30_DAYS, LAST_90_DAYS"));
+                "description", "Relative period (default THIS_MONTH if omitted): TODAY, YESTERDAY, THIS_WEEK, LAST_WEEK (weeks run Saturday to Friday), THIS_MONTH, LAST_MONTH, THIS_QUARTER, LAST_QUARTER, THIS_YEAR, LAST_YEAR, LAST_30_DAYS, LAST_90_DAYS"));
         properties.put("from", Map.of("type", "string", "description", "ISO date YYYY-MM-DD (optional if period set)"));
         properties.put("to", Map.of("type", "string", "description", "ISO date YYYY-MM-DD (optional if period set)"));
         if (includeLimit) {

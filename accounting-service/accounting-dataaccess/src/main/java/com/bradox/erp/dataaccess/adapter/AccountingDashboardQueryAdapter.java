@@ -39,10 +39,21 @@ public class AccountingDashboardQueryAdapter implements AccountingDashboardQuery
                     + " - COALESCE(i.order_discount_amount, 0), 0)"
                     + " * COALESCE(i.exchange_rate_to_company, 1))";
 
-    /** Opening-balance invoices carry pre-go-live receivables, not sales of the period. */
+    /** Invoice net sales in company currency: non-gift lines after line and order discounts, before tax. */
+    private static final String INVOICE_NET_SALES =
+            "(" + INVOICE_SIGN + " * GREATEST(" + INVOICE_LINES
+                    + " - COALESCE(i.order_discount_amount, 0), 0)"
+                    + " * COALESCE(i.exchange_rate_to_company, 1))";
+
+    /**
+     * Opening-balance invoices carry pre-go-live receivables, not sales of the period. Invoices whose
+     * journal entry was reversed are no longer on the books even if their state still reads POSTED.
+     */
     private static final String INVOICE_IN_RANGE =
             "i.state = 'POSTED' "
                     + "AND COALESCE(i.opening_balance, FALSE) = FALSE "
+                    + "AND NOT EXISTS (SELECT 1 FROM journal_entries rv "
+                    + "WHERE rv.reversal_of_entry_id = i.journal_entry_id) "
                     + "AND i.invoice_date IS NOT NULL "
                     + "AND i.invoice_date >= :fromDate AND i.invoice_date <= :toDate";
 
@@ -65,6 +76,8 @@ public class AccountingDashboardQueryAdapter implements AccountingDashboardQuery
 
     private static final String BILL_IN_RANGE =
             "b.state = 'POSTED' "
+                    + "AND NOT EXISTS (SELECT 1 FROM journal_entries rv "
+                    + "WHERE rv.reversal_of_entry_id = b.journal_entry_id) "
                     + "AND b.bill_date IS NOT NULL "
                     + "AND b.bill_date >= :fromDate AND b.bill_date <= :toDate";
 
@@ -93,14 +106,63 @@ public class AccountingDashboardQueryAdapter implements AccountingDashboardQuery
         return ((Number) q.getSingleResult()).longValue();
     }
 
+    /**
+     * Same journal lines as the Profit &amp; Loss revenue section: posted entries in the period on
+     * INCOME accounts (sales less sales discounts and credit notes).
+     */
+    private static final String NET_SALES_LEDGER_FROM =
+            "FROM journal_items ji "
+                    + "JOIN journal_entries e ON e.id = ji.journal_entry_id "
+                    + "JOIN accounts a ON a.id = ji.account_id "
+                    + "WHERE e.company_id = :companyId AND e.status = 'POSTED' AND a.type = 'INCOME' "
+                    + "AND e.entry_date >= :fromInclusive AND e.entry_date < :toExclusive ";
+
     @Override
     public BigDecimal sumPostedIncome(UUID companyId, LocalDate from, LocalDate to) {
         Query q = entityManager.createNativeQuery(
-                "SELECT COALESCE(SUM(" + INVOICE_COMPANY_AMOUNT + "), 0) FROM acc_customer_invoice i "
-                        + "WHERE i.company_id = :companyId "
-                        + "AND " + INVOICE_IN_RANGE);
-        bindRange(q, companyId, from, to);
+                "SELECT COALESCE(SUM(ji.credit - ji.debit), 0) " + NET_SALES_LEDGER_FROM);
+        bindLedgerRange(q, companyId, from, to);
         return toBigDecimal(q.getSingleResult());
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<DocumentFact> listNetSalesFacts(UUID companyId, LocalDate from, LocalDate to) {
+        Query q = entityManager.createNativeQuery(
+                "SELECT CAST(e.entry_date AS DATE), COALESCE(SUM(ji.credit - ji.debit), 0) "
+                        + NET_SALES_LEDGER_FROM
+                        + "GROUP BY CAST(e.entry_date AS DATE)");
+        bindLedgerRange(q, companyId, from, to);
+        return mapFacts(q.getResultList());
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<AccountingDashboardResponse.RankedPartnerRow> topCustomers(
+            UUID companyId, LocalDate from, LocalDate to, int limit) {
+        Query q = entityManager.createNativeQuery(
+                "SELECT i.customer_partner_id, MAX(p.display_name), "
+                        + "COALESCE(SUM(" + INVOICE_NET_SALES + "), 0) AS net_sales, "
+                        + "SUM(CASE WHEN i.move_type <> 'CREDIT_NOTE' THEN 1 ELSE 0 END) "
+                        + "FROM acc_customer_invoice i "
+                        + "LEFT JOIN contacts_partner p ON p.id = i.customer_partner_id "
+                        + "WHERE i.company_id = :companyId "
+                        + "AND " + INVOICE_IN_RANGE + " "
+                        + "GROUP BY i.customer_partner_id "
+                        + "HAVING COALESCE(SUM(" + INVOICE_NET_SALES + "), 0) <> 0 "
+                        + "ORDER BY net_sales DESC");
+        bindRange(q, companyId, from, to);
+        q.setMaxResults(limit);
+        List<AccountingDashboardResponse.RankedPartnerRow> result = new ArrayList<>();
+        for (Object[] row : (List<Object[]>) q.getResultList()) {
+            AccountingDashboardResponse.RankedPartnerRow item = new AccountingDashboardResponse.RankedPartnerRow();
+            item.setPartnerId(toUuid(row[0]));
+            item.setPartnerName(row[1] != null ? row[1].toString() : null);
+            item.setAmount(toBigDecimal(row[2]));
+            item.setDocumentCount(row[3] != null ? ((Number) row[3]).longValue() : 0L);
+            result.add(item);
+        }
+        return result;
     }
 
     @Override
@@ -169,6 +231,12 @@ public class AccountingDashboardQueryAdapter implements AccountingDashboardQuery
         bindRange(q, companyId, from, to);
         q.setMaxResults(limit);
         return mapDocuments(q.getResultList());
+    }
+
+    private static void bindLedgerRange(Query q, UUID companyId, LocalDate from, LocalDate to) {
+        q.setParameter("companyId", companyId);
+        q.setParameter("fromInclusive", from.atStartOfDay());
+        q.setParameter("toExclusive", to.plusDays(1).atStartOfDay());
     }
 
     private static void bindRange(Query q, UUID companyId, LocalDate from, LocalDate to) {

@@ -64,6 +64,7 @@ public class AccountingDashboardService {
         response.setIncome(kpi(income, prevIncome));
         response.setSpend(kpi(spend, prevSpend));
         response.setSeries(buildSeries(
+                queryPort.listNetSalesFacts(companyId, from, to),
                 queryPort.listInvoiceFacts(companyId, from, to),
                 queryPort.listBillFacts(companyId, from, to),
                 from,
@@ -71,10 +72,13 @@ public class AccountingDashboardService {
                 daily));
         response.setTopInvoices(queryPort.topInvoices(companyId, from, to, TOP_LIMIT));
         response.setTopBills(queryPort.topBills(companyId, from, to, TOP_LIMIT));
+        response.setTopCustomers(queryPort.topCustomers(companyId, from, to, TOP_LIMIT));
         return response;
     }
 
+    /** Revenue comes from the ledger (matches the KPI and the P&amp;L); invoices only feed the count. */
     private static List<SeriesPoint> buildSeries(
+            List<DocumentFact> netSales,
             List<DocumentFact> invoices,
             List<DocumentFact> bills,
             LocalDate from,
@@ -85,13 +89,17 @@ public class AccountingDashboardService {
             for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
                 buckets.put(d, emptyPoint(d, d.format(DAY_LABEL)));
             }
+            for (DocumentFact fact : netSales) {
+                SeriesPoint point = buckets.get(fact.documentDate());
+                if (point != null) {
+                    point.setRevenue(point.getRevenue().add(fact.companyAmount()));
+                }
+            }
             for (DocumentFact fact : invoices) {
                 SeriesPoint point = buckets.get(fact.documentDate());
-                if (point == null) {
-                    continue;
+                if (point != null) {
+                    point.setOrderCount(point.getOrderCount() + 1);
                 }
-                point.setRevenue(point.getRevenue().add(fact.companyAmount()));
-                point.setOrderCount(point.getOrderCount() + 1);
             }
             for (DocumentFact fact : bills) {
                 SeriesPoint point = buckets.get(fact.documentDate());
@@ -106,14 +114,17 @@ public class AccountingDashboardService {
             for (LocalDate m = cursor; !m.isAfter(endMonth); m = m.plusMonths(1)) {
                 buckets.put(m, emptyPoint(m, m.format(MONTH_LABEL)));
             }
-            for (DocumentFact fact : invoices) {
-                LocalDate month = fact.documentDate().withDayOfMonth(1);
-                SeriesPoint point = buckets.get(month);
-                if (point == null) {
-                    continue;
+            for (DocumentFact fact : netSales) {
+                SeriesPoint point = buckets.get(fact.documentDate().withDayOfMonth(1));
+                if (point != null) {
+                    point.setRevenue(point.getRevenue().add(fact.companyAmount()));
                 }
-                point.setRevenue(point.getRevenue().add(fact.companyAmount()));
-                point.setOrderCount(point.getOrderCount() + 1);
+            }
+            for (DocumentFact fact : invoices) {
+                SeriesPoint point = buckets.get(fact.documentDate().withDayOfMonth(1));
+                if (point != null) {
+                    point.setOrderCount(point.getOrderCount() + 1);
+                }
             }
             for (DocumentFact fact : bills) {
                 LocalDate month = fact.documentDate().withDayOfMonth(1);
