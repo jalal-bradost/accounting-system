@@ -75,6 +75,7 @@ public class PlatformSecurityConfiguration {
                 .requestMatchers("/media/company-logos/**").permitAll()
                 .requestMatchers("/media/chatter-attachments/**").permitAll()
                 .requestMatchers("/h2-console", "/h2-console/**").permitAll()
+                .requestMatchers("/api/v1/public/sign/**").permitAll()
                 .requestMatchers("/api/**").authenticated());
         http.exceptionHandling(e -> e
                 .authenticationEntryPoint((request, response, authException) -> securityErrorResponseWriter

@@ -124,6 +124,7 @@ public class AccountingDataMapper {
                             .amountCurrency(amountCurrency)
                             .currency(curr)
                             .partnerRef(partnerRef)
+                            .analytic(c.getAnalyticModel(), c.getAnalyticId())
                             .build();
                 })
                 .collect(Collectors.toList());

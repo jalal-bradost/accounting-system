@@ -20,10 +20,14 @@ public interface JournalItemJpaRepository extends JpaRepository<JournalItemEntit
 
     @Query("SELECT i.account.id, (SUM(i.debit) - SUM(i.credit)) FROM JournalItemEntity i "
             + "JOIN i.journalEntry e WHERE e.companyId = :companyId AND e.status = 'POSTED' "
-            + "AND e.entryDate >= :fromInclusive AND e.entryDate < :toExclusive GROUP BY i.account.id")
+            + "AND e.entryDate >= :fromInclusive AND e.entryDate < :toExclusive "
+            + "AND (:analyticModel = '' OR (i.analyticModel = :analyticModel AND i.analyticId = :analyticId)) "
+            + "GROUP BY i.account.id")
     List<Object[]> findTrialBalance(@Param("companyId") UUID companyId,
                                    @Param("fromInclusive") LocalDateTime fromInclusive,
-                                   @Param("toExclusive") LocalDateTime toExclusive);
+                                   @Param("toExclusive") LocalDateTime toExclusive,
+                                   @Param("analyticModel") String analyticModel,
+                                   @Param("analyticId") UUID analyticId);
 
     @Query("SELECT i.account.id, (SUM(i.debit) - SUM(i.credit)) FROM JournalItemEntity i "
             + "JOIN i.journalEntry e WHERE e.companyId = :companyId AND e.status = 'POSTED' "
@@ -37,11 +41,14 @@ public interface JournalItemJpaRepository extends JpaRepository<JournalItemEntit
             + "WHERE e.companyId = :companyId AND e.status = 'POSTED' "
             + "AND e.entryDate >= :fromInclusive AND e.entryDate < :toExclusive "
             + "AND (:accountId IS NULL OR i.account.id = :accountId) "
+            + "AND (:analyticModel = '' OR (i.analyticModel = :analyticModel AND i.analyticId = :analyticId)) "
             + "ORDER BY i.account.id, e.entryDate, e.id, i.id")
     List<Object[]> findGeneralLedgerLines(@Param("companyId") UUID companyId,
                                           @Param("fromInclusive") LocalDateTime fromInclusive,
                                           @Param("toExclusive") LocalDateTime toExclusive,
-                                          @Param("accountId") UUID accountId);
+                                          @Param("accountId") UUID accountId,
+                                          @Param("analyticModel") String analyticModel,
+                                          @Param("analyticId") UUID analyticId);
 
     @Modifying(flushAutomatically = true)
     @Query("UPDATE JournalItemEntity i SET i.reconciliationId = :reconciliationId WHERE i.id IN :ids")

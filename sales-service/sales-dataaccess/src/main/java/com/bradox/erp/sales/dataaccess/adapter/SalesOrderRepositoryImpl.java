@@ -53,6 +53,12 @@ public class SalesOrderRepositoryImpl implements SalesOrderRepository {
     }
 
     @Override
+    public Optional<UUID> findOrderIdByLineId(UUID lineId) {
+        return entityManager.createQuery("select l.salesOrder.id from SalSalesOrderLineEntity l where l.id = :id", UUID.class)
+                .setParameter("id", lineId).getResultStream().findFirst();
+    }
+
+    @Override
     public Optional<SalesOrder> findByIdForUpdate(UUID id) {
         SalSalesOrderEntity entity = entityManager.find(
                 SalSalesOrderEntity.class, id, LockModeType.PESSIMISTIC_WRITE);

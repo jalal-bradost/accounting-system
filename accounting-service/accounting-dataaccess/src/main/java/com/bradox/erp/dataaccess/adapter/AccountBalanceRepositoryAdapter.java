@@ -22,9 +22,12 @@ public class AccountBalanceRepositoryAdapter implements AccountBalanceRepository
     }
 
     @Override
-    public List<AccountBalanceLine> getTrialBalance(CompanyId companyId, LocalDate from, LocalDate to) {
+    public List<AccountBalanceLine> getTrialBalance(CompanyId companyId, LocalDate from, LocalDate to,
+                                                    String analyticModel, UUID analyticId) {
+        boolean filtered = analyticModel != null && !analyticModel.isBlank() && analyticId != null;
         List<Object[]> rows = journalItemJpaRepository.findTrialBalance(
-                companyId.getId(), from.atStartOfDay(), to.plusDays(1).atStartOfDay());
+                companyId.getId(), from.atStartOfDay(), to.plusDays(1).atStartOfDay(),
+                filtered ? analyticModel : "", filtered ? analyticId : new UUID(0L, 0L));
         return rows.stream()
                 .map(row -> new AccountBalanceLine(
                         (UUID) row[0],

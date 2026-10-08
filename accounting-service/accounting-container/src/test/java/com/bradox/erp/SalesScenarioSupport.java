@@ -308,6 +308,12 @@ abstract class SalesScenarioSupport {
         return new Result(mockMvc.perform(request.header("X-Company-Id", COMPANY_ID.toString())));
     }
 
+    /** Same as {@link #call} but acting as a signed-in user, for modules that resolve the current user (Timesheet). */
+    protected Result callAs(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request, UUID userId)
+            throws Exception {
+        return new Result(mockMvc.perform(request.header("X-Company-Id", COMPANY_ID.toString()).header("X-User-Id", userId.toString())));
+    }
+
     /** Thin wrapper so tests read as call(...).andExpect(...).json(). */
     protected final class Result {
         private final ResultActions actions;

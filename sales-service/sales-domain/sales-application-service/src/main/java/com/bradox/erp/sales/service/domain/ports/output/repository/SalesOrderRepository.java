@@ -36,5 +36,8 @@ public interface SalesOrderRepository {
                             java.time.LocalDate orderDateTo,
                             Pageable pageable);
 
+    /** The order that owns a line, for timesheet billing (TSH-06). */
+    Optional<UUID> findOrderIdByLineId(UUID lineId);
+
     void flush();
 }

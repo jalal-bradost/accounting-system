@@ -95,6 +95,7 @@ public class JournalEntryDataAccessMapper {
                 .partnerRef(e.getPartnerId() != null
                         ? new PartnerRef(e.getPartnerId(), e.getPartnerName())
                         : null)
+                .analytic(e.getAnalyticModel(), e.getAnalyticId())
                 .build();
     }
 
@@ -110,6 +111,8 @@ public class JournalEntryDataAccessMapper {
                 ? domain.getAmountCurrency().getAmount()
                 : BigDecimal.ZERO);
         e.setReconciliationId(domain.getReconciliationId());
+        e.setAnalyticModel(domain.getAnalyticModel());
+        e.setAnalyticId(domain.getAnalyticId());
         if (domain.getPartnerRef() != null) {
             e.setPartnerId(domain.getPartnerRef().id());
             e.setPartnerName(domain.getPartnerRef().name());

@@ -59,8 +59,9 @@ public class ReportingApplicationServiceImpl implements ReportingApplicationServ
     }
 
     @Override
-    public List<AccountBalanceRepository.AccountBalanceLine> getTrialBalance(UUID companyId, LocalDate from, LocalDate to) {
-        return accountBalanceRepository.getTrialBalance(new CompanyId(companyId), from, to);
+    public List<AccountBalanceRepository.AccountBalanceLine> getTrialBalance(UUID companyId, LocalDate from, LocalDate to,
+                                                                            String analyticModel, UUID analyticId) {
+        return accountBalanceRepository.getTrialBalance(new CompanyId(companyId), from, to, analyticModel, analyticId);
     }
 
     @Override
@@ -99,9 +100,10 @@ public class ReportingApplicationServiceImpl implements ReportingApplicationServ
     }
 
     @Override
-    public List<GeneralLedgerLine> getGeneralLedger(UUID companyId, LocalDate from, LocalDate to, UUID accountId) {
+    public List<GeneralLedgerLine> getGeneralLedger(UUID companyId, LocalDate from, LocalDate to, UUID accountId,
+                                                    String analyticModel, UUID analyticId) {
         List<GeneralLedgerRepository.GeneralLedgerRawLine> raw = generalLedgerRepository.listPostedLines(
-                new CompanyId(companyId), from, to, accountId);
+                new CompanyId(companyId), from, to, accountId, analyticModel, analyticId);
         List<GeneralLedgerLine> result = new ArrayList<>();
         UUID currentAccount = null;
         BigDecimal running = BigDecimal.ZERO;

@@ -31,6 +31,10 @@ public class JournalItemEntity {
     private UUID partnerId;
     @Column(name = "partner_name", length = 255)
     private String partnerName;
+    @Column(name = "analytic_model", length = 64)
+    private String analyticModel;
+    @Column(name = "analytic_id")
+    private UUID analyticId;
 
     public JournalItemEntity() {}
     public UUID getId() { return id; }
@@ -53,6 +57,10 @@ public class JournalItemEntity {
     public void setReconciliationId(UUID reconciliationId) { this.reconciliationId = reconciliationId; }
     public UUID getPartnerId() { return partnerId; }
     public void setPartnerId(UUID partnerId) { this.partnerId = partnerId; }
+    public String getAnalyticModel() { return analyticModel; }
+    public void setAnalyticModel(String analyticModel) { this.analyticModel = analyticModel; }
+    public UUID getAnalyticId() { return analyticId; }
+    public void setAnalyticId(UUID analyticId) { this.analyticId = analyticId; }
     public String getPartnerName() { return partnerName; }
     public void setPartnerName(String partnerName) { this.partnerName = partnerName; }
 }

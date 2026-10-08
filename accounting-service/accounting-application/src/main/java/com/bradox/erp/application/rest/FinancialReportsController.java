@@ -62,9 +62,12 @@ public class FinancialReportsController {
             @PathVariable UUID companyId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-            @RequestParam(required = false) UUID accountId) {
+            @RequestParam(required = false) UUID accountId,
+            @RequestParam(required = false) String analyticModel,
+            @RequestParam(required = false) UUID analyticId) {
         requireSameCompany(currentCompany, companyId);
-        List<GeneralLedgerLine> lines = reportingApplicationService.getGeneralLedger(companyId, from, to, accountId);
+        List<GeneralLedgerLine> lines = reportingApplicationService.getGeneralLedger(companyId, from, to, accountId,
+                analyticModel, analyticId);
         List<GeneralLedgerResponse.Line> out = lines.stream()
                 .map(l -> new GeneralLedgerResponse.Line(
                         l.accountId(), l.journalEntryId(), l.entryDate(), l.journalCode(), l.sequenceNumber(),

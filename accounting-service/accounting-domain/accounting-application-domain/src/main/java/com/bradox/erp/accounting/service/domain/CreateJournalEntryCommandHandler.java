@@ -85,7 +85,9 @@ class CreateJournalEntryCommandHandler {
                     item.getCredit(),
                     lineCurrency,
                     item.getAmountCurrency(),
-                    item.getPartnerId()));
+                    item.getPartnerId(),
+                    item.getAnalyticModel(),
+                    item.getAnalyticId()));
         }
         return new CreateJournalEntryCommand(
                 command.getCompanyId(),

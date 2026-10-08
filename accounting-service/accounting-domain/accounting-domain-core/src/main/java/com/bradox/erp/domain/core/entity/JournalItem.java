@@ -26,6 +26,13 @@ public class JournalItem extends BaseEntity<JournalItemId> {
     /** Optional partner attached to this individual line; overrides the entry's partner when present. */
     private final PartnerRef partnerRef;
 
+    /**
+     * Minimal analytic dimension (e.g. {@code tsh.project} plus the project id) so cost can be reported per job.
+     * Not a full analytic-accounts feature: no plans, distributions or budgets.
+     */
+    private final String analyticModel;
+    private final UUID analyticId;
+
     private JournalItem(Builder builder) {
         super.setId(builder.id);
         accountId = builder.accountId;
@@ -36,6 +43,16 @@ public class JournalItem extends BaseEntity<JournalItemId> {
         currency = builder.currency;
         reconciliationId = builder.reconciliationId;
         partnerRef = builder.partnerRef;
+        analyticModel = builder.analyticModel;
+        analyticId = builder.analyticId;
+    }
+
+    public String getAnalyticModel() {
+        return analyticModel;
+    }
+
+    public UUID getAnalyticId() {
+        return analyticId;
     }
 
     public AccountId getAccountId() {
@@ -84,6 +101,8 @@ public class JournalItem extends BaseEntity<JournalItemId> {
         private Currency currency;
         private UUID reconciliationId;
         private PartnerRef partnerRef;
+        private String analyticModel;
+        private UUID analyticId;
 
         private Builder() {
         }
@@ -129,6 +148,12 @@ public class JournalItem extends BaseEntity<JournalItemId> {
 
         public Builder reconciliationId(UUID val) {
             reconciliationId = val;
+            return this;
+        }
+
+        public Builder analytic(String model, UUID id) {
+            analyticModel = model;
+            analyticId = id;
             return this;
         }
 

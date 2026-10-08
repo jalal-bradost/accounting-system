@@ -1,0 +1,364 @@
+package com.bradox.erp.integration;
+
+import com.bradox.erp.sign.domain.core.entity.SignRequestLimits;
+import com.bradox.erp.sign.domain.core.exception.SignDomainException;
+import com.bradox.erp.sign.domain.core.valueobject.FieldType;
+import com.bradox.erp.sign.service.domain.dto.PageImage;
+import com.bradox.erp.sign.service.domain.ports.output.PdfPort;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+import org.apache.pdfbox.rendering.ImageType;
+import org.apache.pdfbox.rendering.PDFRenderer;
+import org.apache.pdfbox.util.Matrix;
+import org.springframework.stereotype.Component;
+
+import javax.imageio.ImageIO;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.font.FontRenderContext;
+import java.awt.font.TextLayout;
+import java.awt.geom.Rectangle2D;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.text.AttributedString;
+import java.text.Bidi;
+import java.util.List;
+
+/**
+ * PDF and image work for Sign (D3): page images for the viewer, flattening signer values onto the original pages, the
+ * certificate page, and cleaning uploaded signature images (BR-SIG-10). Built on PDFBox; the domain never sees it.
+ *
+ * <p>PDFBox cannot shape Arabic or Kurdish text, so any text that is not plain Latin is drawn through Java2D, which does
+ * shape and reorder right-to-left scripts, and placed as an image. That needs a font with the glyphs on the server
+ * (DejaVu Sans is enough); the final PDF then shows the right letters but that text is not selectable.
+ */
+@Component
+public class SignPdfAdapter implements PdfPort {
+
+    static {
+        System.setProperty("java.awt.headless", "true");
+    }
+
+    private static final int MAX_SIGNATURE_PIXELS = 1600;
+    private static final int TEXT_IMAGE_SCALE = 4;
+
+    // ------------------------------------------------------------------ inspect and render
+
+    @Override
+    public PdfInfo inspect(byte[] pdf) {
+        if (pdf == null || pdf.length == 0 || pdf.length > SignRequestLimits.MAX_PDF_BYTES) {
+            throw new SignDomainException("error.sign.pdf.size", null, "The PDF must be at most 25 MB");
+        }
+        if (pdf.length < 5 || pdf[0] != '%' || pdf[1] != 'P' || pdf[2] != 'D' || pdf[3] != 'F') {
+            throw new SignDomainException("error.sign.pdf.notPdf", null, "This file is not a PDF");
+        }
+        try (PDDocument doc = PDDocument.load(pdf)) {
+            if (doc.isEncrypted()) {
+                throw new SignDomainException("error.sign.pdf.encrypted", null, "Password-protected PDFs cannot be signed");
+            }
+            int pages = doc.getNumberOfPages();
+            if (pages < 1 || pages > SignRequestLimits.MAX_PDF_PAGES) {
+                throw new SignDomainException("error.sign.pdf.pages", new Object[]{SignRequestLimits.MAX_PDF_PAGES},
+                        "The PDF must have between 1 and " + SignRequestLimits.MAX_PDF_PAGES + " pages");
+            }
+            if (!doc.getSignatureDictionaries().isEmpty()) {
+                throw new SignDomainException("error.sign.pdf.alreadySigned", null,
+                        "This PDF already has digital signatures that adding fields would invalidate");
+            }
+            return new PdfInfo(pages);
+        } catch (IOException e) {
+            if (e.getMessage() != null && e.getMessage().toLowerCase().contains("password")) {
+                throw new SignDomainException("error.sign.pdf.encrypted", null, "Password-protected PDFs cannot be signed");
+            }
+            throw new SignDomainException("error.sign.pdf.unreadable", null, "This PDF could not be read");
+        }
+    }
+
+    @Override
+    public PageImage render(byte[] pdf, int page, float scale) {
+        try (PDDocument doc = PDDocument.load(pdf)) {
+            BufferedImage image = new PDFRenderer(doc).renderImageWithDPI(page - 1, 72f * scale, ImageType.RGB);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            ImageIO.write(image, "png", out);
+            return new PageImage(out.toByteArray(), image.getWidth(), image.getHeight());
+        } catch (IOException e) {
+            throw new SignDomainException("error.sign.pdf.unreadable", null, "This PDF could not be read");
+        }
+    }
+
+    // ------------------------------------------------------------------ signature images
+
+    @Override
+    public byte[] sanitizeSignatureImage(byte[] png) {
+        if (png == null || png.length < 8 || (png[0] & 0xFF) != 0x89 || png[1] != 'P' || png[2] != 'N' || png[3] != 'G') {
+            throw new SignDomainException("error.sign.image.invalid", null, "The signature image must be a PNG");
+        }
+        try {
+            BufferedImage in = ImageIO.read(new ByteArrayInputStream(png));
+            if (in == null || in.getWidth() < 1 || in.getHeight() < 1 || (long) in.getWidth() * in.getHeight() > 25_000_000L) {
+                throw new SignDomainException("error.sign.image.invalid", null, "The signature image is not valid");
+            }
+            double factor = Math.min(1.0, (double) MAX_SIGNATURE_PIXELS / Math.max(in.getWidth(), in.getHeight()));
+            for (int attempt = 0; attempt < 6; attempt++) {
+                int w = Math.max(1, (int) Math.round(in.getWidth() * factor));
+                int h = Math.max(1, (int) Math.round(in.getHeight() * factor));
+                BufferedImage clean = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);   // a fresh canvas drops all metadata
+                Graphics2D g = clean.createGraphics();
+                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                g.drawImage(in, 0, 0, w, h, null);
+                g.dispose();
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                ImageIO.write(clean, "png", out);
+                if (out.size() <= SignRequestLimits.MAX_SIGNATURE_IMAGE_BYTES) {
+                    return out.toByteArray();
+                }
+                factor *= 0.7;
+            }
+            throw new SignDomainException("error.sign.image.tooBig", null, "The signature image is too large");
+        } catch (IOException | RuntimeException e) {
+            if (e instanceof SignDomainException sde) {
+                throw sde;
+            }
+            throw new SignDomainException("error.sign.image.invalid", null, "The signature image is not valid");
+        }
+    }
+
+    // ------------------------------------------------------------------ final PDF
+
+    @Override
+    public byte[] applyValues(byte[] sourcePdf, List<Placement> placements) {
+        try (PDDocument doc = PDDocument.load(sourcePdf)) {
+            for (Placement p : placements) {
+                if (p.page() < 1 || p.page() > doc.getNumberOfPages()) {
+                    continue;
+                }
+                draw(doc, doc.getPage(p.page() - 1), p);
+            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            doc.save(out);
+            return out.toByteArray();
+        } catch (IOException e) {
+            throw new SignDomainException("error.sign.pdf.build", null, "The signed PDF could not be built");
+        }
+    }
+
+    private void draw(PDDocument doc, PDPage page, Placement p) throws IOException {
+        PDRectangle crop = page.getCropBox();
+        int rotation = ((page.getRotation() % 360) + 360) % 360;
+        float uw = crop.getWidth();
+        float uh = crop.getHeight();
+        boolean sideways = rotation == 90 || rotation == 270;
+        float dw = sideways ? uh : uw;          // size of the page as the reader sees it
+        float dh = sideways ? uw : uh;
+        float bx = (float) (p.x() * dw);
+        float bw = (float) (p.width() * dw);
+        float bh = (float) (p.height() * dh);
+        float by = dh - (float) (p.y() * dh) - bh;          // lower-left corner, y up, in displayed space
+
+        try (PDPageContentStream cs = new PDPageContentStream(doc, page, PDPageContentStream.AppendMode.APPEND, true, true)) {
+            cs.transform(Matrix.getTranslateInstance(crop.getLowerLeftX(), crop.getLowerLeftY()));
+            switch (rotation) {
+                case 90 -> cs.transform(new Matrix(0, 1, -1, 0, uw, 0));
+                case 180 -> cs.transform(new Matrix(-1, 0, 0, -1, uw, uh));
+                case 270 -> cs.transform(new Matrix(0, -1, 1, 0, 0, uh));
+                default -> { }
+            }
+            FieldType type = p.type();
+            if ((type == FieldType.SIGNATURE || type == FieldType.INITIALS) && p.image() != null) {
+                PDImageXObject img = PDImageXObject.createFromByteArray(doc, p.image(), "signature");
+                fitImage(cs, img, bx, by, bw, bh);
+            } else if (type == FieldType.CHECKBOX) {
+                if (Boolean.TRUE.equals(p.bool())) {
+                    float s = Math.min(bw, bh);
+                    float cx = bx + (bw - s) / 2;
+                    float cy = by + (bh - s) / 2;
+                    cs.setLineWidth(Math.max(1f, s / 8));
+                    cs.setStrokingColor(0, 0, 0);
+                    cs.moveTo(cx + s * 0.18f, cy + s * 0.5f);
+                    cs.lineTo(cx + s * 0.42f, cy + s * 0.22f);
+                    cs.lineTo(cx + s * 0.82f, cy + s * 0.8f);
+                    cs.stroke();
+                }
+            } else if (p.text() != null && !p.text().isBlank()) {
+                float size = Math.max(6f, Math.min(bh * 0.72f, 14f));
+                drawText(doc, cs, p.text().trim(), bx + 2, by + (bh - size) / 2 + size * 0.2f, size, bw - 4);
+            }
+        }
+    }
+
+    private void fitImage(PDPageContentStream cs, PDImageXObject img, float x, float y, float w, float h) throws IOException {
+        float ratio = (float) img.getWidth() / img.getHeight();
+        float tw = w;
+        float th = tw / ratio;
+        if (th > h) {
+            th = h;
+            tw = th * ratio;
+        }
+        cs.drawImage(img, x + (w - tw) / 2, y + (h - th) / 2, tw, th);
+    }
+
+    // ------------------------------------------------------------------ certificate
+
+    @Override
+    public byte[] appendCertificate(byte[] signedPdf, Certificate c) {
+        try (PDDocument doc = PDDocument.load(signedPdf)) {
+            PDRectangle size = PDRectangle.A4;
+            float margin = 48;
+            PDPage page = new PDPage(size);
+            doc.addPage(page);
+            PDPageContentStream cs = new PDPageContentStream(doc, page);
+            float y = size.getHeight() - margin;
+            float width = size.getWidth() - 2 * margin;
+
+            drawText(doc, cs, "Certificate of electronic signature", margin, y, 18, width);
+            y -= 26;
+            y = line(doc, cs, "Reference: " + c.reference(), margin, y, 10, width);
+            y = line(doc, cs, "Document: " + c.documentName(), margin, y, 10, width);
+            y = line(doc, cs, "Request ID: " + c.requestId(), margin, y, 8, width);
+            y = line(doc, cs, "Original document SHA-256:", margin, y, 8, width);
+            y = line(doc, cs, c.originalSha256(), margin, y, 8, width);
+            y = line(doc, cs, "Signed content SHA-256 (before this page):", margin, y, 8, width);
+            y = line(doc, cs, c.contentSha256(), margin, y, 8, width);
+            y = line(doc, cs, "Generated: " + c.generatedAt() + "   (company time zone: " + c.timeZone() + ")", margin, y, 8, width);
+            y -= 10;
+            for (CertificateSigner s : c.signers()) {
+                if (y < margin + 110) {
+                    cs.close();
+                    page = new PDPage(size);
+                    doc.addPage(page);
+                    cs = new PDPageContentStream(doc, page);
+                    y = size.getHeight() - margin;
+                }
+                y = line(doc, cs, s.name() + "  (" + s.role() + ")", margin, y, 11, width);
+                y = line(doc, cs, "Email: " + (s.email() == null || s.email().isBlank() ? "-" : s.email())
+                        + "   Channel: " + (s.channel() == null ? "-" : s.channel()), margin + 12, y, 9, width - 12);
+                y = line(doc, cs, "Signed: " + s.signedAtUtc() + "  |  " + s.signedAtLocal(), margin + 12, y, 9, width - 12);
+                y = line(doc, cs, "IP address: " + (s.ip() == null ? "-" : s.ip()), margin + 12, y, 9, width - 12);
+                y -= 8;
+            }
+            y -= 6;
+            line(doc, cs, "This certificate records the electronic signing of the document above. Verify its integrity by comparing "
+                    + "the SHA-256 value to the signed file.", margin, y, 8, width);
+            cs.close();
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            doc.save(out);
+            return out.toByteArray();
+        } catch (IOException e) {
+            throw new SignDomainException("error.sign.pdf.build", null, "The certificate page could not be built");
+        }
+    }
+
+    /** One wrapped paragraph; returns the next y. */
+    private float line(PDDocument doc, PDPageContentStream cs, String text, float x, float y, float size, float width) throws IOException {
+        float step = size * 1.5f;
+        for (String part : wrap(text, size, width)) {
+            drawText(doc, cs, part, x, y, size, width);
+            y -= step;
+        }
+        return y;
+    }
+
+    private List<String> wrap(String text, float size, float width) throws IOException {
+        if (!isLatin(text) || textWidth(text, size) <= width) {
+            return List.of(text);
+        }
+        java.util.ArrayList<String> lines = new java.util.ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        for (String word : text.split(" ")) {
+            // A long hash has no spaces: break it by characters.
+            String w = word;
+            while (textWidth(w, size) > width && w.length() > 1) {
+                int cut = w.length();
+                while (cut > 1 && textWidth(w.substring(0, cut), size) > width) {
+                    cut--;
+                }
+                if (current.length() > 0) {
+                    lines.add(current.toString());
+                    current.setLength(0);
+                }
+                lines.add(w.substring(0, cut));
+                w = w.substring(cut);
+            }
+            String candidate = current.length() == 0 ? w : current + " " + w;
+            if (textWidth(candidate, size) > width && current.length() > 0) {
+                lines.add(current.toString());
+                current = new StringBuilder(w);
+            } else {
+                current = new StringBuilder(candidate);
+            }
+        }
+        if (current.length() > 0) {
+            lines.add(current.toString());
+        }
+        return lines;
+    }
+
+    // ------------------------------------------------------------------ text
+
+    private static boolean isLatin(String s) {
+        return s.chars().allMatch(c -> c >= 0x20 && c <= 0x7E || c >= 0xA0 && c <= 0xFF);
+    }
+
+    private float textWidth(String s, float size) throws IOException {
+        return PDType1Font.HELVETICA.getStringWidth(s) / 1000f * size;
+    }
+
+    /** Plain Latin goes in as real text; anything else is shaped by Java2D and placed as an image. */
+    private void drawText(PDDocument doc, PDPageContentStream cs, String text, float x, float y, float size, float maxWidth)
+            throws IOException {
+        if (isLatin(text)) {
+            PDFont font = PDType1Font.HELVETICA;
+            cs.beginText();
+            cs.setFont(font, size);
+            cs.setNonStrokingColor(0, 0, 0);
+            cs.newLineAtOffset(x, y);
+            cs.showText(text);
+            cs.endText();
+            return;
+        }
+        BufferedImage img = renderText(text, size * TEXT_IMAGE_SCALE);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageIO.write(img, "png", out);
+        PDImageXObject pd = PDImageXObject.createFromByteArray(doc, out.toByteArray(), "text");
+        float w = (float) img.getWidth() / TEXT_IMAGE_SCALE;
+        float h = (float) img.getHeight() / TEXT_IMAGE_SCALE;
+        if (w > maxWidth && maxWidth > 0) {
+            float k = maxWidth / w;
+            w *= k;
+            h *= k;
+        }
+        cs.drawImage(pd, x, y - h * 0.25f, w, h);
+    }
+
+    private BufferedImage renderText(String text, float pixelSize) {
+        Font font = new Font("SansSerif", Font.PLAIN, Math.round(pixelSize));
+        FontRenderContext frc = new FontRenderContext(null, true, true);
+        boolean rtl = Bidi.requiresBidi(text.toCharArray(), 0, text.length())
+                && new Bidi(text, Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT).baseIsLeftToRight() == false;
+        AttributedString as = new AttributedString(text);
+        as.addAttribute(java.awt.font.TextAttribute.FONT, font);
+        as.addAttribute(java.awt.font.TextAttribute.RUN_DIRECTION,
+                rtl ? java.awt.font.TextAttribute.RUN_DIRECTION_RTL : java.awt.font.TextAttribute.RUN_DIRECTION_LTR);
+        TextLayout layout = new TextLayout(as.getIterator(), frc);
+        Rectangle2D b = layout.getBounds();
+        int w = (int) Math.ceil(layout.getAdvance()) + 4;
+        int h = (int) Math.ceil(layout.getAscent() + layout.getDescent()) + 4;
+        BufferedImage img = new BufferedImage(Math.max(w, 1), Math.max(h, 1), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+        g.setColor(Color.BLACK);
+        layout.draw(g, 2, 2 + layout.getAscent());
+        g.dispose();
+        return img;
+    }
+}

@@ -78,6 +78,37 @@ public class SalesOrderQtyWriter {
         });
     }
 
+    /**
+     * TSH-06: sets the delivered quantity of one timesheet-billed line to {@code qty} (recomputed by Timesheet,
+     * never incremented by hand). Serialized per order by the row lock. Returns the previous quantity.
+     */
+    public BigDecimal applyDeliveredFromTimesheet(UUID salesOrderId, UUID lineId, BigDecimal qty, String source) {
+        return retry(() -> doApplyDeliveredFromTimesheet(salesOrderId, lineId, qty, source));
+    }
+
+    private BigDecimal doApplyDeliveredFromTimesheet(UUID salesOrderId, UUID lineId, BigDecimal qty, String source) {
+        SalesOrder o = salesOrderRepository.findByIdForUpdate(salesOrderId)
+                .orElseThrow(() -> new com.bradox.erp.sales.domain.core.SalesDomainException("Sales order not found"));
+        SalesOrderLine line = o.getLines().stream().filter(l -> l.getId().equals(lineId)).findFirst()
+                .orElseThrow(() -> new com.bradox.erp.sales.domain.core.SalesDomainException("Sales order line not found"));
+        BigDecimal old = line.getQtyDelivered() != null ? line.getQtyDelivered() : BigDecimal.ZERO;
+        BigDecimal next = qty.setScale(4, RoundingMode.HALF_UP);
+        if (old.compareTo(next) == 0) {
+            return old;
+        }
+        Instant now = Instant.now();
+        line.setQtyDelivered(next);
+        line.setUpdatedAt(now);
+        refreshOrderStatuses(o);
+        o.setUpdatedAt(now);
+        SalesOrder saved = salesOrderRepository.save(o);
+        activityLogger.log(saved.getCompanyId(), RecordActivityLogger.MODEL_SALES_ORDER, saved.getId(),
+                "Delivered quantity updated from timesheets.\n• " + (line.getName() == null ? "" : line.getName())
+                        + ":\n  Delivered Quantity: " + MonetaryScale.toDisplayString(old) + " → "
+                        + MonetaryScale.toDisplayString(next) + (source == null || source.isBlank() ? "" : "\n  Source: " + source));
+        return old;
+    }
+
     private SalesOrder doUpdateQtyDelivered(UUID salesOrderId) {
         SalesOrder o = salesOrderRepository.findByIdForUpdate(salesOrderId).orElse(null);
         if (o == null) {
@@ -89,6 +120,9 @@ public class SalesOrderQtyWriter {
         }
         Instant now = Instant.now();
         for (SalesOrderLine line : o.getLines()) {
+            if (line.getInvoicePolicy() == SalInvoicePolicy.TIMESHEET) {
+                continue;   // delivered quantity comes from approved timesheets, not from stock moves
+            }
             BigDecimal sumBase = stockMoveSalesQueryPort.sumPickedQuantityForSalesOrderLine(line.getId());
             line.setQtyDelivered(toDocumentQty(line, sumBase).setScale(4, RoundingMode.HALF_UP));
             line.setUpdatedAt(now);
@@ -263,6 +297,9 @@ public class SalesOrderQtyWriter {
     private static SalInvoicePolicy effectiveInvoicePolicy(SalesOrderLine sol,
                                                            Product product,
                                                            boolean allowWithoutDelivery) {
+        if (sol.getInvoicePolicy() == SalInvoicePolicy.TIMESHEET) {
+            return SalInvoicePolicy.TIMESHEET;
+        }
         if (allowWithoutDelivery) {
             return SalInvoicePolicy.ORDERED;
         }

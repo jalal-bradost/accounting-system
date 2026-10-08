@@ -76,8 +76,21 @@ public class CompanyRoleProvisioner {
             "accounting.vendor-payment.register",
             "documents.document.read", "documents.document.write", "documents.document.delete",
             "documents.folder.write", "documents.tag.write",
-            "documents.access.manage", "documents.trash.manage"
+            "documents.access.manage", "documents.trash.manage",
+            "tsh.entry.own", "tsh.entry.view_team", "tsh.entry.view_all", "tsh.entry.on_behalf",
+            "tsh.approve", "tsh.approve_all", "tsh.reopen",
+            "tsh.project.manage", "tsh.task.manage", "tsh.cost.view", "tsh.report.view", "tsh.settings.manage",
+            "tsh.billing.manage", "tsh.posting.manage",
+            "sign.template.view", "sign.template.manage",
+            "sign.request.create", "sign.request.view", "sign.request.view_all", "sign.request.cancel",
+            "sign.sign_self", "sign.audit.view", "sign.settings.manage",
+            "rep.order.view", "rep.diagnosis.edit", "rep.line.edit", "rep.price.view", "rep.package.manage",
+            "rep.labor_guide.manage", "rep.discount.approve", "rep.settings.manage"
     );
+
+    /** Everything a person who sends documents for signature needs; not the manager powers. */
+    private static final Set<String> SIGN_USER_PERMISSIONS = Set.of(
+            "sign.template.view", "sign.request.create", "sign.request.view", "sign.request.cancel", "sign.sign_self");
 
     private static final Map<String, Set<String>> ROLE_PERMISSIONS = Map.of(
             "ADMIN", Set.copyOf(PERMISSION_CATALOG),
@@ -106,7 +119,9 @@ public class CompanyRoleProvisioner {
                     "accounting.vendor-bill.read", "accounting.vendor-bill.write", "accounting.vendor-bill.post",
                     "accounting.vendor-payment.register",
                     "documents.document.read", "documents.document.write", "documents.document.delete",
-                    "documents.folder.write", "documents.tag.write"),
+                    "documents.folder.write", "documents.tag.write",
+                    "tsh.entry.own", "tsh.entry.view_team", "tsh.approve", "tsh.entry.view_all", "tsh.cost.view",
+                    "tsh.report.view", "tsh.billing.manage", "tsh.posting.manage"),
             "SALES", Set.of(
                     "platform.activity.read", "platform.activity.write",
                     "platform.assistant.use",
@@ -127,7 +142,8 @@ public class CompanyRoleProvisioner {
                     "pos.receipt.read",
                     "accounting.customer-invoice.read", "accounting.customer-invoice.write",
                     "accounting.customer-invoice.post", "accounting.customer-payment.register",
-                    "documents.document.read", "documents.document.write", "documents.document.delete"),
+                    "documents.document.read", "documents.document.write", "documents.document.delete",
+                    "tsh.entry.own", "tsh.entry.view_team", "tsh.approve"),
             "PURCHASING", Set.of(
                     "platform.activity.read", "platform.activity.write",
                     "platform.assistant.use",
@@ -147,7 +163,8 @@ public class CompanyRoleProvisioner {
                     "purchase.fiscal-tax.read", "purchase.fiscal-tax.write",
                     "accounting.vendor-bill.read", "accounting.vendor-bill.write", "accounting.vendor-bill.post",
                     "accounting.vendor-payment.register",
-                    "documents.document.read", "documents.document.write", "documents.document.delete"),
+                    "documents.document.read", "documents.document.write", "documents.document.delete",
+                    "tsh.entry.own", "tsh.entry.view_team", "tsh.approve"),
             "WAREHOUSE", Set.of(
                     "platform.activity.read", "platform.activity.write",
                     "inventory.product.read",
@@ -156,7 +173,8 @@ public class CompanyRoleProvisioner {
                     "inventory.picking.confirm", "inventory.picking.validate",
                     "inventory.picking.cancel", "inventory.picking.return",
                     "inventory.quant.read", "inventory.valuation.read",
-                    "documents.document.read", "documents.document.write"),
+                    "documents.document.read", "documents.document.write",
+                    "tsh.entry.own", "tsh.entry.view_team", "tsh.approve"),
             "READONLY", Set.of(
                     "platform.activity.read", "platform.audit.read",
                     "platform.assistant.use",
@@ -185,7 +203,8 @@ public class CompanyRoleProvisioner {
                     "hr.time-off.self.read",
                     "hr.time-off.self.write",
                     "payroll.payslip.self.read",
-                    "expense.read", "expense.write"),
+                    "expense.read", "expense.write",
+                    "tsh.entry.own", "tsh.entry.view_team", "tsh.approve"),
             "HR_MANAGER", Set.of(
                     "hr.employee.read", "hr.employee.write", "hr.employee.archive",
                     "hr.department.read", "hr.department.write",
@@ -194,7 +213,18 @@ public class CompanyRoleProvisioner {
                     "payroll.read", "payroll.write", "payroll.post", "payroll.pay",
                     "expense.read", "expense.write", "expense.approve", "expense.post",
                     "documents.document.read", "documents.document.write", "documents.document.delete",
-                    "documents.folder.write", "documents.tag.write")
+                    "documents.folder.write", "documents.tag.write",
+                    "tsh.entry.own", "tsh.entry.view_team", "tsh.entry.view_all", "tsh.entry.on_behalf",
+                    "tsh.approve", "tsh.approve_all", "tsh.reopen",
+                    "tsh.project.manage", "tsh.task.manage", "tsh.cost.view", "tsh.report.view", "tsh.settings.manage",
+                    "tsh.billing.manage", "tsh.posting.manage"),
+            "SIGN_MANAGER", Set.of(
+                    "platform.activity.read", "platform.activity.write",
+                    "documents.document.read",
+                    "sign.template.view", "sign.template.manage",
+                    "sign.request.create", "sign.request.view", "sign.request.view_all", "sign.request.cancel",
+                    "sign.sign_self", "sign.audit.view", "sign.settings.manage"),
+            "SIGN_USER", SIGN_USER_PERMISSIONS
     );
 
     private final PermissionJpaRepository permissionRepository;

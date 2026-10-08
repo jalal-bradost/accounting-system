@@ -16,13 +16,24 @@ public interface ReportingApplicationService {
      * Trial balance: one line per account with balance (sum(debit)-sum(credit)) from posted
      * journal items in the date range.
      */
-    List<AccountBalanceRepository.AccountBalanceLine> getTrialBalance(UUID companyId, LocalDate from, LocalDate to);
+    default List<AccountBalanceRepository.AccountBalanceLine> getTrialBalance(UUID companyId, LocalDate from, LocalDate to) {
+        return getTrialBalance(companyId, from, to, null, null);
+    }
+
+    /** Optional analytic dimension filter, e.g. {@code tsh.project} and a project id (labor cost per project). */
+    List<AccountBalanceRepository.AccountBalanceLine> getTrialBalance(UUID companyId, LocalDate from, LocalDate to,
+                                                                     String analyticModel, UUID analyticId);
 
     BalanceSheetReport getBalanceSheet(UUID companyId, LocalDate asOf);
 
     ProfitAndLossReport getProfitAndLoss(UUID companyId, LocalDate from, LocalDate to);
 
-    List<GeneralLedgerLine> getGeneralLedger(UUID companyId, LocalDate from, LocalDate to, UUID accountId);
+    default List<GeneralLedgerLine> getGeneralLedger(UUID companyId, LocalDate from, LocalDate to, UUID accountId) {
+        return getGeneralLedger(companyId, from, to, accountId, null, null);
+    }
+
+    List<GeneralLedgerLine> getGeneralLedger(UUID companyId, LocalDate from, LocalDate to, UUID accountId,
+                                             String analyticModel, UUID analyticId);
 
     /**
      * Partner subsidiary ledger: posted journal lines on receivable/payable accounts, grouped by partner.

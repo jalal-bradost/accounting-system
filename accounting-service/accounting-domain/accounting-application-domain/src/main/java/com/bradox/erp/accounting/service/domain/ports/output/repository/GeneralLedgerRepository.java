@@ -14,7 +14,12 @@ public interface GeneralLedgerRepository {
      * Posted journal lines in date order: account, then entry date, then entry id.
      * When {@code accountId} is null, all accounts for the company are included.
      */
-    List<GeneralLedgerRawLine> listPostedLines(CompanyId companyId, LocalDate from, LocalDate to, UUID accountId);
+    default List<GeneralLedgerRawLine> listPostedLines(CompanyId companyId, LocalDate from, LocalDate to, UUID accountId) {
+        return listPostedLines(companyId, from, to, accountId, null, null);
+    }
+
+    List<GeneralLedgerRawLine> listPostedLines(CompanyId companyId, LocalDate from, LocalDate to, UUID accountId,
+                                               String analyticModel, UUID analyticId);
 
     record GeneralLedgerRawLine(
             UUID accountId,

@@ -18,7 +18,13 @@ public interface AccountBalanceRepository {
      * journal items in the company and within the date range (inclusive). Only accounts with
      * at least one posted line are included.
      */
-    List<AccountBalanceLine> getTrialBalance(CompanyId companyId, LocalDate from, LocalDate to);
+    default List<AccountBalanceLine> getTrialBalance(CompanyId companyId, LocalDate from, LocalDate to) {
+        return getTrialBalance(companyId, from, to, null, null);
+    }
+
+    /** {@code analyticModel} null means no dimension filter; otherwise only lines with that dimension value. */
+    List<AccountBalanceLine> getTrialBalance(CompanyId companyId, LocalDate from, LocalDate to,
+                                             String analyticModel, UUID analyticId);
 
     /**
      * Cumulative balance per account (sum(debit) − sum(credit)) for posted lines with

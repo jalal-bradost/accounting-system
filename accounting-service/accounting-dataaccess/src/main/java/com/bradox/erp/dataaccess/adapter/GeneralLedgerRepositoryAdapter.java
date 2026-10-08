@@ -22,9 +22,12 @@ public class GeneralLedgerRepositoryAdapter implements GeneralLedgerRepository {
     }
 
     @Override
-    public List<GeneralLedgerRawLine> listPostedLines(CompanyId companyId, LocalDate from, LocalDate to, UUID accountId) {
+    public List<GeneralLedgerRawLine> listPostedLines(CompanyId companyId, LocalDate from, LocalDate to, UUID accountId,
+                                                      String analyticModel, UUID analyticId) {
+        boolean filtered = analyticModel != null && !analyticModel.isBlank() && analyticId != null;
         List<Object[]> rows = journalItemJpaRepository.findGeneralLedgerLines(
-                companyId.getId(), from.atStartOfDay(), to.plusDays(1).atStartOfDay(), accountId);
+                companyId.getId(), from.atStartOfDay(), to.plusDays(1).atStartOfDay(), accountId,
+                filtered ? analyticModel : "", filtered ? analyticId : new UUID(0L, 0L));
         return rows.stream()
                 .map(row -> new GeneralLedgerRawLine(
                         (UUID) row[0],

@@ -262,6 +262,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
             }
             line.setInvoicePolicy(lc.getInvoicePolicy() != null ? lc.getInvoicePolicy()
                     : (product.getProductType() == ProductType.SERVICE ? SalInvoicePolicy.ORDERED : SalInvoicePolicy.DELIVERED));
+            requireServiceForTimesheetPolicy(line, product);
             line.setRevenueAccountId(lc.getRevenueAccountId());
             line.setCreatedAt(now);
             line.setUpdatedAt(now);
@@ -380,6 +381,7 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
             }
             line.setInvoicePolicy(lc.getInvoicePolicy() != null ? lc.getInvoicePolicy()
                     : (product.getProductType() == ProductType.SERVICE ? SalInvoicePolicy.ORDERED : SalInvoicePolicy.DELIVERED));
+            requireServiceForTimesheetPolicy(line, product);
             line.setRevenueAccountId(lc.getRevenueAccountId());
             line.setCreatedAt(now);
             line.setUpdatedAt(now);
@@ -1714,9 +1716,20 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         return targetQty.subtract(invoiced).max(BigDecimal.ZERO).setScale(4, RoundingMode.HALF_UP);
     }
 
+    /** TSH-06: only service products can be billed from timesheets. */
+    private static void requireServiceForTimesheetPolicy(SalesOrderLine line, Product product) {
+        if (line.getInvoicePolicy() == SalInvoicePolicy.TIMESHEET && product.getProductType() != ProductType.SERVICE) {
+            throw new SalesDomainException("error.sales.timesheetPolicyServiceOnly", null,
+                    "Only service products can be invoiced from timesheets");
+        }
+    }
+
     private static SalInvoicePolicy effectiveInvoicePolicy(SalesOrderLine sol,
                                                            Product product,
                                                            boolean allowWithoutDelivery) {
+        if (sol.getInvoicePolicy() == SalInvoicePolicy.TIMESHEET) {
+            return SalInvoicePolicy.TIMESHEET;
+        }
         if (allowWithoutDelivery) {
             return SalInvoicePolicy.ORDERED;
         }
@@ -1746,7 +1759,9 @@ public class SalesApplicationServiceImpl implements SalesApplicationService, Sal
         BigDecimal fulfillmentInvoiced = giftNet.max(chargeNet);
         Optional<Product> product = productRepository.findById(new ProductId(sol.getProductId()));
         BigDecimal baseline;
-        if (product.isPresent() && product.get().getProductType() == ProductType.SERVICE) {
+        if (sol.getInvoicePolicy() == SalInvoicePolicy.TIMESHEET) {
+            baseline = sol.getQtyDelivered();
+        } else if (product.isPresent() && product.get().getProductType() == ProductType.SERVICE) {
             baseline = sol.getQtyOrdered();
         } else {
             baseline = sol.getQtyDelivered();

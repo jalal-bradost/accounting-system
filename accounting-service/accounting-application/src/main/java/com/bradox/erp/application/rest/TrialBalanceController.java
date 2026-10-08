@@ -31,14 +31,16 @@ public class TrialBalanceController {
             @CurrentCompany CompanyId currentCompany,
             @PathVariable UUID companyId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) String analyticModel,
+            @RequestParam(required = false) UUID analyticId) {
         if (currentCompany == null || companyId == null || !companyId.equals(currentCompany.getId())) {
             throw new ForbiddenException(
                     "error.security.forbidden",
                     new Object[]{"company"},
                     "Company scope mismatch");
         }
-        List<AccountBalanceRepository.AccountBalanceLine> lines = reportingApplicationService.getTrialBalance(companyId, from, to);
+        List<AccountBalanceRepository.AccountBalanceLine> lines = reportingApplicationService.getTrialBalance(companyId, from, to, analyticModel, analyticId);
         List<TrialBalanceResponse.Line> responseLines = lines.stream()
                 .map(l -> new TrialBalanceResponse.Line(l.accountId(), l.balance()))
                 .collect(Collectors.toList());

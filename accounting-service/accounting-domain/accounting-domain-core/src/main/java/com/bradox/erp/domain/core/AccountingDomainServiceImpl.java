@@ -47,6 +47,7 @@ public class AccountingDomainServiceImpl implements AccountingDomainService {
                         .amountCurrency(negate(item.getAmountCurrency()))
                         .currency(item.getCurrency())
                         .partnerRef(item.getPartnerRef())
+                        .analytic(item.getAnalyticModel(), item.getAnalyticId())
                         .build())
                 .toList();
 

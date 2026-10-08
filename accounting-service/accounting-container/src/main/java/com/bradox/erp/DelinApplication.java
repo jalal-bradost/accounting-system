@@ -22,7 +22,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         "com.bradox.erp.sales.dataaccess.entity",
         "com.bradox.erp.pos.dataaccess.entity",
         "com.bradox.erp.assistant.dataaccess.entity",
-        "com.bradox.erp.documents.dataaccess.entity"
+        "com.bradox.erp.documents.dataaccess.entity",
+        "com.bradox.erp.timesheet.dataaccess.entity",
+        "com.bradox.erp.sign.dataaccess.entity",
+        "com.bradox.erp.repair.dataaccess.entity"
 })
 @EnableJpaRepositories(basePackages = {
         "com.bradox.erp.dataaccess.repository",
@@ -35,7 +38,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         "com.bradox.erp.sales.dataaccess.repository",
         "com.bradox.erp.pos.dataaccess.repository",
         "com.bradox.erp.assistant.dataaccess.repository",
-        "com.bradox.erp.documents.dataaccess.repository"
+        "com.bradox.erp.documents.dataaccess.repository",
+        "com.bradox.erp.timesheet.dataaccess.repository",
+        "com.bradox.erp.sign.dataaccess.repository",
+        "com.bradox.erp.repair.dataaccess.repository"
 })
 public class DelinApplication {
 
