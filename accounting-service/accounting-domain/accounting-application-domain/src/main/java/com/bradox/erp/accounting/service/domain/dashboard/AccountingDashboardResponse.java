@@ -18,6 +18,7 @@ public class AccountingDashboardResponse {
     private List<SeriesPoint> series = new ArrayList<>();
     private List<RankedDocumentRow> topInvoices = new ArrayList<>();
     private List<RankedDocumentRow> topBills = new ArrayList<>();
+    private List<RankedPartnerRow> topCustomers = new ArrayList<>();
 
     public LocalDate getFrom() { return from; }
     public void setFrom(LocalDate from) { this.from = from; }
@@ -39,6 +40,27 @@ public class AccountingDashboardResponse {
     public void setTopInvoices(List<RankedDocumentRow> topInvoices) { this.topInvoices = topInvoices; }
     public List<RankedDocumentRow> getTopBills() { return topBills; }
     public void setTopBills(List<RankedDocumentRow> topBills) { this.topBills = topBills; }
+
+    public List<RankedPartnerRow> getTopCustomers() { return topCustomers; }
+    public void setTopCustomers(List<RankedPartnerRow> topCustomers) { this.topCustomers = topCustomers; }
+
+    public static class RankedPartnerRow {
+        private UUID partnerId;
+        private String partnerName;
+        /** Invoiced net sales (after discounts, credit notes deducted, before tax), company currency. */
+        private BigDecimal amount;
+        /** Invoices (not credit notes) in the period. */
+        private long documentCount;
+
+        public UUID getPartnerId() { return partnerId; }
+        public void setPartnerId(UUID partnerId) { this.partnerId = partnerId; }
+        public String getPartnerName() { return partnerName; }
+        public void setPartnerName(String partnerName) { this.partnerName = partnerName; }
+        public BigDecimal getAmount() { return amount; }
+        public void setAmount(BigDecimal amount) { this.amount = amount; }
+        public long getDocumentCount() { return documentCount; }
+        public void setDocumentCount(long documentCount) { this.documentCount = documentCount; }
+    }
 
     public static class KpiMetric {
         private BigDecimal value;

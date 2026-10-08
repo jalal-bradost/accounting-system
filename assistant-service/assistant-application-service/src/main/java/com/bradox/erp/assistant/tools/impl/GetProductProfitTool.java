@@ -32,10 +32,12 @@ public class GetProductProfitTool implements ErpTool {
 
     @Override
     public String description() {
-        return "Product margin/profit for a period: estimated (ordered qty net of returns × current valuation cost) "
-                + "and realized (net delivered stock moves × move cost). "
+        return "Product margin/profit for a period: estimated (confirmed orders × current valuation cost) "
+                + "and realized (delivered and invoiced sales minus their cost of goods sold). "
                 + "Use for questions about product profit, margin %, contribution, which products make money. "
-                + "mode=realized (default) or estimated. Not the same as accounting P&L net income.";
+                + "mode=realized (default) or estimated. Not net income: operating expenses are not deducted. "
+                + "Invoiced-but-undelivered sales are reported separately as pendingDelivery; the P&L gross profit "
+                + "equals realized profit plus that pending revenue.";
     }
 
     @Override
@@ -43,13 +45,13 @@ public class GetProductProfitTool implements ErpTool {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("period", Map.of(
                 "type", "string",
-                "description", "Relative period (default THIS_MONTH if omitted): TODAY, YESTERDAY, THIS_WEEK, LAST_WEEK, THIS_MONTH, LAST_MONTH, THIS_QUARTER, LAST_QUARTER, THIS_YEAR, LAST_YEAR, LAST_30_DAYS, LAST_90_DAYS"));
+                "description", "Relative period (default THIS_MONTH if omitted): TODAY, YESTERDAY, THIS_WEEK, LAST_WEEK (weeks run Saturday to Friday), THIS_MONTH, LAST_MONTH, THIS_QUARTER, LAST_QUARTER, THIS_YEAR, LAST_YEAR, LAST_30_DAYS, LAST_90_DAYS"));
         properties.put("from", Map.of("type", "string", "description", "ISO date YYYY-MM-DD (optional if period set)"));
         properties.put("to", Map.of("type", "string", "description", "ISO date YYYY-MM-DD (optional if period set)"));
         properties.put("limit", Map.of("type", "integer", "description", "Max products to return (default 10, max 25)"));
         properties.put("mode", Map.of(
                 "type", "string",
-                "description", "realized (default, delivered) or estimated (ordered)"));
+                "description", "realized (default, delivered and invoiced) or estimated (confirmed orders)"));
         Map<String, Object> schema = new LinkedHashMap<>();
         schema.put("type", "object");
         schema.put("properties", properties);
@@ -89,7 +91,7 @@ public class GetProductProfitTool implements ErpTool {
             map.put("productId", row.getProductId() != null ? row.getProductId().toString() : "");
             map.put("productName", row.getProductName() != null ? row.getProductName() : "");
             map.put("orderCount", row.getOrderCount());
-            map.put("qty", realized ? row.getQtyDelivered() : row.getQtyOrdered());
+            map.put("qty", realized ? row.getQtyInvoiced() : row.getQtyOrdered());
             map.put("revenue", slice.getRevenue());
             map.put("cost", slice.getCost());
             map.put("profit", slice.getProfit());
@@ -108,8 +110,8 @@ public class GetProductProfitTool implements ErpTool {
         Map<String, Object> data = ToolSchemas.baseFinancial(range, currency);
         data.put("mode", realized ? "realized" : "estimated");
         data.put("modeNote", realized
-                ? "Realized uses delivered quantities and valuation cost."
-                : "Estimated uses ordered quantities and valuation cost.");
+                ? "Realized is delivered and invoiced sales against their posted cost of goods sold; sales invoiced but not yet delivered are excluded."
+                : "Estimated uses confirmed order quantities and current valuation cost.");
         data.put("totalRevenue", totalsSlice.getRevenue());
         data.put("totalCost", totalsSlice.getCost());
         data.put("totalProfit", totalsSlice.getProfit());

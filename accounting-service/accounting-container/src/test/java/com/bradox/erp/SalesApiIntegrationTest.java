@@ -769,8 +769,8 @@ class SalesApiIntegrationTest {
 
     @Test
     void sales_product_profit_estimated_and_realized() throws Exception {
-        // Realized profit is filtered by delivery validated_at (wall clock), so the report
-        // window must include today — not a hardcoded past month.
+        // Realized profit follows the Profit & Loss (invoice date, COGS at order date), so the report
+        // window is the current month and the invoice is dated today.
         java.time.LocalDate today = java.time.LocalDate.now();
         String from = today.withDayOfMonth(1).toString();
         String to = today.withDayOfMonth(today.lengthOfMonth()).toString();
@@ -822,7 +822,7 @@ class SalesApiIntegrationTest {
                 .isEqualByComparingTo(new BigDecimal("20.0000"));
         assertThat(estimatedRow.get("estimated").get("profit").decimalValue())
                 .isEqualByComparingTo(new BigDecimal("60.0000"));
-        assertThat(estimatedRow.get("qtyDelivered").decimalValue())
+        assertThat(estimatedRow.get("qtyInvoiced").decimalValue())
                 .isEqualByComparingTo(BigDecimal.ZERO.setScale(4));
 
         assertThat(so.has("deliveryPickingIds") && so.get("deliveryPickingIds").isArray()).isTrue();
@@ -842,9 +842,42 @@ class SalesApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
 
-        JsonNode realizedRow = findProductProfitRow(afterDelivery, productId);
+        // The product form's "Sold" button: two units were delivered; the stock receipt is not a purchase order.
+        JsonNode movement = json.readTree(mockMvc.perform(get("/api/v1/inventory/products/" + productId + "/movement-totals")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertThat(movement.get("sold").decimalValue()).isEqualByComparingTo(new BigDecimal("2"));
+        assertThat(movement.get("purchased").decimalValue()).isEqualByComparingTo(BigDecimal.ZERO);
+
+        // Delivered but not invoiced: nothing is on the P&L yet.
+        JsonNode deliveredRow = findProductProfitRow(afterDelivery, productId);
+        assertThat(deliveredRow).isNotNull();
+        assertThat(deliveredRow.get("qtyInvoiced").decimalValue()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(deliveredRow.get("realized").get("revenue").decimalValue()).isEqualByComparingTo(BigDecimal.ZERO);
+
+        String invCmd = "{\"salesOrderId\":\"" + soId + "\",\"invoiceDate\":\"" + orderDate
+                + "\",\"dueDate\":\"" + orderDate + "\"}";
+        UUID invoiceId = UUID.fromString(json.readTree(mockMvc.perform(post("/api/v1/sales/customer-invoices/from-order")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invCmd))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString()).get("id").asText());
+        mockMvc.perform(post("/api/v1/accounting/customer-invoices/" + invoiceId + "/post")
+                        .header("X-Company-Id", COMPANY_ID.toString()))
+                .andExpect(status().isOk());
+
+        JsonNode afterInvoice = json.readTree(mockMvc.perform(get("/api/v1/sales/dashboard/product-profit")
+                        .header("X-Company-Id", COMPANY_ID.toString())
+                        .param("from", from)
+                        .param("to", to))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+
+        JsonNode realizedRow = findProductProfitRow(afterInvoice, productId);
         assertThat(realizedRow).isNotNull();
-        assertThat(realizedRow.get("qtyDelivered").decimalValue())
+        assertThat(realizedRow.get("qtyInvoiced").decimalValue())
                 .isEqualByComparingTo(new BigDecimal("2.0000"));
         assertThat(realizedRow.get("realized").get("revenue").decimalValue())
                 .isEqualByComparingTo(new BigDecimal("80.0000"));

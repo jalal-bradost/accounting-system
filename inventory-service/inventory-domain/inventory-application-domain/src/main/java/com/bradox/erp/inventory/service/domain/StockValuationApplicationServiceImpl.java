@@ -7,6 +7,7 @@ import com.bradox.erp.inventory.service.domain.dto.StockQuantResponse;
 import com.bradox.erp.inventory.service.domain.dto.ValuationLayerResponse;
 import com.bradox.erp.inventory.service.domain.mapper.InventoryDataMapper;
 import com.bradox.erp.inventory.service.domain.ports.input.StockValuationApplicationService;
+import com.bradox.erp.inventory.service.domain.ports.output.ProductMovementTotalsPort;
 import com.bradox.erp.inventory.service.domain.ports.output.repository.StockQuantRepository;
 import com.bradox.erp.inventory.service.domain.ports.output.repository.StockValuationLayerRepository;
 import org.springframework.stereotype.Service;
@@ -28,13 +29,25 @@ class StockValuationApplicationServiceImpl implements StockValuationApplicationS
     private final StockQuantRepository quantRepository;
     private final StockValuationLayerRepository layerRepository;
     private final InventoryDataMapper mapper;
+    private final ProductMovementTotalsPort movementTotalsPort;
 
     StockValuationApplicationServiceImpl(StockQuantRepository quantRepository,
                                          StockValuationLayerRepository layerRepository,
-                                         InventoryDataMapper mapper) {
+                                         InventoryDataMapper mapper,
+                                         ProductMovementTotalsPort movementTotalsPort) {
         this.quantRepository = quantRepository;
         this.layerRepository = layerRepository;
         this.mapper = mapper;
+        this.movementTotalsPort = movementTotalsPort;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, BigDecimal> movementTotals(CompanyId companyId, UUID productId) {
+        Map<String, BigDecimal> totals = new HashMap<>();
+        totals.put("sold", movementTotalsPort.soldQuantity(companyId.getId(), productId));
+        totals.put("purchased", movementTotalsPort.purchasedQuantity(companyId.getId(), productId));
+        return totals;
     }
 
     @Override

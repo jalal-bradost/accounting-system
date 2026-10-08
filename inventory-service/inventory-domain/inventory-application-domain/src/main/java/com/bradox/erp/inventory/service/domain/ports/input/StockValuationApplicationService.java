@@ -33,6 +33,9 @@ public interface StockValuationApplicationService {
     /** Total inventory value for a product (sum of remaining-value across positive layers). */
     BigDecimal valuationOf(CompanyId companyId, UUID productId);
 
+    /** Lifetime sold and purchased quantity of a product, net of returns, from validated stock moves. */
+    Map<String, BigDecimal> movementTotals(CompanyId companyId, UUID productId);
+
     /** On-hand qty + valuation for many products in one round-trip. */
     List<Map<String, Object>> bulkValuation(CompanyId companyId, Collection<UUID> productIds);
 }

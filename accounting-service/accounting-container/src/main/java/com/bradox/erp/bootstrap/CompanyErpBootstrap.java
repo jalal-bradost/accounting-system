@@ -77,7 +77,7 @@ public class CompanyErpBootstrap {
         insertAccount(companyId, "430003", "Accounts Receivable", AccountType.RECEIVABLE);
         insertAccount(companyId, "430004", "Accounts Payable", AccountType.PAYABLE);
         insertAccount(companyId, "430005", "Sales Revenue", AccountType.INCOME);
-        insertAccount(companyId, "430006", "Sales Discount", AccountType.EXPENSES);
+        insertAccount(companyId, "430006", "Sales Discount", AccountType.INCOME);
         insertAccount(companyId, "430007", "Purchase Discount", AccountType.OTHER_INCOME);
         insertAccount(companyId, "430008", "Gift Expense", AccountType.EXPENSES);
         insertAccount(companyId, "430009", "Cost of goods sold", AccountType.COST_OF_REVENUE);

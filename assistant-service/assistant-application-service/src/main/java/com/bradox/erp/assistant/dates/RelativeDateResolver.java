@@ -16,6 +16,9 @@ import java.util.Locale;
 @Component
 public class RelativeDateResolver {
 
+    /** The business week runs Saturday to Friday. */
+    static final java.time.DayOfWeek WEEK_START = java.time.DayOfWeek.SATURDAY;
+
     private final AiProperties properties;
     private final Clock clock;
 
@@ -46,12 +49,12 @@ public class RelativeDateResolver {
                 yield new DateRange(y, y);
             }
             case "THIS_WEEK" -> {
-                LocalDate start = today.with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+                LocalDate start = today.with(TemporalAdjusters.previousOrSame(WEEK_START));
                 yield new DateRange(start, today);
             }
             case "LAST_WEEK" -> {
-                LocalDate thisMonday = today.with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
-                LocalDate start = thisMonday.minusWeeks(1);
+                LocalDate thisWeekStart = today.with(TemporalAdjusters.previousOrSame(WEEK_START));
+                LocalDate start = thisWeekStart.minusWeeks(1);
                 yield new DateRange(start, start.plusDays(6));
             }
             case "THIS_MONTH" -> new DateRange(today.withDayOfMonth(1), today);

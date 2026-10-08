@@ -13,7 +13,14 @@ public interface AccountingDashboardQueryPort {
 
     long countPostedBills(UUID companyId, LocalDate from, LocalDate to);
 
+    /** Net sales as on the Profit &amp; Loss: posted INCOME journal lines in the period. */
     BigDecimal sumPostedIncome(UUID companyId, LocalDate from, LocalDate to);
+
+    /** {@link #sumPostedIncome} per entry date. */
+    List<DocumentFact> listNetSalesFacts(UUID companyId, LocalDate from, LocalDate to);
+
+    /** Customers by invoiced net sales (credit notes deducted) in the period. */
+    List<AccountingDashboardResponse.RankedPartnerRow> topCustomers(UUID companyId, LocalDate from, LocalDate to, int limit);
 
     BigDecimal sumPostedSpend(UUID companyId, LocalDate from, LocalDate to);
 
