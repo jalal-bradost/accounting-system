@@ -12,6 +12,10 @@
     <module>purchase-service</module>
     <module>sales-service</module>
     <module>pos-service</module>
+    <module>documents-service</module>
+    <module>sign-service</module>
+    <module>timesheet-service</module>
+    <module>repair-service</module>
     <module>assistant-service</module>
     <module>infrastructure</module>
   </modules>
@@ -275,6 +279,86 @@
       <dependency>
         <groupId>com.bradox.erp</groupId>
         <artifactId>assistant-application</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>documents-domain-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>documents-application-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>documents-dataaccess</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>documents-application</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>sign-domain-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>sign-application-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>sign-dataaccess</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>sign-application</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>timesheet-domain-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>timesheet-application-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>timesheet-dataaccess</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>timesheet-application</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>repair-domain-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>repair-application-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>repair-dataaccess</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>repair-application</artifactId>
         <version>${project.version}</version>
       </dependency>
     </dependencies>

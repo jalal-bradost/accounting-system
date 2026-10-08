@@ -62,6 +62,10 @@
             <artifactId>hr-application-service</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.bradox.erp</groupId>
+            <artifactId>documents-application-service</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
             <artifactId>jackson-datatype-jsr310</artifactId>
         </dependency>

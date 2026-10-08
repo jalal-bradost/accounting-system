@@ -73,7 +73,10 @@ public class CompanyRoleProvisioner {
             "accounting.customer-invoice.read", "accounting.customer-invoice.write",
             "accounting.customer-invoice.post", "accounting.customer-payment.register",
             "accounting.vendor-bill.read", "accounting.vendor-bill.write", "accounting.vendor-bill.post",
-            "accounting.vendor-payment.register"
+            "accounting.vendor-payment.register",
+            "documents.document.read", "documents.document.write", "documents.document.delete",
+            "documents.folder.write", "documents.tag.write",
+            "documents.access.manage", "documents.trash.manage"
     );
 
     private static final Map<String, Set<String>> ROLE_PERMISSIONS = Map.of(
@@ -101,7 +104,9 @@ public class CompanyRoleProvisioner {
                     "accounting.customer-invoice.read", "accounting.customer-invoice.write",
                     "accounting.customer-invoice.post", "accounting.customer-payment.register",
                     "accounting.vendor-bill.read", "accounting.vendor-bill.write", "accounting.vendor-bill.post",
-                    "accounting.vendor-payment.register"),
+                    "accounting.vendor-payment.register",
+                    "documents.document.read", "documents.document.write", "documents.document.delete",
+                    "documents.folder.write", "documents.tag.write"),
             "SALES", Set.of(
                     "platform.activity.read", "platform.activity.write",
                     "platform.assistant.use",
@@ -121,7 +126,8 @@ public class CompanyRoleProvisioner {
                     "pos.order.read", "pos.order.write", "pos.order.pay", "pos.order.finalize",
                     "pos.receipt.read",
                     "accounting.customer-invoice.read", "accounting.customer-invoice.write",
-                    "accounting.customer-invoice.post", "accounting.customer-payment.register"),
+                    "accounting.customer-invoice.post", "accounting.customer-payment.register",
+                    "documents.document.read", "documents.document.write", "documents.document.delete"),
             "PURCHASING", Set.of(
                     "platform.activity.read", "platform.activity.write",
                     "platform.assistant.use",
@@ -140,7 +146,8 @@ public class CompanyRoleProvisioner {
                     "purchase.payment.register",
                     "purchase.fiscal-tax.read", "purchase.fiscal-tax.write",
                     "accounting.vendor-bill.read", "accounting.vendor-bill.write", "accounting.vendor-bill.post",
-                    "accounting.vendor-payment.register"),
+                    "accounting.vendor-payment.register",
+                    "documents.document.read", "documents.document.write", "documents.document.delete"),
             "WAREHOUSE", Set.of(
                     "platform.activity.read", "platform.activity.write",
                     "inventory.product.read",
@@ -148,7 +155,8 @@ public class CompanyRoleProvisioner {
                     "inventory.picking.read", "inventory.picking.write",
                     "inventory.picking.confirm", "inventory.picking.validate",
                     "inventory.picking.cancel", "inventory.picking.return",
-                    "inventory.quant.read", "inventory.valuation.read"),
+                    "inventory.quant.read", "inventory.valuation.read",
+                    "documents.document.read", "documents.document.write"),
             "READONLY", Set.of(
                     "platform.activity.read", "platform.audit.read",
                     "platform.assistant.use",
@@ -169,7 +177,8 @@ public class CompanyRoleProvisioner {
                     "accounting.currency.read",
                     "accounting.report.read",
                     "accounting.customer-invoice.read",
-                    "accounting.vendor-bill.read"),
+                    "accounting.vendor-bill.read",
+                    "documents.document.read"),
             "EMPLOYEE", Set.of(
                     "hr.employee.self.read",
                     "hr.attendance.self.read",
@@ -183,7 +192,9 @@ public class CompanyRoleProvisioner {
                     "hr.attendance.read", "hr.attendance.write",
                     "hr.time-off.read", "hr.time-off.write", "hr.time-off.approve",
                     "payroll.read", "payroll.write", "payroll.post", "payroll.pay",
-                    "expense.read", "expense.write", "expense.approve", "expense.post")
+                    "expense.read", "expense.write", "expense.approve", "expense.post",
+                    "documents.document.read", "documents.document.write", "documents.document.delete",
+                    "documents.folder.write", "documents.tag.write")
     );
 
     private final PermissionJpaRepository permissionRepository;

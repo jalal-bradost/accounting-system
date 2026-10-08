@@ -1,0 +1,21 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <modules>
+        <module>repair-domain</module>
+        <module>repair-application</module>
+        <module>repair-dataaccess</module>
+    </modules>
+
+    <parent>
+        <artifactId>bradox-erp</artifactId>
+        <groupId>com.bradox.erp</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>repair-service</artifactId>
+    <packaging>pom</packaging>
+    <name>repair-service</name>
+    <description>Repair: diagnosis, quotation, execution, parts, quality, warranty. Hexagonal layout matching hr-service.</description>
+</project>

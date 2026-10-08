@@ -33,6 +33,13 @@ app:
       location: ./data/chatter-attachments
       public-base-path: /media/chatter-attachments
       max-bytes: 10485760
+    # Documents module. Files are served only through the authenticated API, never from a public path.
+    documents:
+      location: ./data/documents
+  documents:
+    max-bytes: 26214400       # 25 MB per file
+    quota-bytes: 0            # 0 = unlimited storage per company
+    purge-cron: "0 30 3 * * *" # permanently delete documents trashed more than 30 days ago
   messaging:
     enabled: false
     exchange: accounting.system.events
@@ -125,5 +132,5 @@ spring:
           multiplier: 2.0
   servlet:
     multipart:
-      max-file-size: 20MB
-      max-request-size: 40MB
+      max-file-size: 26MB
+      max-request-size: 60MB
