@@ -1,6 +1,6 @@
 package com.bradox.erp.integration;
 
-import com.bradox.erp.sign.domain.core.entity.SignRequestLimits;
+import com.bradox.erp.sign.domain.core.model.SignLimits;
 import com.bradox.erp.sign.domain.core.exception.SignDomainException;
 import com.bradox.erp.sign.domain.core.valueobject.FieldType;
 import com.bradox.erp.sign.service.domain.dto.PageImage;
@@ -34,8 +34,8 @@ import java.text.Bidi;
 import java.util.List;
 
 /**
- * PDF and image work for Sign (D3): page images for the viewer, flattening signer values onto the original pages, the
- * certificate page, and cleaning uploaded signature images (BR-SIG-10). Built on PDFBox; the domain never sees it.
+ * PDF and image work for Sign: page images for the viewer, flattening the signed values onto the original pages, and
+ * cleaning drawn signature images. Built on PDFBox; the domain never sees it.
  *
  * <p>PDFBox cannot shape Arabic or Kurdish text, so any text that is not plain Latin is drawn through Java2D, which does
  * shape and reorder right-to-left scripts, and placed as an image. That needs a font with the glyphs on the server
@@ -55,7 +55,7 @@ public class SignPdfAdapter implements PdfPort {
 
     @Override
     public PdfInfo inspect(byte[] pdf) {
-        if (pdf == null || pdf.length == 0 || pdf.length > SignRequestLimits.MAX_PDF_BYTES) {
+        if (pdf == null || pdf.length == 0 || pdf.length > SignLimits.MAX_PDF_BYTES) {
             throw new SignDomainException("error.sign.pdf.size", null, "The PDF must be at most 25 MB");
         }
         if (pdf.length < 5 || pdf[0] != '%' || pdf[1] != 'P' || pdf[2] != 'D' || pdf[3] != 'F') {
@@ -66,9 +66,9 @@ public class SignPdfAdapter implements PdfPort {
                 throw new SignDomainException("error.sign.pdf.encrypted", null, "Password-protected PDFs cannot be signed");
             }
             int pages = doc.getNumberOfPages();
-            if (pages < 1 || pages > SignRequestLimits.MAX_PDF_PAGES) {
-                throw new SignDomainException("error.sign.pdf.pages", new Object[]{SignRequestLimits.MAX_PDF_PAGES},
-                        "The PDF must have between 1 and " + SignRequestLimits.MAX_PDF_PAGES + " pages");
+            if (pages < 1 || pages > SignLimits.MAX_PDF_PAGES) {
+                throw new SignDomainException("error.sign.pdf.pages", new Object[]{SignLimits.MAX_PDF_PAGES},
+                        "The PDF must have between 1 and " + SignLimits.MAX_PDF_PAGES + " pages");
             }
             if (!doc.getSignatureDictionaries().isEmpty()) {
                 throw new SignDomainException("error.sign.pdf.alreadySigned", null,
@@ -118,7 +118,7 @@ public class SignPdfAdapter implements PdfPort {
                 g.dispose();
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
                 ImageIO.write(clean, "png", out);
-                if (out.size() <= SignRequestLimits.MAX_SIGNATURE_IMAGE_BYTES) {
+                if (out.size() <= SignLimits.MAX_SIGNATURE_IMAGE_BYTES) {
                     return out.toByteArray();
                 }
                 factor *= 0.7;
@@ -173,21 +173,9 @@ public class SignPdfAdapter implements PdfPort {
                 default -> { }
             }
             FieldType type = p.type();
-            if ((type == FieldType.SIGNATURE || type == FieldType.INITIALS) && p.image() != null) {
+            if (type == FieldType.SIGNATURE && p.image() != null) {
                 PDImageXObject img = PDImageXObject.createFromByteArray(doc, p.image(), "signature");
                 fitImage(cs, img, bx, by, bw, bh);
-            } else if (type == FieldType.CHECKBOX) {
-                if (Boolean.TRUE.equals(p.bool())) {
-                    float s = Math.min(bw, bh);
-                    float cx = bx + (bw - s) / 2;
-                    float cy = by + (bh - s) / 2;
-                    cs.setLineWidth(Math.max(1f, s / 8));
-                    cs.setStrokingColor(0, 0, 0);
-                    cs.moveTo(cx + s * 0.18f, cy + s * 0.5f);
-                    cs.lineTo(cx + s * 0.42f, cy + s * 0.22f);
-                    cs.lineTo(cx + s * 0.82f, cy + s * 0.8f);
-                    cs.stroke();
-                }
             } else if (p.text() != null && !p.text().isBlank()) {
                 float size = Math.max(6f, Math.min(bh * 0.72f, 14f));
                 drawText(doc, cs, p.text().trim(), bx + 2, by + (bh - size) / 2 + size * 0.2f, size, bw - 4);
@@ -206,110 +194,10 @@ public class SignPdfAdapter implements PdfPort {
         cs.drawImage(img, x + (w - tw) / 2, y + (h - th) / 2, tw, th);
     }
 
-    // ------------------------------------------------------------------ certificate
-
-    @Override
-    public byte[] appendCertificate(byte[] signedPdf, Certificate c) {
-        try (PDDocument doc = PDDocument.load(signedPdf)) {
-            PDRectangle size = PDRectangle.A4;
-            float margin = 48;
-            PDPage page = new PDPage(size);
-            doc.addPage(page);
-            PDPageContentStream cs = new PDPageContentStream(doc, page);
-            float y = size.getHeight() - margin;
-            float width = size.getWidth() - 2 * margin;
-
-            drawText(doc, cs, "Certificate of electronic signature", margin, y, 18, width);
-            y -= 26;
-            y = line(doc, cs, "Reference: " + c.reference(), margin, y, 10, width);
-            y = line(doc, cs, "Document: " + c.documentName(), margin, y, 10, width);
-            y = line(doc, cs, "Request ID: " + c.requestId(), margin, y, 8, width);
-            y = line(doc, cs, "Original document SHA-256:", margin, y, 8, width);
-            y = line(doc, cs, c.originalSha256(), margin, y, 8, width);
-            y = line(doc, cs, "Signed content SHA-256 (before this page):", margin, y, 8, width);
-            y = line(doc, cs, c.contentSha256(), margin, y, 8, width);
-            y = line(doc, cs, "Generated: " + c.generatedAt() + "   (company time zone: " + c.timeZone() + ")", margin, y, 8, width);
-            y -= 10;
-            for (CertificateSigner s : c.signers()) {
-                if (y < margin + 110) {
-                    cs.close();
-                    page = new PDPage(size);
-                    doc.addPage(page);
-                    cs = new PDPageContentStream(doc, page);
-                    y = size.getHeight() - margin;
-                }
-                y = line(doc, cs, s.name() + "  (" + s.role() + ")", margin, y, 11, width);
-                y = line(doc, cs, "Email: " + (s.email() == null || s.email().isBlank() ? "-" : s.email())
-                        + "   Channel: " + (s.channel() == null ? "-" : s.channel()), margin + 12, y, 9, width - 12);
-                y = line(doc, cs, "Signed: " + s.signedAtUtc() + "  |  " + s.signedAtLocal(), margin + 12, y, 9, width - 12);
-                y = line(doc, cs, "IP address: " + (s.ip() == null ? "-" : s.ip()), margin + 12, y, 9, width - 12);
-                y -= 8;
-            }
-            y -= 6;
-            line(doc, cs, "This certificate records the electronic signing of the document above. Verify its integrity by comparing "
-                    + "the SHA-256 value to the signed file.", margin, y, 8, width);
-            cs.close();
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            doc.save(out);
-            return out.toByteArray();
-        } catch (IOException e) {
-            throw new SignDomainException("error.sign.pdf.build", null, "The certificate page could not be built");
-        }
-    }
-
-    /** One wrapped paragraph; returns the next y. */
-    private float line(PDDocument doc, PDPageContentStream cs, String text, float x, float y, float size, float width) throws IOException {
-        float step = size * 1.5f;
-        for (String part : wrap(text, size, width)) {
-            drawText(doc, cs, part, x, y, size, width);
-            y -= step;
-        }
-        return y;
-    }
-
-    private List<String> wrap(String text, float size, float width) throws IOException {
-        if (!isLatin(text) || textWidth(text, size) <= width) {
-            return List.of(text);
-        }
-        java.util.ArrayList<String> lines = new java.util.ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        for (String word : text.split(" ")) {
-            // A long hash has no spaces: break it by characters.
-            String w = word;
-            while (textWidth(w, size) > width && w.length() > 1) {
-                int cut = w.length();
-                while (cut > 1 && textWidth(w.substring(0, cut), size) > width) {
-                    cut--;
-                }
-                if (current.length() > 0) {
-                    lines.add(current.toString());
-                    current.setLength(0);
-                }
-                lines.add(w.substring(0, cut));
-                w = w.substring(cut);
-            }
-            String candidate = current.length() == 0 ? w : current + " " + w;
-            if (textWidth(candidate, size) > width && current.length() > 0) {
-                lines.add(current.toString());
-                current = new StringBuilder(w);
-            } else {
-                current = new StringBuilder(candidate);
-            }
-        }
-        if (current.length() > 0) {
-            lines.add(current.toString());
-        }
-        return lines;
-    }
-
     // ------------------------------------------------------------------ text
 
     private static boolean isLatin(String s) {
         return s.chars().allMatch(c -> c >= 0x20 && c <= 0x7E || c >= 0xA0 && c <= 0xFF);
-    }
-
-    private float textWidth(String s, float size) throws IOException {
-        return PDType1Font.HELVETICA.getStringWidth(s) / 1000f * size;
     }
 
     /** Plain Latin goes in as real text; anything else is shaped by Java2D and placed as an image. */

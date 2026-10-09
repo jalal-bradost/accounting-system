@@ -1,5 +1,0 @@
-package com.bradox.erp.sign.domain.core.valueobject;
-
-public enum EventType {
-    CREATED, SENT, OPENED, SIGNED, REFUSED, CANCELED, EXPIRED, REMINDED, COMPLETED, VERIFIED, LINK_REGENERATED, EXTENDED, SIGNER_REPLACED, ATTENTION, HANDOVER
-}

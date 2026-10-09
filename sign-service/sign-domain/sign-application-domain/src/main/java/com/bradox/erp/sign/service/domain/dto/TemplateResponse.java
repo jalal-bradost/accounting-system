@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-public record TemplateResponse(UUID id, String name, String category, UUID documentId, String documentSha256, int pageCount,
-                               boolean active, int defaultValidityDays, String defaultMessage, List<RoleDto> roles,
-                               List<FieldDto> fields, long sentRequests, Instant createdAt, String createdBy) {
+public record TemplateResponse(UUID id, String name, UUID documentId, int pageCount, List<FieldDto> fields, long signedCount,
+                               Instant createdAt) {
 }

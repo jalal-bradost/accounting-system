@@ -10,9 +10,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 
 /** Who is acting, what they may do, and "now". The one place the signed-in user is read. */
 @Component
@@ -44,23 +42,11 @@ class SignAccess {
         }
     }
 
-    Optional<UUID> userId() {
-        return context.currentUser().map(UserId::getId);
-    }
-
-    UUID requireUserId() {
-        return userId().orElseThrow(() -> new ForbiddenException("error.sign.forbidden", null, "You must be signed in"));
-    }
-
     String actorLabel() {
         return context.currentUserDisplay();
     }
 
     Instant now() {
         return clock.instant();
-    }
-
-    Clock clock() {
-        return clock;
     }
 }

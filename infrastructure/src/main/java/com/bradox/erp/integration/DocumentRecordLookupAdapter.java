@@ -29,6 +29,7 @@ public class DocumentRecordLookupAdapter implements RecordLookupPort {
             "purchase.vendor-bill", new Model("pur_vendor_bill", "reference", "purchase.vendor-bill.read"),
             "sales.order", new Model("sal_sales_order", "name", "sales.order.read"),
             "purchase.order", new Model("pur_purchase_order", "name", "purchase.order.read"),
+            "repair.order", new Model("rep_order", "reference", "rep.order.view"),
             "inventory.product", new Model("inv_product", "name", "inventory.product.read"));
 
     private final JdbcTemplate jdbc;

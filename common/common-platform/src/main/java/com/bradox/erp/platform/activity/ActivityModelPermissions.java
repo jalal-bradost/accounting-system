@@ -20,6 +20,7 @@ public final class ActivityModelPermissions {
             case "purchase.order", "purchase.vendor.bill" -> "purchase.order.read";
             case "sales.order" -> "sales.order.read";
             case "expense.expense" -> "expense.read";
+            case "repair.order" -> "rep.order.view";
             // Timesheet: lets the module list the users who may approve any week (tsh.approve_all) as the fallback approvers.
             case "tsh.approval" -> "tsh.approve_all";
             default -> null;

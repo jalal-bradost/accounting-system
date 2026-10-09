@@ -83,7 +83,7 @@ class FolderApplicationServiceImpl implements FolderApplicationService {
     @Override
     @Transactional
     public List<FolderResponse> list(CompanyId companyId, boolean includeArchived) {
-        if (!folders.existsAny(companyId)) {
+        if (needsDefaults(companyId)) {
             seedDefaults(companyId);
         }
         Access acc = access.load(companyId);
@@ -98,7 +98,7 @@ class FolderApplicationServiceImpl implements FolderApplicationService {
     @Override
     @Transactional
     public FolderResponse create(CompanyId companyId, CreateFolderCommand command) {
-        if (!folders.existsAny(companyId)) {
+        if (needsDefaults(companyId)) {
             seedDefaults(companyId);
         }
         Access acc = access.load(companyId);
@@ -263,6 +263,19 @@ class FolderApplicationServiceImpl implements FolderApplicationService {
     private static final Map<String, List<String>> RESTRICTED_WORKSPACES = Map.of(
             "HR", List.of("ADMIN", "HR_MANAGER"),
             "FINANCE", List.of("ADMIN", "ACCOUNTANT"));
+
+    /**
+     * True until the default workspaces exist. Checked by key, not by "no folders at all", because another module may
+     * have created its own system folder (Sign, for one) before anyone opened Documents.
+     */
+    private boolean needsDefaults(CompanyId companyId) {
+        if (!folders.existsAny(companyId)) {
+            return true;
+        }
+        java.util.Set<String> keys = new java.util.HashSet<>();
+        DEFAULT_WORKSPACES.forEach(ws -> keys.add(ws[0]));
+        return folders.findAll(companyId).stream().noneMatch(f -> keys.contains(f.getSystemKey()));
+    }
 
     private void seedDefaults(CompanyId companyId) {
         int sequence = 0;

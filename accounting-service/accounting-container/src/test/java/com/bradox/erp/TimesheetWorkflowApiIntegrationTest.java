@@ -19,7 +19,9 @@ import org.springframework.test.web.servlet.request.AbstractMockHttpServletReque
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.UUID;
 
@@ -147,7 +149,8 @@ class TimesheetWorkflowApiIntegrationTest {
     @Test
     void submitApproveReopenAndRefuseWithCostSnapshots() throws Exception {
         UUID p = project("Weekflow", "HOURLY", true);
-        LocalDate day = today.minusDays(70);
+        // A Monday, so day and day + 1 are in the same week whatever the week start (Saturday by default).
+        LocalDate day = today.minusDays(70).with(TemporalAdjusters.nextOrSame(DayOfWeek.MONDAY));
         assertThat(logFor(worker, day, p, null, "2h").get("minutes").asInt()).isEqualTo(120);
 
         JsonNode submitted = submit(worker, day, 200);
