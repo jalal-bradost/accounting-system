@@ -19,6 +19,7 @@ public class RecordActivityLogger {
     public static final String MODEL_VENDOR_PAYMENT = "purchase.vendor.payment";
     public static final String MODEL_SALES_ORDER = "sales.order";
     public static final String MODEL_REPAIR_ORDER = "repair.order";
+    public static final String MODEL_PROJECT_TASK = "project.task";
     public static final String MODEL_CUSTOMER_INVOICE = "accounting.customer.invoice";
     public static final String MODEL_CUSTOMER_PAYMENT = "accounting.customer.payment";
 

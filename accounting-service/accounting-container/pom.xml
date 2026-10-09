@@ -185,6 +185,22 @@
         </dependency>
         <dependency>
             <groupId>com.bradox.erp</groupId>
+            <artifactId>project-domain-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bradox.erp</groupId>
+            <artifactId>project-application-service</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bradox.erp</groupId>
+            <artifactId>project-dataaccess</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bradox.erp</groupId>
+            <artifactId>project-application</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.bradox.erp</groupId>
             <artifactId>expense-domain-core</artifactId>
         </dependency>
         <dependency>

@@ -16,6 +16,7 @@
     <module>sign-service</module>
     <module>timesheet-service</module>
     <module>repair-service</module>
+    <module>project-service</module>
     <module>assistant-service</module>
     <module>infrastructure</module>
   </modules>
@@ -359,6 +360,26 @@
       <dependency>
         <groupId>com.bradox.erp</groupId>
         <artifactId>repair-application</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>project-domain-core</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>project-application-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>project-dataaccess</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bradox.erp</groupId>
+        <artifactId>project-application</artifactId>
         <version>${project.version}</version>
       </dependency>
     </dependencies>

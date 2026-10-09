@@ -85,7 +85,8 @@ public class CompanyRoleProvisioner {
             "sign.request.create", "sign.request.view", "sign.request.view_all", "sign.request.cancel",
             "sign.sign_self", "sign.audit.view", "sign.settings.manage",
             "rep.order.view", "rep.diagnosis.edit", "rep.line.edit", "rep.price.view", "rep.package.manage",
-            "rep.labor_guide.manage", "rep.discount.approve", "rep.settings.manage"
+            "rep.labor_guide.manage", "rep.discount.approve", "rep.settings.manage",
+            "project.view", "project.edit"
     );
 
     /** Everything a person who sends documents for signature needs; not the manager powers. */
@@ -204,7 +205,8 @@ public class CompanyRoleProvisioner {
                     "hr.time-off.self.write",
                     "payroll.payslip.self.read",
                     "expense.read", "expense.write",
-                    "tsh.entry.own", "tsh.entry.view_team", "tsh.approve"),
+                    "tsh.entry.own", "tsh.entry.view_team", "tsh.approve",
+                    "project.view", "project.edit"),
             "HR_MANAGER", Set.of(
                     "hr.employee.read", "hr.employee.write", "hr.employee.archive",
                     "hr.department.read", "hr.department.write",
